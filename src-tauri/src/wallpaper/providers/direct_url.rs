@@ -44,6 +44,8 @@ impl VideoProvider for DirectUrlProvider {
                 width: 0,
                 height: 0,
                 source: "direct".to_string(),
+                start_time: None,
+                end_time: None,
             });
         }
 
@@ -69,6 +71,8 @@ impl VideoProvider for DirectUrlProvider {
             width: 0,
             height: 0,
             source: "direct".to_string(),
+            start_time: None,
+            end_time: None,
         })
     }
 

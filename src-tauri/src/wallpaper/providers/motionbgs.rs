@@ -126,6 +126,8 @@ impl VideoProvider for MotionBgsProvider {
             width: 3840,   // Assuming 4K resolution preferred
             height: 2160,
             source: "motionbgs".to_string(),
+            start_time: None,
+            end_time: None,
         })
     }
 
@@ -199,6 +201,8 @@ impl VideoProvider for MotionBgsProvider {
                 width: 3840,
                 height: 2160,
                 source: "motionbgs".to_string(),
+                start_time: None,
+                end_time: None,
             });
         }
 

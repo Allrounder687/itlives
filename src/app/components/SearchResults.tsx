@@ -1,6 +1,7 @@
 "use client";
 
 import { VideoResult } from "@/hooks/useWallpaper";
+import { HoverVideo } from "./HoverVideo";
 
 interface SearchResultsProps {
   results: VideoResult[];
@@ -15,25 +16,15 @@ export function SearchResults({ results, onSelect, page, onPageChange }: SearchR
   }
 
   return (
-    <div className="search-results-panel panel">
-      <div className="section-head">
-        <span className="eyebrow">Search Discovery</span>
-        <h2>Provider Results ({results.length})</h2>
-      </div>
-
+    <div>
       <div className="search-grid">
         {results.map((item) => (
           <article 
             key={`${item.source}:${item.id}`} 
             className="search-card"
-            onClick={() => onSelect(item)}
           >
             <div className="search-card__media">
-              {item.thumbnail_url ? (
-                <img src={item.thumbnail_url} alt={item.id} className="search-card__thumb" />
-              ) : (
-                <div className="search-card__thumb-placeholder">No Thumbnail</div>
-              )}
+              <HoverVideo video={item} onClick={() => onSelect(item)} />
             </div>
             <div className="search-card__copy">
               <strong>{item.id.replace(/-/g, " ")}</strong>

@@ -30,8 +30,8 @@ export function VideoPreview({
   onToggleQueue,
 }: VideoPreviewProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  
-  const videoSrc = video.local_path 
+
+  const videoSrc = video.local_path
     ? `https://asset.localhost/${encodeURIComponent(video.local_path.replace(/\\/g, "/"))}`
     : video.video_url;
 
@@ -75,7 +75,9 @@ export function VideoPreview({
         />
         <div className="preview-overlay">
           <span className="preview-chip">{video.source.toUpperCase()}</span>
-          <span className="preview-chip">{video.duration > 0 ? `${video.duration.toFixed(1)}s` : "Looping"}</span>
+          <span className="preview-chip">
+            {video.duration > 0 ? `${video.duration.toFixed(1)}s` : "Looping"}
+          </span>
           <span className="preview-chip">
             {video.width > 0 && video.height > 0 ? `${video.width}x${video.height}` : "Desktop media"}
           </span>

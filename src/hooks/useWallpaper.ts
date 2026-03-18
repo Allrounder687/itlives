@@ -428,6 +428,25 @@ export function useWallpaper() {
     }
   }, []);
 
+  const removeRecentVideo = useCallback(async (video: VideoResult) => {
+    try {
+      const { invoke } = await getCoreApi();
+      const persisted = await invoke<PersistedState>("remove_recent_video", { video });
+      setState((s) => ({
+        ...applyPersistedState(persisted, s),
+        error: null,
+        errorHint: null,
+      }));
+    } catch (error: unknown) {
+      const message = toErrorMessage(error, "Recent video removal failed");
+      setState((s) => ({
+        ...s,
+        error: message,
+        errorHint: "Could not remove the video from recents.",
+      }));
+    }
+  }, []);
+
   const addToQueue = useCallback(async (video: VideoResult) => {
     try {
       const { invoke } = await getCoreApi();
@@ -758,6 +777,7 @@ export function useWallpaper() {
     stopWallpaper,
     toggleFavorite,
     removeImportedVideo,
+    removeRecentVideo,
     addToQueue,
     removeFromQueue,
     clearQueue,

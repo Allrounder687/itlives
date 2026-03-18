@@ -248,6 +248,14 @@ fn remove_imported_video(
     wallpaper::state::remove_imported_video(&state, video)
 }
 
+#[tauri::command]
+fn remove_recent_video(
+    state: State<'_, AppStateStore>,
+    video: VideoResult,
+) -> Result<WallpaperState, String> {
+    wallpaper::state::remove_recent_video(&state, video)
+}
+
 fn restore_wallpaper_if_enabled(store: &AppStateStore) {
     let state = wallpaper::state::get(store);
     if state.restore_on_launch && state.is_playing {
@@ -382,6 +390,7 @@ pub fn run() {
             set_wallpaper_scale,
             import_local_video,
             remove_imported_video,
+            remove_recent_video,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

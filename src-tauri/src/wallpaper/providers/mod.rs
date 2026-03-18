@@ -20,6 +20,8 @@ pub struct VideoResult {
     pub width: u32,
     pub height: u32,
     pub source: String,
+    pub start_time: Option<f64>,
+    pub end_time: Option<f64>,
 }
 
 /// Configuration for a provider search request.

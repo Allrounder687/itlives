@@ -1,5 +1,7 @@
 "use client";
 
+import { useState, useEffect } from "react";
+
 interface ControlBarProps {
   source: string;
   query: string;
@@ -35,79 +37,77 @@ export function ControlBar({
   onFetchAndApply,
   onStop,
 }: ControlBarProps) {
+  const [showRedGifs, setShowRedGifs] = useState(false);
+
+  useEffect(() => {
+    const checkUnlock = () => {
+      setShowRedGifs(localStorage.getItem("unlock_redgifs") === "true");
+    };
+    checkUnlock();
+    window.addEventListener("unlock_redgifs", checkUnlock);
+    return () => window.removeEventListener("unlock_redgifs", checkUnlock);
+  }, []);
+
+  const visibleSources = SOURCES.filter((item) => item.value !== "redgifs" || showRedGifs);
+
   return (
     <div className="control-shell">
       <div className="source-pills">
-        {SOURCES.map((item) => (
+        {visibleSources.map((item) => (
           <button
             key={item.value}
             type="button"
             className={`source-pill ${source === item.value ? "source-pill--active" : ""}`}
             onClick={() => onSourceChange(item.value)}
           >
+            {item.value === "motionbgs" && <span style={{ marginRight: "8px" }}>🌏</span>}
+            {item.value === "redgifs" && <span style={{ marginRight: "8px" }}>🎬</span>}
+            {item.value === "direct" && <span style={{ marginRight: "8px" }}>🔗</span>}
             {item.label}
           </button>
         ))}
       </div>
 
-      <div className="control-grid">
-        <label className="field">
-          <span className="field__label">Source Mode</span>
-          <select
-            className="input input--select"
-            value={source}
-            onChange={(e) => onSourceChange(e.target.value)}
-          >
-            {SOURCES.map((item) => (
-              <option key={item.value} value={item.value}>
-                {item.label}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="field field--wide">
+      <div className="control-grid-v2">
+        <div className="field">
           <span className="field__label">
-            {source === "direct" ? "Video URL or local path" : "Search query"}
+            {source === "direct" ? "Integrated Video Feed URL or local path" : "Search Query"}
           </span>
-          <input
-            className="input"
-            type="text"
-            placeholder={source === "direct" ? "Paste an .mp4 URL or local file path" : "Search clips..."}
-            value={query}
-            onChange={(e) => onQueryChange(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                onFetchAndApply();
-              }
-            }}
-          />
-          {source === "direct" && (
-            <div className="direct-file-row">
-              <button
-                type="button"
-                className="action-btn action-btn--secondary"
-                onClick={onBrowseLocalFile}
-                disabled={isLoading}
-              >
-                Browse Local Video
-              </button>
-              <span className="field__hint">
-                Uses the native Windows file picker and fills the selected path automatically.
-              </span>
-            </div>
-          )}
-        </label>
+          <div className="input-group">
+            <input
+              className="input input--hud"
+              type="text"
+              placeholder={source === "direct" ? "Paste an .mp4 URL or local file path" : "Search clips..."}
+              value={query}
+              onChange={(e) => onQueryChange(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  onFetchAndApply();
+                }
+              }}
+            />
+            {source === "direct" && (
+                <button
+                  type="button"
+                  className="action-btn action-btn--accent-ghost"
+                  onClick={onBrowseLocalFile}
+                  disabled={isLoading}
+                >
+                  Browse Local
+                </button>
+            )}
+          </div>
+        </div>
       </div>
 
       {source === "motionbgs" && (
-        <div className="categories-row" style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginTop: "1rem", marginBottom: "1rem" }}>
+        <div className="categories-scroll">
           {CATEGORIES.map((cat) => (
             <button
               key={cat}
               type="button"
-              className="source-pill"
-              style={{ padding: "0.25rem 0.75rem", fontSize: "0.8rem" }}
+              className={`pill ${query.toLowerCase() === cat.toLowerCase() ? "" : "pill--muted"}`}
+              style={{ padding: "8px 16px", cursor: "pointer", border: "none" }}
               onClick={() => onCategoryChange && onCategoryChange(cat.toLowerCase())}
             >
               {cat}
@@ -116,17 +116,17 @@ export function ControlBar({
         </div>
       )}
 
-      <div className="action-row">
+      <div className="action-row action-row--hud">
         <button className="action-btn action-btn--primary" onClick={onFetchAndApply} disabled={isLoading}>
-          {isLoading ? "Loading..." : "Fetch and Play"}
+          {isLoading ? "Syncing..." : "Fetch and Deploy"}
         </button>
 
         <button className="action-btn action-btn--secondary" onClick={onFetch} disabled={isLoading}>
-          Preview Only
+          Preview Stream
         </button>
 
         <button className="action-btn action-btn--ghost" onClick={onStop}>
-          Stop Playback
+          Unload Engine
         </button>
       </div>
     </div>

@@ -30,8 +30,13 @@ pub fn start_monitor(state_store: AppStateStore) {
         loop {
             thread::sleep(Duration::from_millis(1500));
 
-            let mut should_pause = force_paused();
             let state = state_store.snapshot();
+            if !state.is_playing {
+                IS_PAUSED.store(false, Ordering::Relaxed);
+                continue;
+            }
+
+            let mut should_pause = force_paused();
 
             #[cfg(windows)]
             {

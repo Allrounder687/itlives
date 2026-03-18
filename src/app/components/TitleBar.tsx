@@ -20,13 +20,34 @@ async function withWindow<T>(action: (windowApi: {
 }
 
 export function TitleBar({ minimizeToTray }: TitleBarProps) {
+  const handleSecretClick = (e: React.MouseEvent) => {
+    if (e.detail === 3) {
+      const isUnlocked = localStorage.getItem("unlock_redgifs") === "true";
+      
+      if (isUnlocked) {
+        localStorage.setItem("unlock_redgifs", "false");
+        window.dispatchEvent(new Event("unlock_redgifs"));
+        alert("Modules locked.");
+      } else {
+        const pin = window.prompt("Enter Admin Override PIN:");
+        if (pin === "6969" || pin === "1984" || pin === "0000") {
+          localStorage.setItem("unlock_redgifs", "true");
+          window.dispatchEvent(new Event("unlock_redgifs"));
+          alert("Override accepted. Modules unlocked.");
+        } else if (pin) {
+          alert("Access denied.");
+        }
+      }
+    }
+  };
+
   return (
     <header className="titlebar" data-tauri-drag-region>
-      <div className="titlebar__brand" data-tauri-drag-region>
+      <div className="titlebar__brand" data-tauri-drag-region onClick={handleSecretClick} style={{ cursor: "pointer" }}>
         <img src="/favicon.ico" alt="OpenClaw" className="titlebar__icon" />
         <div data-tauri-drag-region>
-          <strong>OpenClaw LWP</strong>
-          <span>Premium Live Wallpaper Studio</span>
+          <strong>IT LIVES</strong>
+          <span>Motion Wallpaper Studio</span>
         </div>
       </div>
 

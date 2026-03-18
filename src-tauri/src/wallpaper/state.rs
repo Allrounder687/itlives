@@ -291,6 +291,16 @@ pub fn remove_imported_video(
     })
 }
 
+pub fn remove_recent_video(
+    store: &AppStateStore,
+    video: VideoResult,
+) -> Result<WallpaperState, String> {
+    store.update(|state| {
+        state.recents.retain(|item| !same_video(&item.video, &video));
+        Ok(())
+    })
+}
+
 pub fn add_to_queue(store: &AppStateStore, video: VideoResult) -> Result<WallpaperState, String> {
     store.update(|state| {
         state.queue.retain(|item| !same_video(&item.video, &video));

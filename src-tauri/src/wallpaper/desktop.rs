@@ -53,16 +53,6 @@ mod win32 {
             let handle = FOUND_WORKERW.lock().ok().map(|g| *g).unwrap_or(0);
             if handle != 0 {
                 log::info!("Found Target Canvas (With Icons): {}", handle);
-                // Force resize Canvas to full screen (2048x1152)
-                let _ = SetWindowPos(
-                    HWND(handle as *mut _),
-                    HWND::default(),
-                    0,
-                    0,
-                    2048,
-                    1152,
-                    SWP_SHOWWINDOW | SWP_NOACTIVATE | SWP_NOZORDER,
-                );
                 Some(handle)
             } else {
                 // Fallback: embed directly into Progman
@@ -149,7 +139,8 @@ pub fn set_video(
     {
         let _mpv_path = find_mpv().ok_or("mpv not found. Install: winget install shinchiro.mpv")?;
 
-        log::info!("Spawning standalone PowerShell self-healing script fix wrapper layout...");
+        let workerw = win32::get_desktop_workerw().unwrap_or(0);
+        log::info!("Spawning standalone PowerShell self-healing script fix wrapper layout... WorkerW: {}", workerw);
 
         let script_path = app_root_dir()
             .join("scripts")
@@ -171,6 +162,8 @@ pub fn set_video(
                 video_filter,
                 "-StartPaused",
                 if paused { "$true" } else { "$false" },
+                "-WindowHandle",
+                &workerw.to_string(),
             ])
             .spawn()
             .map_err(|e| format!("Failed to launch powershell self-healing wrapper: {}", e))?;
@@ -184,12 +177,16 @@ pub fn set_video(
     Ok(format!("Wallpaper set: {} at {}%", path, scale_percent))
 }
 
-/// Stops the current video wallpaper.
+/// Stops all current video wallpapers.
 pub fn stop_video() -> Result<String, String> {
-    if let Some(pid) = read_mpv_pid() {
-        let _ = Command::new("taskkill")
-            .args(&["/PID", &pid.to_string(), "/T", "/F"])
-            .output();
+    if let Ok(content) = std::fs::read_to_string(mpv_pid_file()) {
+        for pid_str in content.lines() {
+            if let Ok(pid) = pid_str.trim().parse::<u32>() {
+                let _ = Command::new("taskkill")
+                    .args(&["/PID", &pid.to_string(), "/T", "/F"])
+                    .output();
+            }
+        }
     }
     let _ = std::fs::remove_file(mpv_pid_file());
     if let Ok(mut current) = CURRENT_VIDEO.lock() {
@@ -288,17 +285,30 @@ fn send_ipc_command(payload: &str) -> Result<(), String> {
     use std::fs::OpenOptions;
     use std::io::Write;
 
-    let mut pipe = OpenOptions::new()
-        .write(true)
-        .open(r"\\.\pipe\openclaw-mpv")
-        .map_err(|e| format!("Failed to connect to mpv IPC: {}", e))?;
+    let mut sent_any = false;
+    let mut last_err = String::new();
 
-    pipe.write_all(payload.as_bytes())
-        .map_err(|e| format!("Failed to send mpv IPC command: {}", e))
+    for idx in 0..8 {
+        let pipe_name = format!(r"\\.\pipe\openclaw-mpv-{}", idx);
+        
+        if let Ok(mut pipe) = OpenOptions::new().write(true).open(&pipe_name) {
+            if pipe.write_all(payload.as_bytes()).is_ok() {
+                sent_any = true;
+            } else {
+                last_err = format!("Failed to write to {}", pipe_name);
+            }
+        }
+    }
+
+    if sent_any {
+        Ok(())
+    } else {
+        Err(format!("Failed to connect to any mpv IPC: {}", last_err))
+    }
 }
 
 /// Finds mpv.exe on the system.
-fn find_mpv() -> Option<String> {
+pub(crate) fn find_mpv() -> Option<String> {
     for p in &[
         "C:\\Program Files\\MPV Player\\mpv.exe",
         "C:\\Program Files\\mpv\\mpv.exe",

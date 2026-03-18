@@ -117,6 +117,8 @@ impl VideoProvider for RedGifsProvider {
             width: gif.width.unwrap_or(0),
             height: gif.height.unwrap_or(0),
             source: "redgifs".to_string(),
+            start_time: None,
+            end_time: None,
         })
     }
 
@@ -162,6 +164,8 @@ impl VideoProvider for RedGifsProvider {
                     width: gif.width.unwrap_or(0),
                     height: gif.height.unwrap_or(0),
                     source: "redgifs".to_string(),
+                    start_time: None,
+                    end_time: None,
                 });
             }
         }
