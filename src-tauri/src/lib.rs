@@ -256,6 +256,66 @@ fn remove_recent_video(
     wallpaper::state::remove_recent_video(&state, video)
 }
 
+/// Fetches YouTube video metadata (title, duration, thumbnail) without downloading.
+#[tauri::command]
+async fn fetch_youtube_meta(url: String) -> Result<VideoResult, String> {
+    let meta = tokio::task::spawn_blocking(move || {
+        wallpaper::providers::youtube::fetch_metadata(&url)
+    })
+    .await
+    .map_err(|e| format!("Task join error: {}", e))??;
+
+    Ok(VideoResult {
+        id: meta.id.clone(),
+        video_url: String::new(),
+        thumbnail_url: meta.thumbnail.unwrap_or_default(),
+        local_path: String::new(),
+        duration: meta.duration.unwrap_or(0.0),
+        width: meta.width.unwrap_or(1920),
+        height: meta.height.unwrap_or(1080),
+        source: "youtube".to_string(),
+        start_time: None,
+        end_time: None,
+    })
+}
+
+/// Downloads a time-trimmed YouTube clip and returns a VideoResult with local_path.
+#[tauri::command]
+async fn download_youtube_clip(
+    url: String,
+    start_time: f64,
+    end_time: f64,
+) -> Result<VideoResult, String> {
+    // Fetch metadata first for title/thumbnail info
+    let meta_url = url.clone();
+    let meta = tokio::task::spawn_blocking(move || {
+        wallpaper::providers::youtube::fetch_metadata(&meta_url)
+    })
+    .await
+    .map_err(|e| format!("Task join error: {}", e))??;
+
+    let dl_url = url.clone();
+    let dl_id = meta.id.clone();
+    let local_path = tokio::task::spawn_blocking(move || {
+        wallpaper::providers::youtube::download_clip(&dl_url, &dl_id, start_time, end_time)
+    })
+    .await
+    .map_err(|e| format!("Task join error: {}", e))??;
+
+    Ok(VideoResult {
+        id: meta.id.clone(),
+        video_url: url,
+        thumbnail_url: meta.thumbnail.unwrap_or_default(),
+        local_path,
+        duration: end_time - start_time,
+        width: meta.width.unwrap_or(1920),
+        height: meta.height.unwrap_or(1080),
+        source: "youtube".to_string(),
+        start_time: Some(start_time),
+        end_time: Some(end_time),
+    })
+}
+
 fn restore_wallpaper_if_enabled(store: &AppStateStore) {
     let state = wallpaper::state::get(store);
     if state.restore_on_launch && state.is_playing {
@@ -391,6 +451,8 @@ pub fn run() {
             import_local_video,
             remove_imported_video,
             remove_recent_video,
+            fetch_youtube_meta,
+            download_youtube_clip,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

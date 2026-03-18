@@ -12,6 +12,7 @@ import { FloatingPreview } from "./components/FloatingPreview";
 import { LibraryList, ImportedLibraryList } from "./components/LibraryList";
 import { AutomationPanel } from "./components/AutomationPanel";
 import { QueuePanel } from "./components/QueuePanel";
+import { YouTubePanel } from "./components/YouTubePanel";
 
 const ICONS = {
   discover: (
@@ -35,6 +36,12 @@ const ICONS = {
   preview: (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <polygon points="5 3 19 12 5 21 5 3" />
+    </svg>
+  ),
+  youtube: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 11.75a29 29 0 0 0 .46 5.33A2.78 2.78 0 0 0 3.4 19.13C5.12 19.56 12 19.56 12 19.56s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2 29 29 0 0 0 .46-5.25 29 29 0 0 0-.46-5.43z" />
+      <polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02" />
     </svg>
   ),
 };
@@ -61,7 +68,7 @@ const SOURCE_NOTES: Record<string, string> = {
 
 function Home() {
   const wallpaper = useWallpaper();
-  const [activeTab, setActiveTab] = useState<"discover" | "library" | "direct" | "preview">("discover");
+  const [activeTab, setActiveTab] = useState<"discover" | "library" | "direct" | "preview" | "youtube">("discover");
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   const handleFetchAndApply = async () => {
@@ -153,6 +160,15 @@ function Home() {
               >
                 <div className="tab-icon">{ICONS.preview}</div>
                 {!isSidebarCollapsed && <span>Preview Deck</span>}
+              </button>
+              <button 
+                type="button" 
+                className={`sidebar-list__item sidebar-list__item--clickable ${activeTab === "youtube" ? "sidebar-list__item--active" : ""}`} 
+                onClick={() => setActiveTab("youtube")}
+                title="YouTube"
+              >
+                <div className="tab-icon">{ICONS.youtube}</div>
+                {!isSidebarCollapsed && <span>YouTube</span>}
               </button>
             </div>
           </div>
@@ -361,6 +377,14 @@ function Home() {
                 </div>
               ) : null}
             </section>
+          )}
+
+          {activeTab === "youtube" && (
+            <YouTubePanel
+              onApplyWallpaper={(video) => wallpaper.applyWallpaper(video)}
+              onStop={wallpaper.stopWallpaper}
+              isPlaying={wallpaper.isPlaying}
+            />
           )}
         </main>
       </div>
