@@ -37,6 +37,8 @@ async fn apply_wallpaper(
     state: State<'_, AppStateStore>,
     mut video: VideoResult,
     scale_percent: u64,
+    start_time: Option<f64>,
+    end_time: Option<f64>,
 ) -> Result<WallpaperState, String> {
     if video.local_path.is_empty() {
         log::info!("[Core] Download on apply triggered for source: {}", video.source);
@@ -54,6 +56,8 @@ async fn apply_wallpaper(
         current.volume_percent,
         &current.video_filter,
         false, // Explicitly start playing instead of using previous state
+        start_time,
+        end_time,
     )?;
     wallpaper::state::mark_active(&state, video)
 }
@@ -135,6 +139,8 @@ fn advance_rotation(
         current.volume_percent,
         &current.video_filter,
         false, // Explicitly start playing
+        None,
+        None,
     )?;
     let persisted = wallpaper::state::mark_active(&state, advanced.video.clone())?;
     Ok(QueueAdvanceResult {
@@ -206,6 +212,8 @@ fn set_wallpaper_filter(
                 persisted.volume_percent,
                 &persisted.video_filter,
                 persisted.paused,
+                None,
+                None,
             )?;
         }
     }
@@ -226,6 +234,8 @@ fn set_wallpaper_scale(
                 persisted.volume_percent,
                 &persisted.video_filter,
                 persisted.paused,
+                None,
+                None,
             )?;
         }
     }
@@ -254,6 +264,42 @@ fn remove_recent_video(
     video: VideoResult,
 ) -> Result<WallpaperState, String> {
     wallpaper::state::remove_recent_video(&state, video)
+}
+
+#[tauri::command]
+fn reorder_queue(
+    state: State<'_, AppStateStore>,
+    from_index: usize,
+    to_index: usize,
+) -> Result<WallpaperState, String> {
+    wallpaper::state::reorder_queue(&state, from_index, to_index)
+}
+
+#[tauri::command]
+async fn save_thumbnail(
+    state: State<'_, AppStateStore>,
+    local_path: String,
+    base64_data: String,
+) -> Result<WallpaperState, String> {
+    use base64::{Engine as _, engine::general_purpose};
+    
+    let path = std::path::PathBuf::from(&local_path);
+    let id = path.file_stem().and_then(|s| s.to_str()).unwrap_or("unknown");
+    
+    let base_dir = wallpaper::desktop::app_data_dir().join("thumbnails");
+    let _ = std::fs::create_dir_all(&base_dir);
+    let thumb_path = base_dir.join(format!("{}.jpg", id));
+    
+    let clean_base64 = if let Some(pos) = base64_data.find(",") {
+        &base64_data[pos+1..]
+    } else {
+        &base64_data
+    };
+
+    let bytes = general_purpose::STANDARD.decode(clean_base64).map_err(|e| e.to_string())?;
+    std::fs::write(&thumb_path, bytes).map_err(|e| e.to_string())?;
+
+    wallpaper::state::set_thumbnail(&state, local_path, thumb_path.to_string_lossy().to_string())
 }
 
 /// Fetches YouTube video metadata (title, duration, thumbnail) without downloading.
@@ -334,6 +380,8 @@ fn restore_wallpaper_if_enabled(store: &AppStateStore) {
                 state.volume_percent,
                 &state.video_filter,
                 state.paused,
+                None,
+                None,
             );
         }
     }
@@ -373,7 +421,7 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
                 let store = app_handle.state::<AppStateStore>();
                 let state = wallpaper::state::get(&store);
                 if let Some(video) = state.current_video.as_ref() {
-                    let _ = wallpaper::desktop::set_video(&video.local_path, state.wallpaper_scale_percent, state.volume_percent, &state.video_filter, state.paused);
+                    let _ = wallpaper::desktop::set_video(&video.local_path, state.wallpaper_scale_percent, state.volume_percent, &state.video_filter, state.paused, None, None);
                 }
             }
             "stop_wallpaper" => {
@@ -461,6 +509,8 @@ pub fn run() {
             remove_recent_video,
             fetch_youtube_meta,
             download_youtube_clip,
+            reorder_queue,
+            save_thumbnail,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

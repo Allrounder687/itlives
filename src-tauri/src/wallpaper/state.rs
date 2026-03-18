@@ -348,6 +348,45 @@ pub fn clear_queue(store: &AppStateStore) -> Result<WallpaperState, String> {
     })
 }
 
+pub fn reorder_queue(
+    store: &AppStateStore,
+    from_index: usize,
+    to_index: usize,
+) -> Result<WallpaperState, String> {
+    store.update(|state| {
+        if from_index < state.queue.len() && to_index < state.queue.len() {
+            let item = state.queue.remove(from_index);
+            state.queue.insert(to_index, item);
+        }
+        Ok(())
+    })
+}
+
+pub fn set_thumbnail(
+    store: &AppStateStore,
+    local_path: String,
+    thumb_path: String,
+) -> Result<WallpaperState, String> {
+    store.update(|state| {
+        for item in state.imports.iter_mut() {
+            if item.video.local_path == local_path { item.video.thumbnail_url = thumb_path.clone(); }
+        }
+        for item in state.recents.iter_mut() {
+            if item.video.local_path == local_path { item.video.thumbnail_url = thumb_path.clone(); }
+        }
+        for item in state.favorites.iter_mut() {
+            if item.video.local_path == local_path { item.video.thumbnail_url = thumb_path.clone(); }
+        }
+        for item in state.queue.iter_mut() {
+            if item.video.local_path == local_path { item.video.thumbnail_url = thumb_path.clone(); }
+        }
+        if let Some(ref mut curr) = state.current_video {
+            if curr.local_path == local_path { curr.thumbnail_url = thumb_path.clone(); }
+        }
+        Ok(())
+    })
+}
+
 pub fn set_rotation(
     store: &AppStateStore,
     enabled: bool,

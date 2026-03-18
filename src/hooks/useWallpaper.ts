@@ -346,12 +346,14 @@ export function useWallpaper() {
     setState((s) => ({ ...s, currentVideo: video }));
   }, []);
 
-  const applyWallpaper = useCallback(async (video: VideoResult) => {
+  const applyWallpaper = useCallback(async (video: VideoResult, startTime?: number, endTime?: number) => {
     try {
       const { invoke } = await getCoreApi();
       const persisted = await invoke<PersistedState>("apply_wallpaper", {
         video,
         scalePercent: state.wallpaperScalePercent,
+        startTime: startTime !== undefined ? startTime : null,
+        endTime: endTime !== undefined ? endTime : null,
       });
       setState((s) => ({
         ...applyPersistedState(persisted, s),
@@ -763,6 +765,21 @@ export function useWallpaper() {
     [state.queue],
   );
 
+  const reorderQueue = useCallback(async (fromIndex: number, toIndex: number) => {
+    try {
+      const { invoke } = await getCoreApi();
+      const persisted = await invoke<PersistedState>("reorder_queue", { fromIndex, toIndex });
+      setState((s) => ({
+        ...applyPersistedState(persisted, s),
+        error: null,
+        errorHint: null,
+      }));
+    } catch (error: unknown) {
+      const message = toErrorMessage(error, "Queue reorder failed");
+      setState((s) => ({ ...s, error: message, errorHint: "Could not rearrange the queue." }));
+    }
+  }, []);
+
   return {
     ...state,
     setSource,
@@ -791,5 +808,6 @@ export function useWallpaper() {
     setVideoFilter,
     isFavorite,
     isQueued,
+    reorderQueue,
   };
 }

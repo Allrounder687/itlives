@@ -130,6 +130,8 @@ pub fn set_video(
     volume_percent: u64,
     video_filter: &str,
     paused: bool,
+    start_time: Option<f64>,
+    end_time: Option<f64>,
 ) -> Result<String, String> {
     let resolved_path = path.to_string();
     let is_url = path.starts_with("http://") || path.starts_with("https://");
@@ -158,26 +160,38 @@ pub fn set_video(
         let script_path = app_root_dir()
             .join("scripts")
             .join("set_wallpaper_cli_v2.ps1");
+        let mut args = vec![
+            "-NoProfile".to_string(),
+            "-ExecutionPolicy".to_string(),
+            "Bypass".to_string(),
+            "-File".to_string(),
+            script_path.to_string_lossy().into_owned(),
+            "-VideoPath".to_string(),
+            path.to_string(),
+            "-ScalePercent".to_string(),
+            scale_percent.to_string(),
+            "-VolumePercent".to_string(),
+            volume_percent.to_string(),
+            "-VideoFilter".to_string(),
+            video_filter.to_string(),
+            "-StartPaused".to_string(),
+            if paused { "$true".to_string() } else { "$false".to_string() },
+            "-WindowHandle".to_string(),
+            workerw.to_string(),
+        ];
+
+        if let Some(st) = start_time {
+            args.push("-StartTime".to_string());
+            args.push(st.to_string());
+        }
+
+        if let Some(et) = end_time {
+            args.push("-EndTime".to_string());
+            args.push(et.to_string());
+        }
+
         let _child = Command::new("powershell")
-            .args(&[
-                "-NoProfile",
-                "-ExecutionPolicy",
-                "Bypass",
-                "-File",
-                &script_path.to_string_lossy(),
-                "-VideoPath",
-                path,
-                "-ScalePercent",
-                &scale_percent.to_string(),
-                "-VolumePercent",
-                &volume_percent.to_string(),
-                "-VideoFilter",
-                video_filter,
-                "-StartPaused",
-                if paused { "$true" } else { "$false" },
-                "-WindowHandle",
-                &workerw.to_string(),
-            ])
+            .args(&args)
             .spawn()
             .map_err(|e| format!("Failed to launch powershell self-healing wrapper: {}", e))?;
     }

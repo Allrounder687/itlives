@@ -11,7 +11,7 @@ interface FloatingPreviewProps {
   filterPreset: string;
   isFavorite: boolean;
   isQueued: boolean;
-  onApply: () => void;
+  onApply: (start?: number, end?: number) => void;
   onTogglePause: () => void;
   onToggleFavorite: () => void;
   onToggleQueue: () => void;

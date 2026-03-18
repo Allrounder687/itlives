@@ -4,7 +4,9 @@ param (
     [int]$VolumePercent = 0,
     [string]$VideoFilter = "none",
     [string]$StartPaused = "false",
-    [Int64]$WindowHandle = 0
+    [Int64]$WindowHandle = 0,
+    [string]$StartTime = "",
+    [string]$EndTime = ""
 )
 
 Write-Host "Cleaning up previous wallpaper engine streams..." -ForegroundColor Yellow
@@ -83,7 +85,10 @@ for ($idx = 0; $idx -lt $screens.Count; $idx++) {
     $widArg = if ($WindowHandle -eq 0) { "--wid=0" } else { "" }
     $ipc_server = "\\.\pipe\openclaw-mpv-$idx"
 
-    $args = "$widArg --input-ipc-server=$ipc_server --loop=inf --mute=$mute --volume=${VolumePercent} --pause=$pauseArg --no-osc --no-osd-bar --no-border --no-config --input-default-bindings=no --input-vo-keyboard=no --show-in-taskbar=no --keepaspect=no --force-window=yes --geometry=${width}x${height}+${X}+${Y} --ontop=no --vo=gpu --hwdec=auto-safe --panscan=1.0 --vf=$filterChain --demuxer-max-bytes=128M --demuxer-max-back-bytes=32M --cache=no --vd-lavc-fast --vd-lavc-skiploopfilter=all --terminal=no `"$VideoPath`""
+    $stArg = if ($StartTime -ne "") { "--start=$StartTime" } else { "" }
+    $etArg = if ($EndTime -ne "") { "--end=$EndTime" } else { "" }
+
+    $args = "$widArg $stArg $etArg --input-ipc-server=$ipc_server --loop=inf --mute=$mute --volume=${VolumePercent} --pause=$pauseArg --no-osc --no-osd-bar --no-border --no-config --input-default-bindings=no --input-vo-keyboard=no --show-in-taskbar=no --keepaspect=no --force-window=yes --geometry=${width}x${height}+${X}+${Y} --ontop=no --vo=gpu --hwdec=auto-safe --panscan=1.0 --vf=$filterChain --demuxer-max-bytes=128M --demuxer-max-back-bytes=32M --cache=no --vd-lavc-fast --vd-lavc-skiploopfilter=all --terminal=no `"$VideoPath`""
 
     $stdoutLog = Join-Path $LogDir "mpv_out_$idx.log"
     $stderrLog = Join-Path $LogDir "mpv_err_$idx.log"

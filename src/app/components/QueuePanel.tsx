@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { formatSavedAt } from "./LibraryList";
 
 interface QueuePanelProps {
@@ -7,6 +8,25 @@ interface QueuePanelProps {
 }
 
 export function QueuePanel({ wallpaper }: QueuePanelProps) {
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    setDraggedIndex(index);
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = (e: React.DragEvent, targetIndex: number) => {
+    e.preventDefault();
+    if (draggedIndex === null || draggedIndex === targetIndex) return;
+
+    wallpaper.reorderQueue(draggedIndex, targetIndex);
+    setDraggedIndex(null);
+  };
+
   return (
     <div className="panel queue-card">
       <div className="queue-card__head">
@@ -29,8 +49,21 @@ export function QueuePanel({ wallpaper }: QueuePanelProps) {
       ) : (
         <div className="library-list">
           {wallpaper.queue.map((item: any, index: number) => (
-            <article className="library-item" key={`${item.video.id}:${item.video.local_path}`}>
-              <div className="library-item__copy">
+            <article 
+              className="library-item" 
+              key={`${item.video.id}:${item.video.local_path}`}
+              draggable={true}
+              onDragStart={(e) => handleDragStart(e, index)}
+              onDragOver={(e) => handleDragOver(e, index)}
+              onDrop={(e) => handleDrop(e, index)}
+              style={{ 
+                cursor: "move", 
+                opacity: draggedIndex === index ? 0.3 : 1,
+                border: draggedIndex !== null && draggedIndex !== index ? "1px dashed rgba(187, 255, 93, 0.3)" : "1px solid rgba(255,255,255,0.03)",
+                transition: "opacity 0.2s ease"
+              }}
+            >
+              <div className="library-item__copy" style={{ pointerEvents: "none" }}>
                 <strong>{index + 1}. {item.video.id}</strong>
                 <span>{item.video.source.toUpperCase()} - queued {formatSavedAt(item.saved_at)}</span>
               </div>

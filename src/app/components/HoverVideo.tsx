@@ -32,6 +32,31 @@ export function HoverVideo({ video, className, onClick }: HoverVideoProps) {
     }
   };
 
+  const handleLoadedData = async () => {
+    if (!video.thumbnail_url && videoRef.current && video.local_path) {
+      const vid = videoRef.current;
+      // Seek slightly to avoid capturing black frame at absolute start
+      if (vid.currentTime === 0 && vid.duration > 0.5) {
+        vid.currentTime = 0.5;
+        return;
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = vid.videoWidth || 320;
+      canvas.height = vid.videoHeight || 180;
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.drawImage(vid, 0, 0, canvas.width, canvas.height);
+        const base64 = canvas.toDataURL("image/jpeg", 0.82);
+        try {
+          const { invoke } = await import("@tauri-apps/api/core");
+          await invoke("save_thumbnail", { localPath: video.local_path, base64Data: base64 });
+        } catch (e) {
+          console.error("save_thumbnail trigger failed", e);
+        }
+      }
+    }
+  };
+
   return (
     <div 
       className={`hover-video-container ${className || ""}`}
@@ -61,11 +86,14 @@ export function HoverVideo({ video, className, onClick }: HoverVideoProps) {
         <video 
           ref={videoRef}
           src={src}
+          crossOrigin="anonymous"
           muted
           loop
           playsInline
           autoPlay={isHovered}
           preload="metadata"
+          onLoadedData={handleLoadedData}
+          onSeeked={handleLoadedData}
           style={{ 
             position: "absolute", 
             inset: 0, 
