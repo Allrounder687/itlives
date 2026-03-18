@@ -39,3 +39,17 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# openclaw runtime state & downloads
+/runtime/
+
+# scratch debugging tools
+/motionbgs_test.html
+/test_scrape.js
+/thumbnails.txt
+
+# tauri debug logs and cache
+/src-tauri/target-check/
+/src-tauri/target_check/
+/src-tauri/build.log
+/src-tauri/error.txt
