@@ -104,6 +104,7 @@ function Home() {
   const wallpaper = useWallpaper();
   const [activeTab, setActiveTab] = useState<"discover" | "library" | "direct" | "preview" | "youtube" | "settings">("discover");
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [lastVolume, setLastVolume] = useState(25);
 
   const handleFetchAndApply = async () => {
     const result = await wallpaper.fetchVideo();
@@ -437,8 +438,25 @@ function Home() {
 
                 <div className="hud-divider" style={{ width: "1px", height: "24px", background: "rgba(255,255,255,0.08)" }} />
 
-                <div className="hud-audio">
-                  <span className="eyebrow" style={{ fontSize: "10px" }}>Audio</span>
+                <div className="hud-audio" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <button 
+                    style={{ background: "transparent", border: "none", cursor: "pointer", padding: 0, color: "var(--accent)", display: "flex" }}
+                    onClick={() => {
+                      if (wallpaper.volumePercent > 0) {
+                        setLastVolume(wallpaper.volumePercent);
+                        wallpaper.setVolumePercent(0);
+                      } else {
+                        wallpaper.setVolumePercent(lastVolume > 0 ? lastVolume : 30);
+                      }
+                    }}
+                    title={wallpaper.volumePercent > 0 ? "Mute" : "Unmute"}
+                  >
+                    {wallpaper.volumePercent > 0 ? (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+                    ) : (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: "red" }}><path d="M11 5L6 9H2v6h4l5 4V5z"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
+                    )}
+                  </button>
                   <VolumeSlider 
                     initialVolume={wallpaper.volumePercent} 
                     onCommit={wallpaper.setVolumePercent} 

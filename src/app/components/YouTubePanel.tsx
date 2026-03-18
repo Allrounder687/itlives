@@ -34,6 +34,14 @@ export function YouTubePanel({ onApplyWallpaper, onStop, isPlaying }: YouTubePan
   const yt = useYouTube();
   const clipDuration = yt.endTime - yt.startTime;
   const playerRef = useRef<HTMLIFrameElement>(null);
+  const [activeThumb, setActiveThumb] = useState<"start" | "end">("start");
+  const [iframeStart, setIframeStart] = useState(0);
+
+  useEffect(() => {
+    if (yt.meta) {
+      setIframeStart(yt.startTime);
+    }
+  }, [yt.meta]);
 
   const handleFetchAndApply = async () => {
     const result = await yt.downloadClip();
@@ -53,7 +61,7 @@ export function YouTubePanel({ onApplyWallpaper, onStop, isPlaying }: YouTubePan
   }, [yt.startTime, yt.meta]);
 
   const embedUrl = yt.meta 
-    ? `https://www.youtube.com/embed/${yt.meta.id}?start=${Math.floor(yt.startTime)}&autoplay=0&controls=1&rel=0`
+    ? `https://www.youtube.com/embed/${yt.meta.id}?start=${Math.floor(iframeStart)}&autoplay=1&controls=1&rel=0`
     : "";
 
   return (
@@ -158,6 +166,11 @@ export function YouTubePanel({ onApplyWallpaper, onStop, isPlaying }: YouTubePan
               <input
                 type="range"
                 className="yt-range-input yt-range-start"
+                style={{ zIndex: activeThumb === "start" ? 15 : 10 }}
+                onMouseDown={() => setActiveThumb("start")}
+                onTouchStart={() => setActiveThumb("start")}
+                onMouseUp={() => setIframeStart(yt.startTime)}
+                onTouchEnd={() => setIframeStart(yt.startTime)}
                 min={0}
                 max={yt.meta.duration}
                 step={0.5}
@@ -170,6 +183,11 @@ export function YouTubePanel({ onApplyWallpaper, onStop, isPlaying }: YouTubePan
               <input
                 type="range"
                 className="yt-range-input yt-range-end"
+                style={{ zIndex: activeThumb === "end" ? 15 : 10 }}
+                onMouseDown={() => setActiveThumb("end")}
+                onTouchStart={() => setActiveThumb("end")}
+                onMouseUp={() => setIframeStart(yt.startTime)}
+                onTouchEnd={() => setIframeStart(yt.startTime)}
                 min={0}
                 max={yt.meta.duration}
                 step={0.5}
