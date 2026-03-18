@@ -53,7 +53,7 @@ async fn apply_wallpaper(
         scale_percent,
         current.volume_percent,
         &current.video_filter,
-        current.paused,
+        false, // Explicitly start playing instead of using previous state
     )?;
     wallpaper::state::mark_active(&state, video)
 }
@@ -134,7 +134,7 @@ fn advance_rotation(
         scale_percent,
         current.volume_percent,
         &current.video_filter,
-        current.paused,
+        false, // Explicitly start playing
     )?;
     let persisted = wallpaper::state::mark_active(&state, advanced.video.clone())?;
     Ok(QueueAdvanceResult {

@@ -125,7 +125,7 @@ fn check_should_pause() -> bool {
                 let c_name = String::from_utf16_lossy(&class_name[..len as usize]);
                 let c_name = c_name.trim_end_matches('\0');
 
-                if c_name != "WorkerW" && c_name != "Progman" {
+                if c_name != "WorkerW" && c_name != "Progman" && c_name != "mpv" {
                     log::info!(
                         "Auto-pause trigger: Fullscreen app detected (ClassName: {}).",
                         c_name

@@ -32,15 +32,15 @@ mod win32 {
             let _ = SendMessageTimeoutW(
                 progman,
                 0x052C,
-                WPARAM(0xD),
-                LPARAM(0x1),
+                WPARAM(0),
+                LPARAM(0),
                 SMTO_NORMAL,
                 1000,
                 Some(&mut result_val),
             );
 
             // Small delay to let Windows create the WorkerW
-            std::thread::sleep(std::time::Duration::from_millis(200));
+            std::thread::sleep(std::time::Duration::from_millis(1500));
 
             // 3. Reset the global
             if let Ok(mut g) = FOUND_WORKERW.lock() {
@@ -80,13 +80,13 @@ mod win32 {
                 PCWSTR::null(),
             );
 
-            // If it DOES have SHELLDLL_DefView, it is target containment window layer!
+            // If it DOES have SHELLDLL_DefView, it is the parent containing icons!
             if shell.is_ok() && !shell.unwrap().is_invalid() {
                 use windows::Win32::UI::WindowsAndMessaging::{
-                    GetClassNameW, GetWindow, GW_HWNDNEXT,
+                    GetClassNameW, GetWindow, GW_HWNDNEXT, GW_HWNDPREV,
                 };
 
-                // The WorkerW window created by 0x052C is usually placed immediately behind the icons window.
+                // 1. Check adjacent Next Sibling (Windows 10 Standard)
                 if let Ok(next) = GetWindow(hwnd, GW_HWNDNEXT) {
                     let mut cn_sub = [0u16; 256];
                     let len_sub = GetClassNameW(next, &mut cn_sub);
@@ -95,18 +95,31 @@ mod win32 {
                         if let Ok(mut g) = FOUND_WORKERW.lock() {
                             *g = next.0 as isize;
                         }
-                        return BOOL(0); // Stop enumeration
+                        return BOOL(0);
                     }
                 }
 
-                // Fallback to the icons window itself if adjacent is not found
+                // 2. Check adjacent Previous Sibling (Windows 11 Fallback)
+                if let Ok(prev) = GetWindow(hwnd, GW_HWNDPREV) {
+                    let mut cn_sub = [0u16; 256];
+                    let len_sub = GetClassNameW(prev, &mut cn_sub);
+                    let class_sub = String::from_utf16_lossy(&cn_sub[..len_sub as usize]);
+                    if class_sub == "WorkerW" {
+                        if let Ok(mut g) = FOUND_WORKERW.lock() {
+                            *g = prev.0 as isize;
+                        }
+                        return BOOL(0);
+                    }
+                }
+
+                // Standard fallback to self layer if sibling is missing
                 if let Ok(mut g) = FOUND_WORKERW.lock() {
                     *g = hwnd.0 as isize;
                 }
-                return BOOL(0); // Stop enumeration
+                return BOOL(0);
             }
         }
-        BOOL(1) // Continue enumeration
+        BOOL(1)
     }
 }
 

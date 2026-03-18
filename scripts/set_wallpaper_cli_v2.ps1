@@ -36,6 +36,9 @@ public class Win32 {
 
     [DllImport("user32.dll")]
     public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr FindWindowEx(IntPtr hwndParent, IntPtr hwndChildAfter, string lpszClass, string lpszWindow);
 }
 "@
 Add-Type -TypeDefinition $Signature -ErrorAction SilentlyContinue | Out-Null
@@ -89,12 +92,22 @@ for ($idx = 0; $idx -lt $screens.Count; $idx++) {
     Add-Content -Path $PidFile -Value $mpvProc.Id
 
     if ($WindowHandle -ne 0) {
+        $shell_hwnd = [Win32]::FindWindowEx([IntPtr]$WindowHandle, [IntPtr]::Zero, "SHELLDLL_DefView", $null)
+        Write-Host "Shell View Handle inside parent: $shell_hwnd" -ForegroundColor Yellow
+
         for ($i = 0; $i -lt 10; $i++) {
             $mpvProc.Refresh()
             $mpvHwnd = $mpvProc.MainWindowHandle
             if ($mpvHwnd -ne [IntPtr]::Zero) {
+                Write-Host "Reparenting mpv window into target canvas coordinate layer..." -ForegroundColor Yellow
                 [Win32]::SetParent($mpvHwnd, [IntPtr]$WindowHandle)
-                [Win32]::SetWindowPos($mpvHwnd, [IntPtr]::Zero, $X, $Y, $width, $height, 0x0040 -bor 0x0010 -bor 0x0004)
+
+                if ($shell_hwnd -ne [IntPtr]::Zero) {
+                    Write-Host "Placing mpv behind desktop icons layer..." -ForegroundColor Green
+                    [Win32]::SetWindowPos($mpvHwnd, $shell_hwnd, $X, $Y, $width, $height, 0x0040) # SWP_SHOWWINDOW
+                } else {
+                    [Win32]::SetWindowPos($mpvHwnd, [IntPtr]::Zero, $X, $Y, $width, $height, 0x0040)
+                }
                 break
             }
             Start-Sleep -Seconds 1
