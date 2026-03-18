@@ -14,6 +14,34 @@ import { AutomationPanel } from "./components/AutomationPanel";
 import { QueuePanel } from "./components/QueuePanel";
 import { YouTubePanel } from "./components/YouTubePanel";
 
+function VolumeSlider({ initialVolume, onCommit }: { initialVolume: number, onCommit: (val: number) => void }) {
+  const [localVal, setLocalVal] = useState(initialVolume);
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+      <input 
+        type="range" 
+        min="0" 
+        max="100" 
+        value={localVal} 
+        onChange={(e) => setLocalVal(parseInt(e.target.value))}
+        onMouseUp={() => onCommit(localVal)}
+        onTouchEnd={() => onCommit(localVal)}
+        style={{
+          WebkitAppearance: "none",
+          width: "80px",
+          height: "4px",
+          background: "rgba(255,255,255,0.1)",
+          borderRadius: "2px",
+          outline: "none",
+          cursor: "pointer"
+        }}
+      />
+      <strong>{localVal}%</strong>
+    </div>
+  );
+}
+
 const ICONS = {
   discover: (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -196,8 +224,13 @@ function Home() {
                   <strong>{wallpaper.currentVideo?.source.toUpperCase() || "READY"}</strong>
                </div>
                <div className="hud-metric">
-                  <span>Runtime</span>
-                  <strong>{wallpaper.currentVideo?.duration ? `${wallpaper.currentVideo.duration}s` : "0.0s"}</strong>
+                  <span>Volume</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <VolumeSlider 
+                       initialVolume={wallpaper.volumePercent} 
+                       onCommit={wallpaper.setVolumePercent} 
+                    />
+                  </div>
                </div>
             </div>
           </section>
@@ -385,6 +418,51 @@ function Home() {
               onStop={wallpaper.stopWallpaper}
               isPlaying={wallpaper.isPlaying}
             />
+          )}
+
+          {/* Master Floating HUD for Universal Control */}
+          {wallpaper.isPlaying && (
+            <div className="master-hud">
+              <div className="hud-content">
+                <button 
+                  className={`action-btn ${wallpaper.paused ? "action-btn--primary" : "action-btn--ghost"}`}
+                  style={{ padding: "8px 12px", minWidth: "40px" }}
+                  onClick={() => wallpaper.setPaused(!wallpaper.paused)}
+                  title={wallpaper.paused ? "Resume Wallpaper" : "Pause Wallpaper"}
+                >
+                  {wallpaper.paused ? (
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3" /></svg>
+                  ) : (
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" /><rect x="14" y="4" width="4" height="16" /></svg>
+                  )}
+                </button>
+
+                <div className="hud-info">
+                  <span className="eyebrow" style={{ fontSize: "10px", lineHeight: 1 }}>Now Playing</span>
+                  <span className="hud-title" style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "160px", fontSize: "12px", fontWeight: "bold" }}>
+                    {wallpaper.currentVideo?.id.replace(/-/g, " ") || "Live Wallpaper"}
+                  </span>
+                </div>
+
+                <div className="hud-divider" style={{ width: "1px", height: "24px", background: "rgba(255,255,255,0.08)" }} />
+
+                <div className="hud-audio">
+                  <span className="eyebrow" style={{ fontSize: "10px" }}>Audio</span>
+                  <VolumeSlider 
+                    initialVolume={wallpaper.volumePercent} 
+                    onCommit={wallpaper.setVolumePercent} 
+                  />
+                </div>
+
+                <button 
+                  className="action-btn action-btn--danger-ghost"
+                  style={{ padding: "8px 12px", fontSize: "11px" }}
+                  onClick={wallpaper.stopWallpaper}
+                >
+                  Stop
+                </button>
+              </div>
+            </div>
           )}
         </main>
       </div>

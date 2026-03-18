@@ -29,8 +29,10 @@ export interface YouTubeState {
   meta: YtMetaResult | null;
   startTime: number;
   endTime: number;
+  maxHeight: number;
   isLoadingMeta: boolean;
   isDownloading: boolean;
+  downloadProgress: number; // 0 to 100
   error: string | null;
   downloadedVideo: YtMetaResult | null;
 }
@@ -41,14 +43,16 @@ export function useYouTube() {
     meta: null,
     startTime: 0,
     endTime: 0,
+    maxHeight: 1080,
     isLoadingMeta: false,
     isDownloading: false,
+    downloadProgress: 0,
     error: null,
     downloadedVideo: null,
   });
 
   const setUrl = useCallback((url: string) => {
-    setState((s) => ({ ...s, url, error: null }));
+    setState((s) => ({ ...s, url, error: null, meta: null }));
   }, []);
 
   const setStartTime = useCallback((startTime: number) => {
@@ -57,6 +61,10 @@ export function useYouTube() {
 
   const setEndTime = useCallback((endTime: number) => {
     setState((s) => ({ ...s, endTime }));
+  }, []);
+
+  const setMaxHeight = useCallback((maxHeight: number) => {
+    setState((s) => ({ ...s, maxHeight }));
   }, []);
 
   const fetchMeta = useCallback(async () => {
@@ -97,17 +105,30 @@ export function useYouTube() {
       return null;
     }
 
-    setState((s) => ({ ...s, isDownloading: true, error: null }));
+    setState((s) => ({ ...s, isDownloading: true, downloadProgress: 0, error: null }));
+
     try {
+      // Lazy load window listener
       const { invoke } = await getCoreApi();
+      const { listen } = await import("@tauri-apps/api/event");
+
+      const unlisten = await listen<number>("yt-progress", (event) => {
+        setState((s) => ({ ...s, downloadProgress: event.payload }));
+      });
+
       const result = await invoke<YtMetaResult>("download_youtube_clip", {
         url: state.url.trim(),
         startTime: start,
         endTime: end,
+        maxHeight: state.maxHeight,
       });
+
+      unlisten();
+
       setState((s) => ({
         ...s,
         isDownloading: false,
+        downloadProgress: 100,
         downloadedVideo: result,
       }));
       return result;
@@ -116,13 +137,14 @@ export function useYouTube() {
       setState((s) => ({ ...s, isDownloading: false, error: message }));
       return null;
     }
-  }, [state.url, state.startTime, state.endTime]);
+  }, [state.url, state.startTime, state.endTime, state.maxHeight]);
 
   return {
     ...state,
     setUrl,
     setStartTime,
     setEndTime,
+    setMaxHeight,
     fetchMeta,
     downloadClip,
   };

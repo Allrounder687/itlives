@@ -4,6 +4,7 @@
 use super::{SearchConfig, VideoProvider, VideoResult};
 use serde::Deserialize;
 use std::process::Command;
+use tauri::Emitter;
 
 pub struct YouTubeProvider;
 
@@ -74,13 +75,14 @@ pub fn fetch_metadata(url: &str) -> Result<YtMeta, String> {
         .map_err(|e| format!("Failed to parse yt-dlp JSON: {}", e))
 }
 
-/// Download a time-trimmed clip to the cache directory.
-/// `video_id` is passed in to avoid a redundant fetch_metadata call.
+/// Download a time-trimmed clip to the cache directory with quality caps and progress streaming.
 pub fn download_clip(
     url: &str,
     video_id: &str,
     start_secs: f64,
     end_secs: f64,
+    max_height: u32,
+    window: Option<&tauri::Window>,
 ) -> Result<String, String> {
     let ytdlp = find_ytdlp()?;
     let cache_dir = crate::wallpaper::desktop::get_cache_dir();
@@ -92,51 +94,99 @@ pub fn download_clip(
         .take(32)
         .collect::<String>();
     let filename = format!(
-        "yt_{}_{:.0}_{:.0}.mp4",
-        safe_id, start_secs, end_secs
+        "yt_{}_{:.0}_{:.0}_{}p.mp4",
+        safe_id, start_secs, end_secs, max_height
     );
     let dest = cache_dir.join(&filename);
 
-    // Skip if already downloaded
     if dest.exists() {
-        log::info!("[YouTube] Clip already cached: {}", dest.display());
+        if let Some(w) = window { let _ = w.emit("yt-progress", 100); }
         return Ok(dest.to_string_lossy().to_string());
     }
 
     let section_arg = format!("*{:.1}-{:.1}", start_secs, end_secs);
-
-    log::info!(
-        "[YouTube] Downloading clip: {} section={} (id={})",
-        url, section_arg, safe_id
+    let format_arg = format!(
+        "bestvideo[height<={}][ext=mp4]+bestaudio[ext=m4a]/best[height<={}]/best",
+        max_height, max_height
     );
 
-    // Cap at 1080p to avoid massive 4K downloads; skip --force-keyframes-at-cuts
-    // to prevent a full re-encode (cuts may be off by a fraction of a second).
-    let output = Command::new(&ytdlp)
+    log::info!(
+        "[YouTube] Downloading clip: {} section={} quality={}p",
+        url, section_arg, max_height
+    );
+
+    use std::io::{BufRead, BufReader};
+    use std::process::Stdio;
+
+    let mut child = Command::new(&ytdlp)
         .args([
             "--no-playlist",
             "--no-warnings",
             "--download-sections",
             &section_arg,
             "-f",
-            "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best",
+            &format_arg,
             "--merge-output-format",
             "mp4",
+            "--newline",
+            "--progress",
             "-o",
             &dest.to_string_lossy(),
             url,
         ])
-        .output()
-        .map_err(|e| format!("Failed to run yt-dlp download: {}", e))?;
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("Failed to spawn yt-dlp: {}", e))?;
 
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("yt-dlp download failed: {}", stderr.trim()));
+    if let Some(stderr) = child.stderr.take() {
+        let w_clone = window.map(|w| w.clone());
+        let clip_dur = if end_secs > start_secs { end_secs - start_secs } else { 1.0 };
+        
+        std::thread::spawn(move || {
+            let reader = BufReader::new(stderr);
+            // Split on \r (carriage return) instead of \n to capture incremental updates
+            for chunk in reader.split(b'\r').filter_map(|c| c.ok()) {
+                let line = String::from_utf8_lossy(&chunk);
+                if let Some(w) = w_clone.as_ref() {
+                    // Standard yt-dlp percent
+                    if line.contains("[download]") && line.contains("%") {
+                        if let Some(pct_str) = line.split_whitespace().find(|s| s.contains("%")) {
+                            if let Ok(pct) = pct_str.replace("%", "").parse::<f64>() {
+                                let _ = w.emit("yt-progress", pct as u32);
+                            }
+                        }
+                    } 
+                    // ffmpeg timestamp parser: "time=00:00:05.12"
+                    else if line.contains("time=") {
+                        if let Some(time_part) = line.split_whitespace().find(|s| s.starts_with("time=")) {
+                            let ts_str = time_part.replace("time=", ""); // "00:00:05.12"
+                            let hms: Vec<&str> = ts_str.split(':').collect();
+                            if hms.len() >= 3 {
+                                if let (Ok(h), Ok(m), Ok(s)) = (hms[0].parse::<f64>(), hms[1].parse::<f64>(), hms[2].parse::<f64>()) {
+                                    let current_secs = (h * 3600.0) + (m * 60.0) + s;
+                                    let pct = ((current_secs / clip_dur) * 100.0).min(100.0);
+                                    let _ = w.emit("yt-progress", pct as u32);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    let status = child.wait().map_err(|e| format!("yt-dlp wait failed: {}", e))?;
+
+    if !status.success() {
+        return Err("yt-dlp download failed".to_string());
     }
 
     if !dest.exists() {
         return Err("yt-dlp completed but output file was not created".to_string());
     }
+
+    if let Some(w) = window { let _ = w.emit("yt-progress", 100); }
 
     log::info!(
         "[YouTube] Clip saved: {} ({} bytes)",
@@ -203,7 +253,7 @@ impl VideoProvider for YouTubeProvider {
 
         let url = video.video_url.clone();
         let vid_id = video.id.clone();
-        tokio::task::spawn_blocking(move || download_clip(&url, &vid_id, start, end))
+        tokio::task::spawn_blocking(move || download_clip(&url, &vid_id, start, end, 1080, None))
             .await
             .map_err(|e| format!("Task join error: {}", e))?
     }

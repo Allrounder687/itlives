@@ -282,9 +282,12 @@ async fn fetch_youtube_meta(url: String) -> Result<VideoResult, String> {
 /// Downloads a time-trimmed YouTube clip and returns a VideoResult with local_path.
 #[tauri::command]
 async fn download_youtube_clip(
+    state: State<'_, AppStateStore>,
     url: String,
     start_time: f64,
     end_time: f64,
+    max_height: u32,
+    window: tauri::Window,
 ) -> Result<VideoResult, String> {
     // Fetch metadata first for title/thumbnail info
     let meta_url = url.clone();
@@ -297,12 +300,12 @@ async fn download_youtube_clip(
     let dl_url = url.clone();
     let dl_id = meta.id.clone();
     let local_path = tokio::task::spawn_blocking(move || {
-        wallpaper::providers::youtube::download_clip(&dl_url, &dl_id, start_time, end_time)
+        wallpaper::providers::youtube::download_clip(&dl_url, &dl_id, start_time, end_time, max_height, Some(&window))
     })
     .await
     .map_err(|e| format!("Task join error: {}", e))??;
 
-    Ok(VideoResult {
+    let video = VideoResult {
         id: meta.id.clone(),
         video_url: url,
         thumbnail_url: meta.thumbnail.unwrap_or_default(),
@@ -313,7 +316,12 @@ async fn download_youtube_clip(
         source: "youtube".to_string(),
         start_time: Some(start_time),
         end_time: Some(end_time),
-    })
+    };
+
+    // Auto-save to Imports so it appears in the Library permanently
+    let _ = wallpaper::state::import_local_video(&state, video.clone());
+
+    Ok(video)
 }
 
 fn restore_wallpaper_if_enabled(store: &AppStateStore) {

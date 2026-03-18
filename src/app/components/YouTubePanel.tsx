@@ -1,6 +1,7 @@
 "use client";
 
 import { useYouTube, YtMetaResult } from "@/hooks/useYouTube";
+import { useState, useEffect, useRef } from "react";
 
 interface YouTubePanelProps {
   onApplyWallpaper: (video: any) => void;
@@ -22,9 +23,17 @@ function formatDuration(seconds: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
+const QUALITIES = [
+  { label: "720p", value: 720 },
+  { label: "1080p (HD)", value: 1080 },
+  { label: "1440p (2K)", value: 1440 },
+  { label: "2160p (4K)", value: 2160 },
+];
+
 export function YouTubePanel({ onApplyWallpaper, onStop, isPlaying }: YouTubePanelProps) {
   const yt = useYouTube();
   const clipDuration = yt.endTime - yt.startTime;
+  const playerRef = useRef<HTMLIFrameElement>(null);
 
   const handleFetchAndApply = async () => {
     const result = await yt.downloadClip();
@@ -33,6 +42,20 @@ export function YouTubePanel({ onApplyWallpaper, onStop, isPlaying }: YouTubePan
     }
   };
 
+  // Sync Video IFrame Time on slider drags
+  useEffect(() => {
+    if (playerRef.current && yt.meta) {
+      const iframe = playerRef.current;
+      // Seek via iframe postMessage works only with YT.Player API, 
+      // but simple iframe reload with start= is foolproof for previews.
+      // To avoid reloading iframe 10x per second, we can just do a small reload on mouseUp or debounced.
+    }
+  }, [yt.startTime, yt.meta]);
+
+  const embedUrl = yt.meta 
+    ? `https://www.youtube.com/embed/${yt.meta.id}?start=${Math.floor(yt.startTime)}&autoplay=0&controls=1&rel=0`
+    : "";
+
   return (
     <section className="panel panel--main yt-panel">
       <div className="section-head">
@@ -40,7 +63,7 @@ export function YouTubePanel({ onApplyWallpaper, onStop, isPlaying }: YouTubePan
         <h2>Video to Wallpaper</h2>
       </div>
 
-      {/* URL Input */}
+      {/* URL Input + Quality */}
       <div className="yt-url-row">
         <div className="field" style={{ flex: 1 }}>
           <span className="field__label">YouTube Video URL</span>
@@ -55,6 +78,18 @@ export function YouTubePanel({ onApplyWallpaper, onStop, isPlaying }: YouTubePan
                 if (e.key === "Enter") yt.fetchMeta();
               }}
             />
+            
+            <select 
+              className="input input--hud" 
+              style={{ width: "120px" }}
+              value={yt.maxHeight}
+              onChange={(e) => yt.setMaxHeight(parseInt(e.target.value))}
+            >
+              {QUALITIES.map(q => (
+                <option key={q.value} value={q.value}>{q.label}</option>
+              ))}
+            </select>
+
             <button
               type="button"
               className="action-btn action-btn--accent-ghost"
@@ -81,35 +116,30 @@ export function YouTubePanel({ onApplyWallpaper, onStop, isPlaying }: YouTubePan
       {/* Video Metadata + Time Slider */}
       {yt.meta && !yt.isLoadingMeta && (
         <div className="yt-clip-builder">
-          {/* Thumbnail + Info */}
-          <div className="yt-meta-card">
-            {yt.meta.thumbnail_url && (
-              <img
-                className="yt-thumb"
-                src={yt.meta.thumbnail_url}
-                alt="Video thumbnail"
-              />
-            )}
-            <div className="yt-meta-info">
-              <div className="yt-meta-tag">
-                <span className="eyebrow">ID</span>
-                <strong>{yt.meta.id}</strong>
-              </div>
-              <div className="yt-meta-tag">
-                <span className="eyebrow">Duration</span>
-                <strong>{formatDuration(yt.meta.duration)}</strong>
-              </div>
-              <div className="yt-meta-tag">
-                <span className="eyebrow">Resolution</span>
-                <strong>{yt.meta.width}×{yt.meta.height}</strong>
-              </div>
-            </div>
+          {/* IFrame Preview instead of Static Card */}
+          <div className="yt-player-container">
+            <iframe
+              ref={playerRef}
+              className="yt-preview-iframe"
+              src={embedUrl}
+              title="YouTube video player"
+              frameBorder="0"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+            />
+          </div>
+
+          {/* Quick Info Bar */}
+          <div className="yt-meta-tagline">
+            <span>ID: <strong>{yt.meta.id}</strong></span>
+            <span>Duration: <strong>{formatDuration(yt.meta.duration)}</strong></span>
+            <span>Resolution Choice: <strong>{yt.maxHeight}p max</strong></span>
           </div>
 
           {/* Dual Range Slider */}
           <div className="yt-range-section">
             <div className="yt-range-header">
-              <span className="eyebrow">Clip Range</span>
+              <span className="eyebrow">Clip Range Selection</span>
               <span className="yt-clip-duration">
                 {formatTime(yt.startTime)} → {formatTime(yt.endTime)} ({formatDuration(clipDuration)})
               </span>
@@ -186,17 +216,23 @@ export function YouTubePanel({ onApplyWallpaper, onStop, isPlaying }: YouTubePan
           {yt.isDownloading && (
             <div className="yt-download-progress">
               <div className="yt-progress-bar">
-                <div className="yt-progress-fill" />
+                <div 
+                  className="yt-progress-fill" 
+                  style={{ width: `${yt.downloadProgress}%`, animation: "none" }} 
+                />
               </div>
-              <p className="muted">Downloading and trimming clip via yt-dlp...</p>
+              <div style={{ display: "flex", justifyContent: "space-between", marginTop: "4px" }}>
+                <p className="muted">Downloading and trimming clip via yt-dlp...</p>
+                <strong style={{ color: "var(--accent)" }}>{Math.floor(yt.downloadProgress)}%</strong>
+              </div>
             </div>
           )}
 
           {/* Success */}
           {yt.downloadedVideo && !yt.isDownloading && (
             <div className="callout callout--success">
-              <span className="callout__label">Clip Ready</span>
-              <p>Downloaded {formatDuration(clipDuration)} clip successfully.</p>
+              <span className="callout__label">Clip Ready & Saved in Library</span>
+              <p>Downloaded {formatDuration(clipDuration)} clip successfully at {yt.maxHeight}p.</p>
             </div>
           )}
         </div>
