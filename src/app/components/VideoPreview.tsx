@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 
 import { VideoResult } from "@/hooks/useWallpaper";
+import { convertFileSrc } from "@tauri-apps/api/core";
 
 interface VideoPreviewProps {
   video: VideoResult;
@@ -32,7 +33,7 @@ export function VideoPreview({
   const videoRef = useRef<HTMLVideoElement>(null);
 
   const videoSrc = video.local_path
-    ? `https://asset.localhost/${encodeURIComponent(video.local_path.replace(/\\/g, "/"))}`
+    ? convertFileSrc(video.local_path)
     : video.video_url;
 
   useEffect(() => {
@@ -70,11 +71,11 @@ export function VideoPreview({
           muted
           playsInline
           controls
-          onError={handleError}
           style={{ filter: previewCssFilter(filterPreset) }}
         />
         <div className="preview-overlay">
           <span className="preview-chip">{video.source.toUpperCase()}</span>
+          <span className="preview-chip" style={{ wordBreak: "break-all", maxWidth: "200px" }}>SRC: {videoSrc}</span>
           <span className="preview-chip">
             {video.duration > 0 ? `${video.duration.toFixed(1)}s` : "Looping"}
           </span>

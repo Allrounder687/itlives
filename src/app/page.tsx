@@ -9,7 +9,7 @@ import { ControlBar } from "./components/ControlBar";
 import { StatusBar } from "./components/StatusBar";
 import { SearchResults } from "./components/SearchResults";
 import { FloatingPreview } from "./components/FloatingPreview";
-import { LibraryList, ImportedLibraryList } from "./components/LibraryList";
+import { UnifiedLibrary } from "./components/LibraryList";
 import { AutomationPanel } from "./components/AutomationPanel";
 import { QueuePanel } from "./components/QueuePanel";
 import { YouTubePanel } from "./components/YouTubePanel";
@@ -72,6 +72,13 @@ const ICONS = {
       <polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02" />
     </svg>
   ),
+  settings: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 \
+1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82 1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
+  ),
 };
 
 const FEATURE_CARDS = [
@@ -96,7 +103,7 @@ const SOURCE_NOTES: Record<string, string> = {
 
 function Home() {
   const wallpaper = useWallpaper();
-  const [activeTab, setActiveTab] = useState<"discover" | "library" | "direct" | "preview" | "youtube">("discover");
+  const [activeTab, setActiveTab] = useState<"discover" | "library" | "direct" | "preview" | "youtube" | "settings">("discover");
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   const handleFetchAndApply = async () => {
@@ -198,6 +205,15 @@ function Home() {
                 <div className="tab-icon">{ICONS.youtube}</div>
                 {!isSidebarCollapsed && <span>YouTube</span>}
               </button>
+              <button 
+                type="button" 
+                className={`sidebar-list__item sidebar-list__item--clickable ${activeTab === "settings" ? "sidebar-list__item--active" : ""}`} 
+                onClick={() => setActiveTab("settings")}
+                title="Settings"
+              >
+                <div className="tab-icon">{ICONS.settings}</div>
+                {!isSidebarCollapsed && <span>Settings</span>}
+              </button>
             </div>
           </div>
         </aside>
@@ -287,60 +303,36 @@ function Home() {
           )}
 
           {activeTab === "library" && (
-            <>
+            <UnifiedLibrary
+              favorites={wallpaper.favorites}
+              recents={wallpaper.recents}
+              imports={wallpaper.imports}
+              favoriteIds={favoriteIds}
+              queueIds={queueIds}
+              onApply={(item) => wallpaper.applyWallpaper(item.video)}
+              onPreview={(item) => wallpaper.selectVideo(item.video)}
+              onToggleFavorite={(item) => wallpaper.toggleFavorite(item.video)}
+              onToggleQueue={(item) =>
+                queueIds.has(`${item.video.id}:${item.video.local_path}`)
+                  ? wallpaper.removeFromQueue(item.video)
+                  : wallpaper.addToQueue(item.video)
+              }
+              onRemoveRecent={(item) => wallpaper.removeRecentVideo(item.video)}
+              onRemoveImport={(item) => wallpaper.removeImportedVideo(item.video)}
+            />
+          )}
+
+          {activeTab === "settings" && (
+            <section className="panel" style={{ padding: "16px", marginTop: "1rem" }}>
+              <div className="section-head" style={{ marginBottom: "1.5rem" }}>
+                <span className="eyebrow">Controls & Queue</span>
+                <h2>Application Settings</h2>
+              </div>
               <div className="support-grid">
                 <AutomationPanel wallpaper={wallpaper} />
                 <QueuePanel wallpaper={wallpaper} />
               </div>
-
-              <section className="library-grid">
-                <ImportedLibraryList
-                  items={wallpaper.imports}
-                  queueIds={queueIds}
-                  onApply={(item) => wallpaper.applyWallpaper(item.video)}
-                  onPreview={(item) => wallpaper.selectVideo(item.video)}
-                  onRemove={(item) => wallpaper.removeImportedVideo(item.video)}
-                  onToggleQueue={(item) =>
-                    queueIds.has(`${item.video.id}:${item.video.local_path}`)
-                      ? wallpaper.removeFromQueue(item.video)
-                      : wallpaper.addToQueue(item.video)
-                  }
-                />
-
-                <LibraryList
-                  title="Favorites"
-                  empty="Favorite wallpapers appear here after you save them."
-                  items={wallpaper.favorites}
-                  favoriteIds={favoriteIds}
-                  queueIds={queueIds}
-                  onApply={(item) => wallpaper.applyWallpaper(item.video)}
-                  onPreview={(item) => wallpaper.selectVideo(item.video)}
-                  onToggleFavorite={(item) => wallpaper.toggleFavorite(item.video)}
-                  onToggleQueue={(item) =>
-                    queueIds.has(`${item.video.id}:${item.video.local_path}`)
-                      ? wallpaper.removeFromQueue(item.video)
-                      : wallpaper.addToQueue(item.video)
-                  }
-                />
-
-                <LibraryList
-                  title="Recent Wallpapers"
-                  empty="Applied wallpapers will appear here after the first successful apply."
-                  items={wallpaper.recents}
-                  favoriteIds={favoriteIds}
-                  queueIds={queueIds}
-                  onApply={(item) => wallpaper.applyWallpaper(item.video)}
-                  onPreview={(item) => wallpaper.selectVideo(item.video)}
-                  onToggleFavorite={(item) => wallpaper.toggleFavorite(item.video)}
-                  onRemove={(item) => wallpaper.removeRecentVideo(item.video)}
-                  onToggleQueue={(item) =>
-                    queueIds.has(`${item.video.id}:${item.video.local_path}`)
-                      ? wallpaper.removeFromQueue(item.video)
-                      : wallpaper.addToQueue(item.video)
-                  }
-                />
-              </section>
-            </>
+            </section>
           )}
 
           {activeTab === "direct" && (
