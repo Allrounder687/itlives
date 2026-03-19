@@ -12,6 +12,7 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "OpenClaw LWP - Live Wallpaper Player",
         "width": 1480,
         "height": 940,
@@ -22,6 +23,18 @@
         "shadow": true,
         "resizable": true,
         "fullscreen": false
+      },
+      {
+        "label": "tray_menu",
+        "url": "/tray",
+        "width": 380,
+        "height": 480,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "resizable": false,
+        "visible": false,
+        "shadow": true
       }
     ],
     "security": {

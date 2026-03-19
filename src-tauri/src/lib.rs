@@ -3,7 +3,7 @@ mod wallpaper;
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Manager, State,
+    Manager, State, Position, PhysicalPosition, Size, LogicalSize
 };
 use wallpaper::providers::{self, SearchConfig, VideoResult};
 use wallpaper::state::{AppStateStore, QueueAdvanceResult, WallpaperState};
@@ -442,13 +442,20 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
             } = event
             {
                 let app_handle = tray.app_handle();
-                if let Some(window) = app_handle.get_webview_window("main") {
-                    let visible = window.is_visible().unwrap_or(true);
+                if let Some(window) = app_handle.get_webview_window("tray_menu") {
+                    let visible = window.is_visible().unwrap_or(false);
                     if visible {
                         let _ = window.hide();
                     } else {
+                        if let Ok(Some(m)) = window.current_monitor() {
+                             let size = m.size();
+                             let scale = m.scale_factor();
+                             let _ = window.set_size(Size::Logical(LogicalSize::new(380.0, 480.0)));
+                             let x = size.width as f64 - (380.0 * scale) - (15.0 * scale);
+                             let y = size.height as f64 - (480.0 * scale) - (50.0 * scale);
+                             let _ = window.set_position(Position::Physical(PhysicalPosition::new(x as i32, y as i32)));
+                        }
                         let _ = window.show();
-                        let _ = window.unminimize();
                         let _ = window.set_focus();
                     }
                 }

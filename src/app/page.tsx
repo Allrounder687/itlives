@@ -19,11 +19,11 @@ function VolumeSlider({ initialVolume, onCommit }: { initialVolume: number, onCo
 
   return (
     <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-      <input 
-        type="range" 
-        min="0" 
-        max="100" 
-        value={localVal} 
+      <input
+        type="range"
+        min="0"
+        max="100"
+        value={localVal}
         onChange={(e) => setLocalVal(parseInt(e.target.value))}
         onMouseUp={() => onCommit(localVal)}
         onTouchEnd={() => onCommit(localVal)}
@@ -145,8 +145,8 @@ function Home() {
       <div className={`shell__body ${isSidebarCollapsed ? "shell__body--collapsed" : ""}`}>
         <aside className={`sidebar panel ${isSidebarCollapsed ? "sidebar--collapsed" : ""}`}>
           <div className="brand-block">
-            <button 
-              type="button" 
+            <button
+              type="button"
               className="brand-mark brand-mark--clickable"
               onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
               title={isSidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
@@ -160,54 +160,54 @@ function Home() {
 
           <div className="sidebar-section">
             <div className="sidebar-list">
-              <button 
-                type="button" 
-                className={`sidebar-list__item sidebar-list__item--clickable ${activeTab === "discover" ? "sidebar-list__item--active" : ""}`} 
+              <button
+                type="button"
+                className={`sidebar-list__item sidebar-list__item--clickable ${activeTab === "discover" ? "sidebar-list__item--active" : ""}`}
                 onClick={() => setActiveTab("discover")}
                 title="Discover"
               >
                 <div className="tab-icon">{ICONS.discover}</div>
                 {!isSidebarCollapsed && <span>Discover</span>}
               </button>
-              <button 
-                type="button" 
-                className={`sidebar-list__item sidebar-list__item--clickable ${activeTab === "library" ? "sidebar-list__item--active" : ""}`} 
+              <button
+                type="button"
+                className={`sidebar-list__item sidebar-list__item--clickable ${activeTab === "library" ? "sidebar-list__item--active" : ""}`}
                 onClick={() => setActiveTab("library")}
                 title="Library"
               >
                 <div className="tab-icon">{ICONS.library}</div>
                 {!isSidebarCollapsed && <span>Library</span>}
               </button>
-              <button 
-                type="button" 
-                className={`sidebar-list__item sidebar-list__item--clickable ${activeTab === "direct" ? "sidebar-list__item--active" : ""}`} 
+              <button
+                type="button"
+                className={`sidebar-list__item sidebar-list__item--clickable ${activeTab === "direct" ? "sidebar-list__item--active" : ""}`}
                 onClick={() => setActiveTab("direct")}
                 title="Direct Launch"
               >
                 <div className="tab-icon">{ICONS.direct}</div>
                 {!isSidebarCollapsed && <span>Direct Launch</span>}
               </button>
-              <button 
-                type="button" 
-                className={`sidebar-list__item sidebar-list__item--clickable ${activeTab === "preview" ? "sidebar-list__item--active" : ""}`} 
+              <button
+                type="button"
+                className={`sidebar-list__item sidebar-list__item--clickable ${activeTab === "preview" ? "sidebar-list__item--active" : ""}`}
                 onClick={() => setActiveTab("preview")}
                 title="Preview Deck"
               >
                 <div className="tab-icon">{ICONS.preview}</div>
                 {!isSidebarCollapsed && <span>Preview Deck</span>}
               </button>
-              <button 
-                type="button" 
-                className={`sidebar-list__item sidebar-list__item--clickable ${activeTab === "youtube" ? "sidebar-list__item--active" : ""}`} 
+              <button
+                type="button"
+                className={`sidebar-list__item sidebar-list__item--clickable ${activeTab === "youtube" ? "sidebar-list__item--active" : ""}`}
                 onClick={() => setActiveTab("youtube")}
                 title="YouTube"
               >
                 <div className="tab-icon">{ICONS.youtube}</div>
                 {!isSidebarCollapsed && <span>YouTube</span>}
               </button>
-              <button 
-                type="button" 
-                className={`sidebar-list__item sidebar-list__item--clickable ${activeTab === "settings" ? "sidebar-list__item--active" : ""}`} 
+              <button
+                type="button"
+                className={`sidebar-list__item sidebar-list__item--clickable ${activeTab === "settings" ? "sidebar-list__item--active" : ""}`}
                 onClick={() => setActiveTab("settings")}
                 title="Settings"
               >
@@ -231,23 +231,23 @@ function Home() {
             </div>
 
             <div className="hero__metrics">
-               <div className="hud-metric">
-                  <span>Resolution</span>
-                  <strong>{currentResolution}</strong>
-               </div>
-               <div className="hud-metric">
-                  <span>Provider</span>
-                  <strong>{wallpaper.currentVideo?.source.toUpperCase() || "READY"}</strong>
-               </div>
-               <div className="hud-metric">
-                  <span>Volume</span>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    <VolumeSlider 
-                       initialVolume={wallpaper.volumePercent} 
-                       onCommit={wallpaper.setVolumePercent} 
-                    />
-                  </div>
-               </div>
+              <div className="hud-metric">
+                <span>Resolution</span>
+                <strong>{currentResolution}</strong>
+              </div>
+              <div className="hud-metric">
+                <span>Provider</span>
+                <strong>{wallpaper.currentVideo?.source.toUpperCase() || "READY"}</strong>
+              </div>
+              <div className="hud-metric">
+                <span>Volume</span>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <VolumeSlider
+                    initialVolume={wallpaper.volumePercent}
+                    onCommit={wallpaper.setVolumePercent}
+                  />
+                </div>
+              </div>
             </div>
           </section>
 
@@ -267,9 +267,9 @@ function Home() {
                 onStop={wallpaper.stopWallpaper}
               />
 
-              <SearchResults 
-                results={wallpaper.searchResults} 
-                onSelect={wallpaper.selectVideo} 
+              <SearchResults
+                results={wallpaper.searchResults}
+                onSelect={wallpaper.selectVideo}
                 page={wallpaper.page}
                 onPageChange={wallpaper.setPage}
               />
@@ -353,8 +353,8 @@ function Home() {
               <div className="hud-ready-zone">
                 <div className="hud-ring" />
                 <div className="hud-center">
-                   <span className="eyebrow">Ready to Deploy</span>
-                   <p className="muted">Paste a stream URL or browse for a local file to override the current desktop scene.</p>
+                  <span className="eyebrow">Ready to Deploy</span>
+                  <p className="muted">Paste a stream URL or browse for a local file to override the current desktop scene.</p>
                 </div>
               </div>
             </section>
@@ -416,7 +416,7 @@ function Home() {
           {wallpaper.isPlaying && (
             <div className="master-hud">
               <div className="hud-content">
-                <button 
+                <button
                   className={`action-btn ${wallpaper.paused ? "action-btn--primary" : "action-btn--ghost"}`}
                   style={{ padding: "8px 12px", minWidth: "40px" }}
                   onClick={() => wallpaper.setPaused(!wallpaper.paused)}
@@ -439,7 +439,7 @@ function Home() {
                 <div className="hud-divider" style={{ width: "1px", height: "24px", background: "rgba(255,255,255,0.08)" }} />
 
                 <div className="hud-audio" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                  <button 
+                  <button
                     style={{ background: "transparent", border: "none", cursor: "pointer", padding: 0, color: "var(--accent)", display: "flex" }}
                     onClick={() => {
                       if (wallpaper.volumePercent > 0) {
@@ -452,18 +452,18 @@ function Home() {
                     title={wallpaper.volumePercent > 0 ? "Mute" : "Unmute"}
                   >
                     {wallpaper.volumePercent > 0 ? (
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 5L6 9H2v6h4l5 4V5z" /><path d="M15.54 8.46a5 5 0 0 1 0 7.07" /><path d="M19.07 4.93a10 10 0 0 1 0 14.14" /></svg>
                     ) : (
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: "red" }}><path d="M11 5L6 9H2v6h4l5 4V5z"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: "red" }}><path d="M11 5L6 9H2v6h4l5 4V5z" /><line x1="23" y1="9" x2="17" y2="15" /><line x1="17" y1="9" x2="23" y2="15" /></svg>
                     )}
                   </button>
-                  <VolumeSlider 
-                    initialVolume={wallpaper.volumePercent} 
-                    onCommit={wallpaper.setVolumePercent} 
+                  <VolumeSlider
+                    initialVolume={wallpaper.volumePercent}
+                    onCommit={wallpaper.setVolumePercent}
                   />
                 </div>
 
-                <button 
+                <button
                   className="action-btn action-btn--danger-ghost"
                   style={{ padding: "8px 12px", fontSize: "11px" }}
                   onClick={wallpaper.stopWallpaper}
