@@ -94,7 +94,9 @@ impl AppStateStore {
     }
 
     fn persist(&self, state: &WallpaperState) -> Result<(), String> {
-        save_to_path(&self.path, state)
+        save_to_path(&self.path, state)?;
+        crate::integrations::save_rainmeter_inc(state);
+        Ok(())
     }
 
     fn update<F>(&self, mutate: F) -> Result<WallpaperState, String>

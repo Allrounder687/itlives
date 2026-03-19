@@ -1,374 +1,13 @@
 mod wallpaper;
+pub mod commands;
+pub mod integrations;
 
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Manager, State, Position, PhysicalPosition, Size, LogicalSize
 };
-use wallpaper::providers::{self, SearchConfig, VideoResult};
-use wallpaper::state::{AppStateStore, QueueAdvanceResult, WallpaperState};
-
-#[tauri::command]
-async fn fetch_video(source: String, query: String, order: String) -> Result<VideoResult, String> {
-    let provider = providers::get_provider(&source)?;
-    let config = SearchConfig {
-        query,
-        order,
-        count: 40,
-        page: 0,
-    };
-    provider.fetch_video(&config).await
-}
-
-#[tauri::command]
-async fn fetch_videos_list(source: String, query: String, order: String, page: u32) -> Result<Vec<VideoResult>, String> {
-    let provider = providers::get_provider(&source)?;
-    let config = SearchConfig {
-        query,
-        order,
-        count: 40,
-        page,
-    };
-    provider.fetch_videos_list(&config).await
-}
-
-#[tauri::command]
-async fn apply_wallpaper(
-    state: State<'_, AppStateStore>,
-    mut video: VideoResult,
-    scale_percent: u64,
-    start_time: Option<f64>,
-    end_time: Option<f64>,
-) -> Result<WallpaperState, String> {
-    if video.local_path.is_empty() {
-        log::info!("[Core] Download on apply triggered for source: {}", video.source);
-        let provider = providers::get_provider(&video.source)?;
-        let local_path = provider.download_video(&video).await?;
-        video.local_path = local_path;
-        
-        let _ = wallpaper::desktop::cleanup_cache(15);
-    }
-
-    let current = wallpaper::state::get(&state);
-    wallpaper::desktop::set_video(
-        &video.local_path,
-        scale_percent,
-        current.volume_percent,
-        &current.video_filter,
-        false, // Explicitly start playing instead of using previous state
-        start_time,
-        end_time,
-    )?;
-    wallpaper::state::mark_active(&state, video)
-}
-
-#[tauri::command]
-fn stop_wallpaper(state: State<'_, AppStateStore>) -> Result<WallpaperState, String> {
-    wallpaper::desktop::stop_video()?;
-    wallpaper::state::clear_active(&state)
-}
-
-#[tauri::command]
-fn get_wallpaper_status() -> Option<String> {
-    wallpaper::desktop::get_current()
-}
-
-#[tauri::command]
-fn list_sources() -> Vec<String> {
-    providers::list_providers()
-}
-
-#[tauri::command]
-fn cleanup_cache(keep: usize) -> Result<usize, String> {
-    wallpaper::desktop::cleanup_cache(keep)
-}
-
-#[tauri::command]
-fn toggle_favorite(
-    state: State<'_, AppStateStore>,
-    video: VideoResult,
-) -> Result<WallpaperState, String> {
-    wallpaper::state::toggle_favorite(&state, video)
-}
-
-#[tauri::command]
-fn get_app_state(state: State<'_, AppStateStore>) -> WallpaperState {
-    wallpaper::state::get(&state)
-}
-
-#[tauri::command]
-fn add_to_queue(
-    state: State<'_, AppStateStore>,
-    video: VideoResult,
-) -> Result<WallpaperState, String> {
-    wallpaper::state::add_to_queue(&state, video)
-}
-
-#[tauri::command]
-fn remove_from_queue(
-    state: State<'_, AppStateStore>,
-    video: VideoResult,
-) -> Result<WallpaperState, String> {
-    wallpaper::state::remove_from_queue(&state, video)
-}
-
-#[tauri::command]
-fn clear_queue(state: State<'_, AppStateStore>) -> Result<WallpaperState, String> {
-    wallpaper::state::clear_queue(&state)
-}
-
-#[tauri::command]
-fn set_rotation(
-    state: State<'_, AppStateStore>,
-    enabled: bool,
-    interval_seconds: u64,
-) -> Result<WallpaperState, String> {
-    wallpaper::state::set_rotation(&state, enabled, interval_seconds)
-}
-
-#[tauri::command]
-fn advance_rotation(
-    state: State<'_, AppStateStore>,
-    scale_percent: u64,
-) -> Result<QueueAdvanceResult, String> {
-    let current = wallpaper::state::get(&state);
-    let advanced = wallpaper::state::advance_queue(&state)?;
-    wallpaper::desktop::set_video(
-        &advanced.video.local_path,
-        scale_percent,
-        current.volume_percent,
-        &current.video_filter,
-        false, // Explicitly start playing
-        None,
-        None,
-    )?;
-    let persisted = wallpaper::state::mark_active(&state, advanced.video.clone())?;
-    Ok(QueueAdvanceResult {
-        video: advanced.video,
-        state: persisted,
-    })
-}
-
-#[tauri::command]
-fn set_restore_on_launch(
-    state: State<'_, AppStateStore>,
-    enabled: bool,
-) -> Result<WallpaperState, String> {
-    wallpaper::state::set_restore_on_launch(&state, enabled)
-}
-
-#[tauri::command]
-fn set_window_behavior(
-    state: State<'_, AppStateStore>,
-    close_to_tray: bool,
-    minimize_to_tray: bool,
-) -> Result<WallpaperState, String> {
-    wallpaper::state::set_window_behavior(&state, close_to_tray, minimize_to_tray)
-}
-
-#[tauri::command]
-fn set_auto_pause(
-    state: State<'_, AppStateStore>,
-    enabled: bool,
-) -> Result<WallpaperState, String> {
-    wallpaper::state::set_auto_pause(&state, enabled)
-}
-
-#[tauri::command]
-fn set_wallpaper_paused(
-    state: State<'_, AppStateStore>,
-    paused: bool,
-) -> Result<WallpaperState, String> {
-    let persisted = wallpaper::state::set_paused(&state, paused)?;
-    if persisted.is_playing {
-        wallpaper::desktop::set_paused(paused)?;
-    }
-    Ok(persisted)
-}
-
-#[tauri::command]
-fn set_wallpaper_volume(
-    state: State<'_, AppStateStore>,
-    volume_percent: u64,
-) -> Result<WallpaperState, String> {
-    let persisted = wallpaper::state::set_volume_percent(&state, volume_percent)?;
-    if persisted.is_playing {
-        wallpaper::desktop::set_volume(persisted.volume_percent)?;
-    }
-    Ok(persisted)
-}
-
-#[tauri::command]
-fn set_wallpaper_filter(
-    state: State<'_, AppStateStore>,
-    video_filter: String,
-) -> Result<WallpaperState, String> {
-    let persisted = wallpaper::state::set_video_filter(&state, video_filter)?;
-    if persisted.is_playing {
-        if let Some(video) = persisted.current_video.as_ref() {
-            wallpaper::desktop::set_video(
-                &video.local_path,
-                persisted.wallpaper_scale_percent,
-                persisted.volume_percent,
-                &persisted.video_filter,
-                persisted.paused,
-                None,
-                None,
-            )?;
-        }
-    }
-    Ok(persisted)
-}
-
-#[tauri::command]
-fn set_wallpaper_scale(
-    state: State<'_, AppStateStore>,
-    scale_percent: u64,
-) -> Result<WallpaperState, String> {
-    let persisted = wallpaper::state::set_wallpaper_scale_percent(&state, scale_percent)?;
-    if persisted.is_playing {
-        if let Some(video) = persisted.current_video.as_ref() {
-            wallpaper::desktop::set_video(
-                &video.local_path,
-                persisted.wallpaper_scale_percent,
-                persisted.volume_percent,
-                &persisted.video_filter,
-                persisted.paused,
-                None,
-                None,
-            )?;
-        }
-    }
-    Ok(persisted)
-}
-
-#[tauri::command]
-fn import_local_video(
-    state: State<'_, AppStateStore>,
-    video: VideoResult,
-) -> Result<WallpaperState, String> {
-    wallpaper::state::import_local_video(&state, video)
-}
-
-#[tauri::command]
-fn remove_imported_video(
-    state: State<'_, AppStateStore>,
-    video: VideoResult,
-) -> Result<WallpaperState, String> {
-    wallpaper::state::remove_imported_video(&state, video)
-}
-
-#[tauri::command]
-fn remove_recent_video(
-    state: State<'_, AppStateStore>,
-    video: VideoResult,
-) -> Result<WallpaperState, String> {
-    wallpaper::state::remove_recent_video(&state, video)
-}
-
-#[tauri::command]
-fn reorder_queue(
-    state: State<'_, AppStateStore>,
-    from_index: usize,
-    to_index: usize,
-) -> Result<WallpaperState, String> {
-    wallpaper::state::reorder_queue(&state, from_index, to_index)
-}
-
-#[tauri::command]
-async fn save_thumbnail(
-    state: State<'_, AppStateStore>,
-    local_path: String,
-    base64_data: String,
-) -> Result<WallpaperState, String> {
-    use base64::{Engine as _, engine::general_purpose};
-    
-    let path = std::path::PathBuf::from(&local_path);
-    let id = path.file_stem().and_then(|s| s.to_str()).unwrap_or("unknown");
-    
-    let base_dir = wallpaper::desktop::app_data_dir().join("thumbnails");
-    let _ = std::fs::create_dir_all(&base_dir);
-    let thumb_path = base_dir.join(format!("{}.jpg", id));
-    
-    let clean_base64 = if let Some(pos) = base64_data.find(",") {
-        &base64_data[pos+1..]
-    } else {
-        &base64_data
-    };
-
-    let bytes = general_purpose::STANDARD.decode(clean_base64).map_err(|e| e.to_string())?;
-    std::fs::write(&thumb_path, bytes).map_err(|e| e.to_string())?;
-
-    wallpaper::state::set_thumbnail(&state, local_path, thumb_path.to_string_lossy().to_string())
-}
-
-/// Fetches YouTube video metadata (title, duration, thumbnail) without downloading.
-#[tauri::command]
-async fn fetch_youtube_meta(url: String) -> Result<VideoResult, String> {
-    let meta = tokio::task::spawn_blocking(move || {
-        wallpaper::providers::youtube::fetch_metadata(&url)
-    })
-    .await
-    .map_err(|e| format!("Task join error: {}", e))??;
-
-    Ok(VideoResult {
-        id: meta.id.clone(),
-        video_url: String::new(),
-        thumbnail_url: meta.thumbnail.unwrap_or_default(),
-        local_path: String::new(),
-        duration: meta.duration.unwrap_or(0.0),
-        width: meta.width.unwrap_or(1920),
-        height: meta.height.unwrap_or(1080),
-        source: "youtube".to_string(),
-        start_time: None,
-        end_time: None,
-    })
-}
-
-/// Downloads a time-trimmed YouTube clip and returns a VideoResult with local_path.
-#[tauri::command]
-async fn download_youtube_clip(
-    state: State<'_, AppStateStore>,
-    url: String,
-    start_time: f64,
-    end_time: f64,
-    max_height: u32,
-    window: tauri::Window,
-) -> Result<VideoResult, String> {
-    // Fetch metadata first for title/thumbnail info
-    let meta_url = url.clone();
-    let meta = tokio::task::spawn_blocking(move || {
-        wallpaper::providers::youtube::fetch_metadata(&meta_url)
-    })
-    .await
-    .map_err(|e| format!("Task join error: {}", e))??;
-
-    let dl_url = url.clone();
-    let dl_id = meta.id.clone();
-    let local_path = tokio::task::spawn_blocking(move || {
-        wallpaper::providers::youtube::download_clip(&dl_url, &dl_id, start_time, end_time, max_height, Some(&window))
-    })
-    .await
-    .map_err(|e| format!("Task join error: {}", e))??;
-
-    let video = VideoResult {
-        id: meta.id.clone(),
-        video_url: url,
-        thumbnail_url: meta.thumbnail.unwrap_or_default(),
-        local_path,
-        duration: end_time - start_time,
-        width: meta.width.unwrap_or(1920),
-        height: meta.height.unwrap_or(1080),
-        source: "youtube".to_string(),
-        start_time: Some(start_time),
-        end_time: Some(end_time),
-    };
-
-    // Auto-save to Imports so it appears in the Library permanently
-    let _ = wallpaper::state::import_local_video(&state, video.clone());
-
-    Ok(video)
-}
+use wallpaper::state::AppStateStore;
 
 fn restore_wallpaper_if_enabled(store: &AppStateStore) {
     let state = wallpaper::state::get(store);
@@ -472,6 +111,9 @@ pub fn run() {
     let restore_store = state_store.clone();
     let monitor_store = state_store.clone();
 
+    // Start local API server for Raycast & Rainmeter integrations
+    integrations::start(state_store.clone());
+
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(state_store)
@@ -490,34 +132,34 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            fetch_video,
-            fetch_videos_list,
-            apply_wallpaper,
-            stop_wallpaper,
-            get_wallpaper_status,
-            list_sources,
-            cleanup_cache,
-            toggle_favorite,
-            get_app_state,
-            add_to_queue,
-            remove_from_queue,
-            clear_queue,
-            set_rotation,
-            advance_rotation,
-            set_restore_on_launch,
-            set_window_behavior,
-            set_auto_pause,
-            set_wallpaper_paused,
-            set_wallpaper_volume,
-            set_wallpaper_filter,
-            set_wallpaper_scale,
-            import_local_video,
-            remove_imported_video,
-            remove_recent_video,
-            fetch_youtube_meta,
-            download_youtube_clip,
-            reorder_queue,
-            save_thumbnail,
+            commands::video::fetch_video,
+            commands::video::fetch_videos_list,
+            commands::wallpaper_control::apply_wallpaper,
+            commands::wallpaper_control::stop_wallpaper,
+            commands::wallpaper_control::get_wallpaper_status,
+            commands::settings::list_sources,
+            commands::settings::cleanup_cache,
+            commands::wallpaper_control::toggle_favorite,
+            commands::settings::get_app_state,
+            commands::queue::add_to_queue,
+            commands::queue::remove_from_queue,
+            commands::queue::clear_queue,
+            commands::queue::set_rotation,
+            commands::queue::advance_rotation,
+            commands::settings::set_restore_on_launch,
+            commands::settings::set_window_behavior,
+            commands::settings::set_auto_pause,
+            commands::wallpaper_control::set_wallpaper_paused,
+            commands::wallpaper_control::set_wallpaper_volume,
+            commands::wallpaper_control::set_wallpaper_filter,
+            commands::wallpaper_control::set_wallpaper_scale,
+            commands::settings::import_local_video,
+            commands::settings::remove_imported_video,
+            commands::settings::remove_recent_video,
+            commands::video::fetch_youtube_meta,
+            commands::video::download_youtube_clip,
+            commands::queue::reorder_queue,
+            commands::video::save_thumbnail,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
