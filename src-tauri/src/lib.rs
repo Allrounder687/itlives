@@ -160,7 +160,11 @@ pub fn run() {
             commands::video::download_youtube_clip,
             commands::queue::reorder_queue,
             commands::video::save_thumbnail,
+            commands::wallpaper_control::apply_desktop_effects,
+            commands::wallpaper_control::get_current_effects,
         ])
         .run(tauri::generate_context!())
+
+
         .expect("error while running tauri application");
 }

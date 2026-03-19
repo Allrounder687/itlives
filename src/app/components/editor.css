@@ -1,0 +1,128 @@
+.editor-workspace {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr) 280px;
+  gap: 16px;
+  height: calc(100vh - 120px); /* Adjust based on parent */
+  padding: 8px;
+}
+
+.editor-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.editor-sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--panel-stroke);
+}
+
+.editor-sidebar-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-family: var(--font-display);
+}
+
+.editor-layer-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.editor-layer-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  cursor: pointer;
+  transition: all 120ms ease;
+}
+
+.editor-layer-item:hover,
+.editor-layer-item--active {
+  background: rgba(154, 230, 0, 0.08);
+  border-color: rgba(154, 230, 0, 0.25);
+}
+
+.editor-layer-item__info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.editor-layer-item__icon {
+  color: var(--accent);
+}
+
+.editor-preview {
+  position: relative;
+  background: #000;
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid var(--panel-stroke);
+  box-shadow: var(--shadow);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.editor-preview-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.editor-bg-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.editor-canvas-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none; /* Let clicks pass through if adding drag handlers later */
+}
+
+.property-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.property-group label {
+  font-size: 12px;
+  color: var(--text-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.property-control {
+  width: 100%;
+}
+
+/* Empty State */
+.editor-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-soft);
+  gap: 12px;
+}

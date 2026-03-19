@@ -8,7 +8,8 @@ use std::sync::Mutex;
 /// Global state tracking the currently playing wallpaper video path.
 static CURRENT_VIDEO: Mutex<Option<String>> = Mutex::new(None);
 #[cfg(windows)]
-mod win32 {
+pub mod win32 {
+
     use std::sync::Mutex;
     use windows::core::PCWSTR;
     use windows::Win32::Foundation::{BOOL, HWND, LPARAM, WPARAM};

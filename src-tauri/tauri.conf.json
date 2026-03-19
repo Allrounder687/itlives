@@ -35,7 +35,19 @@
         "resizable": false,
         "visible": false,
         "shadow": true
+      },
+      {
+        "label": "effects_overlay",
+        "url": "/?mode=desktop-overlay",
+        "decorations": false,
+        "transparent": true,
+        "skipTaskbar": true,
+        "shadow": false,
+        "fullscreen": true,
+        "visible": false,
+        "resizable": false
       }
+
     ],
     "security": {
       "csp": "default-src 'self' 'unsafe-inline' asset: https:; img-src 'self' asset: https: blob: data:; media-src 'self' asset: https: blob: http://asset.localhost; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' ipc: http://ipc.localhost https://api.redgifs.com https://media.redgifs.com https://*.redgifs.com",

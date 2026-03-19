@@ -13,6 +13,10 @@ import { UnifiedLibrary } from "./components/LibraryList";
 import { AutomationPanel } from "./components/AutomationPanel";
 import { QueuePanel } from "./components/QueuePanel";
 import { YouTubePanel } from "./components/YouTubePanel";
+import { EditorWorkspace } from "./components/EditorWorkspace";
+import { CanvasEffectRenderer } from "./components/CanvasEffectRenderer";
+import { useEffect } from "react";
+
 
 function VolumeSlider({ initialVolume, onCommit }: { initialVolume: number, onCommit: (val: number) => void }) {
   const [localVal, setLocalVal] = useState(initialVolume);
@@ -102,9 +106,57 @@ const SOURCE_NOTES: Record<string, string> = {
 
 function Home() {
   const wallpaper = useWallpaper();
-  const [activeTab, setActiveTab] = useState<"discover" | "library" | "direct" | "preview" | "youtube" | "settings">("discover");
+  const [activeTab, setActiveTab] = useState<"discover" | "library" | "direct" | "preview" | "editor" | "youtube" | "settings">("discover");
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [lastVolume, setLastVolume] = useState(25);
+  const [isOverlayMode, setIsOverlayMode] = useState(false);
+  const [overlayConfig, setOverlayConfig] = useState<{ videoSrc?: string; layers?: any[] }>({});
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.location.search.includes("mode=desktop-overlay")) {
+      setIsOverlayMode(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isOverlayMode) {
+      const loadConfig = () => {
+        console.log("[Overlay] invoking get_current_effects...");
+        import("@tauri-apps/api/core").then(({ invoke }) => {
+          invoke<string>("get_current_effects").then((json) => {
+            console.log("[Overlay] Raw effects JSON:", json);
+            try {
+              const config = JSON.parse(json);
+              console.log("[Overlay] Successfully parsed config:", config);
+              setOverlayConfig(config);
+            } catch (e) {
+              console.error("[Overlay] Failed to parse overlay config:", e);
+            }
+          });
+        }).catch(console.error);
+      };
+
+      loadConfig();
+
+      let unlistenRef = { current: () => {} };
+
+      import("@tauri-apps/api/event").then(({ listen }) => {
+        listen("effects-updated", () => {
+          console.log("[Overlay] effects-updated received, re-fetching config!");
+          loadConfig();
+        }).then(u => {
+          unlistenRef.current = u;
+        });
+      }).catch(console.error);
+
+      return () => {
+        if (unlistenRef.current) unlistenRef.current();
+      };
+    }
+  }, [isOverlayMode]);
+
+
+
 
   const handleFetchAndApply = async () => {
     const result = await wallpaper.fetchVideo();
@@ -134,6 +186,25 @@ function Home() {
       void wallpaper.addToQueue(wallpaper.currentVideo);
     }
   };
+
+  if (isOverlayMode) {
+    return (
+      <main className="workspace-overlay" style={{ background: "transparent", width: "100vw", height: "100vh", overflow: "hidden" }}>
+        <style dangerouslySetInnerHTML={{ __html: `
+          html, body {
+            background: transparent !important;
+          }
+        ` }} />
+        <CanvasEffectRenderer 
+          videoSrc={overlayConfig.videoSrc || ""} 
+          effects={overlayConfig.layers || []} 
+          isOverlay={true}
+        />
+
+      </main>
+    );
+  }
+
 
 
   return (
@@ -196,6 +267,16 @@ function Home() {
                 <div className="tab-icon">{ICONS.preview}</div>
                 {!isSidebarCollapsed && <span>Preview Deck</span>}
               </button>
+              <button
+                type="button"
+                className={`sidebar-list__item sidebar-list__item--clickable ${activeTab === "editor" ? "sidebar-list__item--active" : ""}`}
+                onClick={() => setActiveTab("editor")}
+                title="Effects Editor"
+              >
+                <div className="tab-icon">✨</div>
+                {!isSidebarCollapsed && <span>Effects Editor</span>}
+              </button>
+
               <button
                 type="button"
                 className={`sidebar-list__item sidebar-list__item--clickable ${activeTab === "youtube" ? "sidebar-list__item--active" : ""}`}
@@ -411,6 +492,11 @@ function Home() {
               isPlaying={wallpaper.isPlaying}
             />
           )}
+
+          {activeTab === "editor" && (
+            <EditorWorkspace currentVideo={wallpaper.currentVideo} />
+          )}
+
 
           {/* Master Floating HUD for Universal Control */}
           {wallpaper.isPlaying && (
