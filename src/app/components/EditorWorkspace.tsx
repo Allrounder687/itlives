@@ -9,6 +9,7 @@ import "./editor.css";
 interface EditorWorkspaceProps {
   currentVideo: VideoResult | null;
   onApplyPreset?: (preset: any) => void;
+  onApplyWallpaper?: (video: VideoResult) => Promise<void>;
 }
 
 const EFFECT_TEMPLATES: Record<string, Omit<EffectLayer, "id">> = {
@@ -19,7 +20,7 @@ const EFFECT_TEMPLATES: Record<string, Omit<EffectLayer, "id">> = {
   "click-ripple": { type: "click-ripple", name: "Click Burst 💥", enabled: true, params: {} },
 };
 
-export function EditorWorkspace({ currentVideo }: EditorWorkspaceProps) {
+export function EditorWorkspace({ currentVideo, onApplyWallpaper }: EditorWorkspaceProps) {
   const [layers, setLayers] = useState<EffectLayer[]>([
     { id: "vignette-1", type: "vignette", name: "Vignette Frame", enabled: true, params: { intensity: 0.5 } }
   ]);
@@ -78,7 +79,7 @@ export function EditorWorkspace({ currentVideo }: EditorWorkspaceProps) {
                   <input 
                     type="checkbox" 
                     checked={layer.enabled} 
-                    onChange={(e) => updateParam(layer.id, "enabled", e.target.checked)}
+                    onChange={(e) => setLayers(layers.map(l => l.id === layer.id ? { ...l, enabled: e.target.checked } : l))}
                     onClick={(e) => e.stopPropagation()} 
                     style={{ cursor: "pointer", width: "16px", height: "16px" }}
                   />
@@ -170,6 +171,10 @@ export function EditorWorkspace({ currentVideo }: EditorWorkspaceProps) {
                 
                 try {
                   const { invoke } = await import("@tauri-apps/api/core");
+                  console.log("[Editor] Invoking onApplyWallpaper for video...");
+                  if (onApplyWallpaper) {
+                    await onApplyWallpaper(currentVideo);
+                  }
                   console.log("[Editor] Invoking apply_desktop_effects... size:", JSON.stringify(config).length);
                   await invoke("apply_desktop_effects", { layersJson: JSON.stringify(config) });
                   alert("✨ Effects Applied to Desktop Overlay Mode!");

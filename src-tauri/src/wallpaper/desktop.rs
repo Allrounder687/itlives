@@ -176,7 +176,7 @@ pub fn set_video(
             "-VideoFilter".to_string(),
             video_filter.to_string(),
             "-StartPaused".to_string(),
-            if paused { "$true".to_string() } else { "$false".to_string() },
+            if paused { "1".to_string() } else { "0".to_string() },
             "-WindowHandle".to_string(),
             workerw.to_string(),
         ];

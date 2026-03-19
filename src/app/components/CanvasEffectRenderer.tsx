@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 
-
 export interface EffectLayer {
   id: string;
   type: "snow" | "rain" | "vignette" | "light-leak" | "cursor-trail" | "click-ripple";
@@ -18,14 +17,28 @@ interface CanvasEffectRendererProps {
 }
 
 export function CanvasEffectRenderer({ videoSrc, effects, isOverlay = false }: CanvasEffectRendererProps) {
-
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const mediaRef = useRef<HTMLVideoElement | HTMLImageElement>(null);
   const animationFrameRef = useRef<number>(0);
-  const particlesRef = useRef<any[]>([]);
+  
+  // Particle Arrays
+  const snowParticlesRef = useRef<any[]>([]);
+  const rainParticlesRef = useRef<any[]>([]);
   const MouseTrailRef = useRef<any[]>([]);
   
   const [src, setSrc] = useState(videoSrc);
+
+  // [IPC FIX]: We need a live state that can be updated either by props (in the UI) 
+  // OR by Tauri IPC events (in the detached overlay window).
+  const [liveEffects, setLiveEffects] = useState<EffectLayer[]>(effects);
+
+  useEffect(() => {
+    setLiveEffects(effects);
+  }, [effects]);
+
+  // Mirror live state to a Ref to bypass React's stale closures in the 60fps loop.
+  const effectsRef = useRef<EffectLayer[]>(liveEffects);
+  effectsRef.current = liveEffects;
 
   useEffect(() => {
     if (videoSrc) {
@@ -37,12 +50,13 @@ export function CanvasEffectRenderer({ videoSrc, effects, isOverlay = false }: C
       if (isLocal) {
         let cleanPath = videoSrc;
         if (cleanPath.startsWith("file:///")) {
-          cleanPath = cleanPath.slice(8); // On Windows: removes file:///
+          cleanPath = cleanPath.slice(8);
         } else if (cleanPath.startsWith("file://")) {
           cleanPath = cleanPath.slice(7);
         }
 
-        import("@tauri-apps/api/core").then(({ convertFileSrc }) => {
+        const tauriCore = "@tauri-apps/api/core";
+        import(tauriCore).then(({ convertFileSrc }) => {
           setSrc(convertFileSrc(cleanPath));
         }).catch(console.error);
       } else {
@@ -51,9 +65,7 @@ export function CanvasEffectRenderer({ videoSrc, effects, isOverlay = false }: C
     }
   }, [videoSrc]);
 
-
   const isImage = /\.(jpg|jpeg|png|webp|gif)($|\?)/i.test(videoSrc);
-
 
   // Particle Init Helpers
   const generateSnow = (count: number, width: number, height: number) => {
@@ -75,7 +87,7 @@ export function CanvasEffectRenderer({ videoSrc, effects, isOverlay = false }: C
     }));
   };
 
-  // Setup loop
+  // Main Canvas Setup & Loop
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -93,35 +105,33 @@ export function CanvasEffectRenderer({ videoSrc, effects, isOverlay = false }: C
       }
     };
 
-
     updateSize();
     window.addEventListener("resize", updateSize);
     
     const t1 = setTimeout(updateSize, 100);
     const t2 = setTimeout(updateSize, 500);
-    const t3 = setTimeout(updateSize, 2000); // Overlay re-parents, triggers resize delay
+    const t3 = setTimeout(updateSize, 2000);
 
-
-    const snowEffect = effects.find(e => e.type === "snow" && e.enabled);
-    const rainEffect = effects.find(e => e.type === "rain" && e.enabled);
-
-    if (snowEffect) {
-        const count = snowEffect.params.count || 100;
-        particlesRef.current = generateSnow(count, canvas.width, canvas.height);
-    } else if (rainEffect) {
-        const count = rainEffect.params.count || 200;
-        particlesRef.current = generateRain(count, canvas.width, canvas.height);
-    } else {
-        particlesRef.current = [];
-    }
+    let active = true;
 
     const render = () => {
+      if (!active) return;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+      // [CRITICAL FIX]: Safely enforce Array type. 
+      // If Editor sends { videoSrc, layers }, gracefully extract layers to prevent `.find()` crashes.
+      const rawEffects: any = effectsRef.current || [];
+      const currentEffects: EffectLayer[] = Array.isArray(rawEffects) ? rawEffects : (rawEffects.layers || []);
+      
+      const vignette = currentEffects.find(e => e.type === "vignette" && e.enabled);
+      const snowEffect = currentEffects.find(e => e.type === "snow" && e.enabled);
+      const rainEffect = currentEffects.find(e => e.type === "rain" && e.enabled);
+      const trailEffect = currentEffects.find(e => e.type === "cursor-trail" && e.enabled);
+      const rippleEffect = currentEffects.find(e => e.type === "click-ripple" && e.enabled);
+
       // 1. Vignette
-      const vignette = effects.find(e => e.type === "vignette" && e.enabled);
       if (vignette) {
-        const intensity = vignette.params.intensity || 0.5;
+        const intensity = vignette.params?.intensity || 0.5;
         const gradient = ctx.createRadialGradient(
           canvas.width / 2, canvas.height / 2, 0,
           canvas.width / 2, canvas.height / 2, canvas.width / 1.5
@@ -132,13 +142,18 @@ export function CanvasEffectRenderer({ videoSrc, effects, isOverlay = false }: C
         ctx.fillRect(0, 0, canvas.width, canvas.height);
       }
 
-      // 2. Snow / Rain
+      // 2. Snow
       if (snowEffect) {
+          const count = snowEffect.params?.count || 100;
+          if (snowParticlesRef.current.length !== count) {
+              snowParticlesRef.current = generateSnow(count, canvas.width, canvas.height);
+          }
+
           ctx.shadowColor = "rgba(255,255,255,0.4)";
           ctx.shadowBlur = 4;
-          const speed = snowEffect.params.speed || 1;
-
-          particlesRef.current.forEach((p) => {
+          const speed = snowEffect.params?.speed || 1;
+          
+          snowParticlesRef.current.forEach((p) => {
               ctx.beginPath();
               ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2, true);
               ctx.fillStyle = `rgba(255, 255, 255, ${p.opacity})`;
@@ -150,14 +165,22 @@ export function CanvasEffectRenderer({ videoSrc, effects, isOverlay = false }: C
               if (p.y > canvas.height) { p.y = -10; p.x = Math.random() * canvas.width; }
           });
           ctx.shadowBlur = 0;
+      } else {
+          if (snowParticlesRef.current.length > 0) snowParticlesRef.current = [];
       }
 
+      // 3. Rain
       if (rainEffect) {
+          const count = rainEffect.params?.count || 200;
+          if (rainParticlesRef.current.length !== count) {
+              rainParticlesRef.current = generateRain(count, canvas.width, canvas.height);
+          }
+
           ctx.strokeStyle = "rgba(174, 194, 224, 0.5)";
           ctx.lineWidth = 1;
-          const speed = rainEffect.params.speed || 1;
+          const speed = rainEffect.params?.speed || 1;
 
-          particlesRef.current.forEach((p) => {
+          rainParticlesRef.current.forEach((p) => {
               ctx.beginPath();
               ctx.moveTo(p.x, p.y);
               ctx.lineTo(p.x, p.y + p.l);
@@ -166,14 +189,26 @@ export function CanvasEffectRenderer({ videoSrc, effects, isOverlay = false }: C
               p.y += p.s * speed;
               if (p.y > canvas.height) { p.y = -20; p.x = Math.random() * canvas.width; }
           });
+      } else {
+          if (rainParticlesRef.current.length > 0) rainParticlesRef.current = [];
       }
 
-      // 3. Cursor Trail & Ripples
-      const trailEffect = effects.find(e => e.type === "cursor-trail" && e.enabled);
-      const rippleEffect = effects.find(e => e.type === "click-ripple" && e.enabled);
+      // 4. Cursor Trail & Ripples
+      if (trailEffect) {
+          if (Math.random() < 0.15) {
+              MouseTrailRef.current.push({
+                  x: Math.random() * canvas.width,
+                  y: Math.random() * canvas.height,
+                  vx: (Math.random() - 0.5),
+                  vy: (Math.random() - 0.5),
+                  life: 60,
+                  size: Math.random() * 5 + 1.5,
+                  color: `rgba(154, 230, 0, 0.7)`
+              });
+          }
+      }
 
       if (trailEffect || rippleEffect) {
-          // Update and draw trail particles
           MouseTrailRef.current = MouseTrailRef.current.filter(p => p.life > 0);
           MouseTrailRef.current.forEach((p) => {
               ctx.beginPath();
@@ -184,8 +219,10 @@ export function CanvasEffectRenderer({ videoSrc, effects, isOverlay = false }: C
               p.x += p.vx;
               p.y += p.vy;
               p.life -= 1;
-              p.size *= 0.95; // Shrink
+              p.size *= 0.95;
           });
+      } else {
+         if (MouseTrailRef.current.length > 0) MouseTrailRef.current = [];
       }
 
       animationFrameRef.current = requestAnimationFrame(render);
@@ -194,45 +231,104 @@ export function CanvasEffectRenderer({ videoSrc, effects, isOverlay = false }: C
     animationFrameRef.current = requestAnimationFrame(render);
 
     return () => {
+      active = false;
       window.removeEventListener("resize", updateSize);
       cancelAnimationFrame(animationFrameRef.current);
       clearTimeout(t1);
       clearTimeout(t2);
       clearTimeout(t3);
     };
+  }, [isOverlay]); 
 
-  }, [effects]);
+  // Overlay IPC listeners
+  useEffect(() => {
+    if (!isOverlay) return;
+    
+    let unlistenCursor = () => {};
+    let unlistenUpdate = () => {};
+
+    // 1. Listen for cursor movements from Rust background hook
+    const tauriEvent = "@tauri-apps/api/event";
+    import(tauriEvent).then(({ listen }) => {
+      listen("cursor-moved", (e: any) => {
+        const rawEffects: any = effectsRef.current || [];
+        const currentEffects: EffectLayer[] = Array.isArray(rawEffects) ? rawEffects : (rawEffects.layers || []);
+
+        const trailEffect = currentEffects.find(ef => ef.type === "cursor-trail" && ef.enabled);
+        const rippleEffect = currentEffects.find(ef => ef.type === "click-ripple" && ef.enabled);
+        if (!trailEffect && !rippleEffect) return;
+
+        const [x_raw, y_raw] = e.payload;
+        const x = x_raw / (window.devicePixelRatio || 1);
+        const y = y_raw / (window.devicePixelRatio || 1);
+
+        if (trailEffect) {
+          for (let i = 0; i < 2; i++) {
+            MouseTrailRef.current.push({
+              x, y,
+              vx: (Math.random() - 0.5) * 2,
+              vy: (Math.random() - 0.5) * 2 - 0.5,
+              life: 30,
+              size: Math.random() * 4 + 2,
+              color: `rgba(154, 230, 0, 0.8)`
+            });
+          }
+        }
+      }).then((unlisten: any) => { unlistenCursor = unlisten; });
+
+      // 2. [CRITICAL FIX] Ensure we unwrap the direct JSON payload structure efficiently
+      listen("effects-updated", (e: any) => {
+        try {
+          const payload = typeof e.payload === "string" ? JSON.parse(e.payload) : e.payload;
+          const freshEffects = Array.isArray(payload) ? payload : (payload.layers || []);
+          setLiveEffects(freshEffects);
+        } catch (err: any) {
+          console.error("[Overlay] Failed to parse updated effects payload:", err);
+        }
+      }).then((unlisten: any) => { unlistenUpdate = unlisten; });
+
+    }).catch(console.error);
+
+    return () => { 
+      unlistenCursor(); 
+      unlistenUpdate(); 
+    };
+  }, [isOverlay]);
 
   const handlePointerMove = (e: React.PointerEvent) => {
-    const trailEffect = effects.find(e => e.type === "cursor-trail" && e.enabled);
+    const rawEffects: any = effectsRef.current || [];
+    const currentEffects: EffectLayer[] = Array.isArray(rawEffects) ? rawEffects : (rawEffects.layers || []);
+    const trailEffect = currentEffects.find(eff => eff.type === "cursor-trail" && eff.enabled);
+    
     if (!trailEffect || !canvasRef.current) return;
 
     const rect = canvasRef.current.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
-    // Spawn 2 particles per move
     for (let i = 0; i < 2; i++) {
         MouseTrailRef.current.push({
             x, y,
             vx: (Math.random() - 0.5) * 2,
-            vy: (Math.random() - 0.5) * 2 - 0.5, // Float up slightly
+            vy: (Math.random() - 0.5) * 2 - 0.5,
             life: 40,
             size: Math.random() * 4 + 2,
-            color: `rgba(154, 230, 0, 0.8)` // OpenClaw Green accent
+            color: `rgba(154, 230, 0, 0.8)`
         });
     }
   };
 
   const handlePointerDown = (e: React.PointerEvent) => {
-    const rippleEffect = effects.find(e => e.type === "click-ripple" && e.enabled);
+    const rawEffects: any = effectsRef.current || [];
+    const currentEffects: EffectLayer[] = Array.isArray(rawEffects) ? rawEffects : (rawEffects.layers || []);
+    const rippleEffect = currentEffects.find(eff => eff.type === "click-ripple" && eff.enabled);
+    
     if (!rippleEffect || !canvasRef.current) return;
 
     const rect = canvasRef.current.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
-    // Pulse Burst
     for (let i = 0; i < 20; i++) {
         const angle = (Math.PI * 2 / 20) * i;
         MouseTrailRef.current.push({
@@ -282,7 +378,6 @@ export function CanvasEffectRenderer({ videoSrc, effects, isOverlay = false }: C
         )
       )}
 
-
       <canvas 
         ref={canvasRef} 
         className="editor-canvas-overlay" 
@@ -291,7 +386,7 @@ export function CanvasEffectRenderer({ videoSrc, effects, isOverlay = false }: C
           inset: 0,
           width: "100%",
           height: "100%",
-          pointerEvents: "none", 
+          pointerEvents: isOverlay ? "none" : "auto", 
           cursor: "crosshair" 
         }}
         onPointerMove={handlePointerMove}

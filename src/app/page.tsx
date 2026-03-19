@@ -138,12 +138,17 @@ function Home() {
 
       loadConfig();
 
-      let unlistenRef = { current: () => {} };
+      let unlistenRef = { current: () => { } };
 
       import("@tauri-apps/api/event").then(({ listen }) => {
-        listen("effects-updated", () => {
-          console.log("[Overlay] effects-updated received, re-fetching config!");
-          loadConfig();
+        listen("effects-updated", (e: any) => {
+          console.log("[Overlay] effects-updated received with direct payload!");
+          try {
+            const config = typeof e.payload === "string" ? JSON.parse(e.payload) : e.payload;
+            setOverlayConfig(config);
+          } catch (err) {
+            console.error("[Overlay] Failed to parse overlay config payload:", err);
+          }
         }).then(u => {
           unlistenRef.current = u;
         });
@@ -190,14 +195,26 @@ function Home() {
   if (isOverlayMode) {
     return (
       <main className="workspace-overlay" style={{ background: "transparent", width: "100vw", height: "100vh", overflow: "hidden" }}>
-        <style dangerouslySetInnerHTML={{ __html: `
+        <style dangerouslySetInnerHTML={{
+          __html: `
           html, body {
             background: transparent !important;
           }
+          /* Hide Next.js Dev Portal / Error Overlay or badges */
+          nextjs-portal,
+          #nextjs-dev-overlay-container,
+          [data-nextjs-toast],
+          [data-nextjs-portal] {
+            display: none !important;
+            opacity: 0 !important;
+            visibility: hidden !important;
+            width: 0 !important;
+            height: 0 !important;
+          }
         ` }} />
-        <CanvasEffectRenderer 
-          videoSrc={overlayConfig.videoSrc || ""} 
-          effects={overlayConfig.layers || []} 
+        <CanvasEffectRenderer
+          videoSrc={overlayConfig.videoSrc || ""}
+          effects={overlayConfig.layers || []}
           isOverlay={true}
         />
 
@@ -368,13 +385,11 @@ function Home() {
               {wallpaper.currentVideo && !wallpaper.isLoading && (
                 <FloatingPreview
                   video={wallpaper.currentVideo}
-                  isPaused={wallpaper.paused}
                   volumePercent={wallpaper.volumePercent}
                   filterPreset={wallpaper.videoFilter}
                   isFavorite={wallpaper.isFavorite(wallpaper.currentVideo)}
                   isQueued={wallpaper.isQueued(wallpaper.currentVideo)}
                   onApply={(st, et) => wallpaper.applyWallpaper(wallpaper.currentVideo!, st, et)}
-                  onTogglePause={() => wallpaper.setPaused(!wallpaper.paused)}
                   onToggleFavorite={() => wallpaper.toggleFavorite(wallpaper.currentVideo!)}
                   onToggleQueue={toggleCurrentQueue}
                   onClose={() => wallpaper.selectVideo(null as any)}
@@ -464,13 +479,11 @@ function Home() {
               {wallpaper.currentVideo && !wallpaper.isLoading ? (
                 <FloatingPreview
                   video={wallpaper.currentVideo}
-                  isPaused={wallpaper.paused}
                   volumePercent={wallpaper.volumePercent}
                   filterPreset={wallpaper.videoFilter}
                   isFavorite={wallpaper.isFavorite(wallpaper.currentVideo)}
                   isQueued={wallpaper.isQueued(wallpaper.currentVideo)}
                   onApply={(st, et) => wallpaper.applyWallpaper(wallpaper.currentVideo!, st, et)}
-                  onTogglePause={() => wallpaper.setPaused(!wallpaper.paused)}
                   onToggleFavorite={() => wallpaper.toggleFavorite(wallpaper.currentVideo!)}
                   onToggleQueue={toggleCurrentQueue}
                   onClose={() => wallpaper.selectVideo(null as any)}
@@ -494,7 +507,10 @@ function Home() {
           )}
 
           {activeTab === "editor" && (
-            <EditorWorkspace currentVideo={wallpaper.currentVideo} />
+            <EditorWorkspace
+              currentVideo={wallpaper.currentVideo}
+              onApplyWallpaper={async (v) => { await wallpaper.applyWallpaper(v); }}
+            />
           )}
 
 

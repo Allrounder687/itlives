@@ -7,26 +7,22 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 
 interface VideoPreviewProps {
   video: VideoResult;
-  isPaused: boolean;
   volumePercent: number;
   filterPreset: string;
   isFavorite: boolean;
   isQueued: boolean;
   onApply: (start?: number, end?: number) => void;
-  onTogglePause: () => void;
   onToggleFavorite: () => void;
   onToggleQueue: () => void;
 }
 
 export function VideoPreview({
   video,
-  isPaused,
   volumePercent,
   filterPreset,
   isFavorite,
   isQueued,
   onApply,
-  onTogglePause,
   onToggleFavorite,
   onToggleQueue,
 }: VideoPreviewProps) {
@@ -35,6 +31,7 @@ export function VideoPreview({
   const [endTime, setEndTime] = useState(video.duration || 0);
   const [totalDuration, setTotalDuration] = useState(video.duration || 0);
   const [activeThumb, setActiveThumb] = useState<"start" | "end">("start");
+  const [localPaused, setLocalPaused] = useState(false);
 
   const videoSrc = video.local_path
     ? convertFileSrc(video.local_path)
@@ -85,12 +82,12 @@ export function VideoPreview({
 
     element.volume = Math.min(Math.max(volumePercent, 0), 100) / 100;
 
-    if (isPaused) {
+    if (localPaused) {
       void element.pause();
     } else {
       void element.play().catch(() => undefined);
     }
-  }, [isPaused, volumePercent, videoSrc]);
+  }, [localPaused, volumePercent, videoSrc]);
 
   const handleError = (event: React.SyntheticEvent<HTMLVideoElement>) => {
     const target = event.target as HTMLVideoElement;
@@ -112,6 +109,8 @@ export function VideoPreview({
           muted
           playsInline
           controls
+          onPause={() => setLocalPaused(true)}
+          onPlay={() => setLocalPaused(false)}
           onLoadedMetadata={(e) => {
              const vid = e.target as HTMLVideoElement;
              if (vid.duration > 0) {
@@ -194,8 +193,8 @@ export function VideoPreview({
         </div>
 
         <div className="preview-actions">
-          <button className="action-btn action-btn--secondary" onClick={onTogglePause}>
-            {isPaused ? "Resume" : "Pause"}
+          <button className="action-btn action-btn--secondary" onClick={() => setLocalPaused(!localPaused)}>
+            {localPaused ? "Resume" : "Pause"}
           </button>
           <button className="action-btn action-btn--secondary" onClick={onToggleFavorite}>
             {isFavorite ? "Unfavorite" : "Save Favorite"}

@@ -53,3 +53,8 @@ next-env.d.ts
 /src-tauri/target_check/
 /src-tauri/build.log
 /src-tauri/error.txt
+windowslg26.evtx
+LocaleMetaData/windowslg26_1033.MTA
+mpv_cmd_ascii.txt
+mpv_cmd.txt
+read_evtx.ps1

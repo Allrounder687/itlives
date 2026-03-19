@@ -6,13 +6,11 @@ import { useState } from "react";
 
 interface FloatingPreviewProps {
   video: VideoResult;
-  isPaused: boolean;
   volumePercent: number;
   filterPreset: string;
   isFavorite: boolean;
   isQueued: boolean;
   onApply: (start?: number, end?: number) => void;
-  onTogglePause: () => void;
   onToggleFavorite: () => void;
   onToggleQueue: () => void;
   onClose: () => void;

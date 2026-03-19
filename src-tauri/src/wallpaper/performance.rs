@@ -17,14 +17,14 @@ static MONITOR_STARTED: AtomicBool = AtomicBool::new(false);
 
 /// Thread-safe flag to force resume if we want to override
 static FORCE_PAUSE: AtomicBool = AtomicBool::new(false);
-static IS_PAUSED: AtomicBool = AtomicBool::new(false);
+static IS_PAUSED: AtomicBool = AtomicBool::new(true);
 
 pub fn start_monitor(state_store: AppStateStore) {
     if MONITOR_STARTED.swap(true, Ordering::SeqCst) {
         return;
     }
 
-    log::info!("Starting performance monitor thread...");
+    log::info!("Starting performance monitor thread (Initial state: Forced Unpause Request)...");
 
     thread::spawn(move || {
         loop {
@@ -37,25 +37,25 @@ pub fn start_monitor(state_store: AppStateStore) {
             }
 
             let mut should_pause = force_paused();
+            let mut reason = if should_pause { "Force-pause flag" } else { "None" };
 
             #[cfg(windows)]
             {
                 if !should_pause && state.auto_pause_enabled {
-                    should_pause = check_should_pause();
+                    if let Some(r) = check_should_pause_detailed() {
+                        should_pause = true;
+                        reason = r;
+                    }
                 }
             }
 
             let was_paused = IS_PAUSED.load(Ordering::Relaxed);
 
             if should_pause != was_paused {
-                log::info!("Performance state changing: Paused = {}", should_pause);
+                log::info!("Performance monitor: State changing to Paused = {} because: {}", should_pause, reason);
                 if set_mpv_pause(should_pause) {
                     IS_PAUSED.store(should_pause, Ordering::Relaxed);
                 }
-            } else if should_pause && !was_paused {
-                // Edge case: state might not match mpv actual state if mpv restarted,
-                // but we send the command periodically just in case?
-                // No, just track it to avoid spam.
             }
         }
     });
@@ -68,11 +68,12 @@ fn force_paused() -> bool {
 fn set_mpv_pause(pause: bool) -> bool {
     match crate::wallpaper::desktop::set_paused(pause) {
         Ok(()) => {
-            log::info!("Successfully sent pause={} to mpv", pause);
+            log::info!("Successfully sent IPC pause={} to mpv", pause);
             true
         }
         Err(error) => {
-            log::warn!("Failed to send IPC command to mpv: {}", error);
+            // Log as debug because this is common if mpv is still launching or shutting down
+            log::debug!("Could not send IPC to mpv (usually okay during transitions): {}", error);
             false
         }
     }
@@ -80,36 +81,65 @@ fn set_mpv_pause(pause: bool) -> bool {
 
 /// Run diagnostics to determine if wallpaper loop should be paused to preserve system resources
 #[cfg(windows)]
-fn check_should_pause() -> bool {
+fn check_should_pause_detailed() -> Option<&'static str> {
     unsafe {
         // 1. Check power state (Battery vs AC)
         let mut status = SYSTEM_POWER_STATUS::default();
         if GetSystemPowerStatus(&mut status).is_ok() {
             if status.ACLineStatus == 0 {
-                log::info!("Auto-pause trigger: Battery power detected.");
-                return true;
+                return Some("System is on battery power (Auto-Pause)");
             }
         }
 
         // 2. Check current active window
         let hwnd = GetForegroundWindow();
         if hwnd.0.is_null() {
-            log::info!("Auto-pause trigger: Null foreground window (PC locked or overlay).");
-            return true;
+            return Some("No foreground window (PC locked?)");
         }
 
-        // --- FIX: Do not pause if the foreground window belongs to our own app! ---
-        let mut process_id = 0u32;
+        // 3. Identify if the foreground window belongs to our app.
+        //    WebView2 (msedgewebview2.exe) runs in a separate process but is
+        //    a child of our main Tauri window, so we must check BOTH the
+        //    direct foreground HWND and its root ancestor.
+        let our_pid = std::process::id();
+
+        let mut fg_pid = 0u32;
         windows::Win32::UI::WindowsAndMessaging::GetWindowThreadProcessId(
             hwnd,
-            Some(&mut process_id),
+            Some(&mut fg_pid),
         );
-        if process_id == std::process::id() {
-            // Foreground window is our dashboard/tray, do not pause
-            return false;
+        if fg_pid == our_pid {
+            return None;
         }
 
-        // 3. Check for fullscreen application
+        use windows::Win32::UI::WindowsAndMessaging::{GetAncestor, GA_ROOTOWNER};
+        let root_hwnd = GetAncestor(hwnd, GA_ROOTOWNER);
+        let mut root_pid = 0u32;
+        windows::Win32::UI::WindowsAndMessaging::GetWindowThreadProcessId(
+            root_hwnd,
+            Some(&mut root_pid),
+        );
+        if root_pid == our_pid {
+            return None;
+        }
+
+        // Also check class name – WebView2/Chrome widgets are part of our app
+        let mut class_name = [0u16; 256];
+        let len = GetClassNameW(hwnd, &mut class_name);
+        let c_name = String::from_utf16_lossy(&class_name[..len as usize]);
+        let fg_class = c_name.trim_end_matches('\0');
+
+        // Chrome_WidgetWin_* is the WebView2/Chromium embedded class used by Tauri
+        if fg_class.starts_with("Chrome_WidgetWin") 
+           || fg_class.starts_with("Tauri") 
+           || fg_class.contains("WebView") 
+           || fg_class == "Shell_TrayWnd" 
+           || fg_class == "Shell_SecondaryTrayWnd" 
+           || fg_class == "CabinetWClass" {
+            return None;
+        }
+
+        // 4. Check for fullscreen application
         let mut rect = RECT::default();
         if GetWindowRect(hwnd, &mut rect).is_ok() {
             let width = rect.right - rect.left;
@@ -119,22 +149,12 @@ fn check_should_pause() -> bool {
             let screen_h = GetSystemMetrics(SM_CYSCREEN);
 
             if width >= screen_w && height >= screen_h {
-                // Validate we are not looking at the desktop itself
-                let mut class_name = [0u16; 256];
-                let len = GetClassNameW(hwnd, &mut class_name);
-                let c_name = String::from_utf16_lossy(&class_name[..len as usize]);
-                let c_name = c_name.trim_end_matches('\0');
-
-                if c_name != "WorkerW" && c_name != "Progman" && c_name != "mpv" {
-                    log::info!(
-                        "Auto-pause trigger: Fullscreen app detected (ClassName: {}).",
-                        c_name
-                    );
-                    return true;
+                if fg_class != "WorkerW" && fg_class != "Progman" && fg_class != "mpv" {
+                    return Some("Focused window is fullscreen (Non-Desktop, Non-App)");
                 }
             }
         }
 
-        false
+        None
     }
 }

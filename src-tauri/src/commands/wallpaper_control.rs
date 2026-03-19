@@ -3,6 +3,9 @@ use crate::wallpaper::providers::VideoResult;
 use crate::wallpaper::state::{AppStateStore, WallpaperState};
 use crate::wallpaper;
 
+use std::sync::atomic::{AtomicBool, Ordering};
+static TRACKING_STARTED: AtomicBool = AtomicBool::new(false);
+
 
 
 #[tauri::command]
@@ -36,8 +39,16 @@ pub async fn apply_wallpaper(
 }
 
 #[tauri::command]
-pub fn stop_wallpaper(state: State<'_, AppStateStore>) -> Result<WallpaperState, String> {
+pub fn stop_wallpaper(
+    state: State<'_, AppStateStore>,
+    app_handle: tauri::AppHandle,
+) -> Result<WallpaperState, String> {
     wallpaper::desktop::stop_video()?;
+    
+    if let Some(window) = app_handle.get_webview_window("effects_overlay") {
+        let _ = window.hide();
+    }
+
     wallpaper::state::clear_active(&state)
 }
 
@@ -131,7 +142,7 @@ pub fn apply_desktop_effects(
     let data_dir = app_handle.path().app_local_data_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
     std::fs::create_dir_all(&data_dir).ok();
     let config_path = data_dir.join("current_effects.json");
-    let _ = std::fs::write(config_path, &layers_json);
+    std::fs::write(config_path, &layers_json).map_err(|e| format!("Failed to save current_effects.json: {}", e))?;
 
 
     // 2. Spawn Transparent Overlay Window to attach into layout grids
@@ -184,7 +195,10 @@ pub fn apply_desktop_effects(
                             "-File", script_path.to_str().unwrap()
                         ])
                         .spawn() {
-                            Ok(p) => log::info!("[Overlay] Powershell process spawned with PID: {:?}", p.id()),
+                            Ok(p) => {
+                                log::info!("[Overlay] Powershell process spawned with PID: {:?}", p.id());
+                                start_mouse_tracking(app_handle.clone());
+                            },
                             Err(e) => log::error!("[Overlay] Failed to spawn Powershell: {}", e)
                         }
                 }
@@ -196,12 +210,32 @@ pub fn apply_desktop_effects(
         log::error!("[Overlay] effects_overlay window could not be found in current app context.");
     }
 
-
-
-
-
-
     Ok(())
+}
+
+pub fn start_mouse_tracking(app_handle: tauri::AppHandle) {
+    if TRACKING_STARTED.load(Ordering::SeqCst) {
+        return;
+    }
+    TRACKING_STARTED.store(true, Ordering::SeqCst);
+    log::info!("[Overlay] Starting background global mouse cursor tracking stream...");
+
+    std::thread::spawn(move || {
+        use windows::Win32::UI::WindowsAndMessaging::{GetCursorPos, GetSystemMetrics, SM_XVIRTUALSCREEN, SM_YVIRTUALSCREEN};
+        use windows::Win32::Foundation::POINT;
+
+        loop {
+            let mut pt = POINT::default();
+            unsafe {
+                if GetCursorPos(&mut pt).is_ok() {
+                    let vx = GetSystemMetrics(SM_XVIRTUALSCREEN);
+                    let vy = GetSystemMetrics(SM_YVIRTUALSCREEN);
+                    let _ = app_handle.emit("cursor-moved", (pt.x - vx, pt.y - vy));
+                }
+            }
+            std::thread::sleep(std::time::Duration::from_millis(16)); // ~60fps
+        }
+    });
 }
 
 #[tauri::command]

@@ -25,6 +25,7 @@ if (Test-Path $PidFile) {
     }
 }
 Clear-Content $PidFile -ErrorAction SilentlyContinue | Out-Null
+Add-Content -Path $PidFile -Value $PID
 
 Write-Host "--- Multi-Monitor Desktop Wallpaper ---" -ForegroundColor Cyan
 
@@ -67,7 +68,12 @@ for ($idx = 0; $idx -lt $screens.Count; $idx++) {
 
     $ScalePercent = [Math]::Min([Math]::Max($ScalePercent, 25), 200)
     $VolumePercent = [Math]::Min([Math]::Max($VolumePercent, 0), 100)
-    $StartPaused = $StartPaused -eq "true"
+    if ($StartPaused -eq "1" -or $StartPaused -eq 1 -or $StartPaused -eq "true" -or $StartPaused -eq "yes") {
+        $StartPaused = $true
+    } else {
+        $StartPaused = $false
+    }
+    Write-Host "[Engine] Initial StartPaused decision: $StartPaused (Input: $args)" -ForegroundColor Gray
     $targetWidth = [Math]::Max(2, [int]([Math]::Round(($width * $ScalePercent / 100.0) / 2) * 2))
     $targetHeight = [Math]::Max(2, [int]([Math]::Round(($height * $ScalePercent / 100.0) / 2) * 2))
     $mute = if ($VolumePercent -le 0 -or $idx -gt 0) { "yes" } else { "no" } # Mute others
@@ -88,8 +94,9 @@ for ($idx = 0; $idx -lt $screens.Count; $idx++) {
     $stArg = if ($StartTime -ne "") { "--start=$StartTime" } else { "" }
     $etArg = if ($EndTime -ne "") { "--end=$EndTime" } else { "" }
 
-    $args = "$widArg $stArg $etArg --input-ipc-server=$ipc_server --loop=inf --mute=$mute --volume=${VolumePercent} --pause=$pauseArg --no-osc --no-osd-bar --no-border --no-config --input-default-bindings=no --input-vo-keyboard=no --show-in-taskbar=no --keepaspect=no --force-window=yes --geometry=${width}x${height}+${X}+${Y} --ontop=no --vo=gpu --hwdec=auto-safe --panscan=1.0 --vf=$filterChain --demuxer-max-bytes=128M --demuxer-max-back-bytes=32M --cache=no --vd-lavc-fast --vd-lavc-skiploopfilter=all --terminal=no `"$VideoPath`""
-
+    $args = "$widArg $stArg $etArg --input-ipc-server=$ipc_server --loop=inf --mute=$mute --volume=${VolumePercent} --pause=$pauseArg --no-osc --no-osd-bar --no-border --no-config --input-default-bindings=no --input-vo-keyboard=no --show-in-taskbar=no --keepaspect=no --force-window=yes --geometry=${width}x${height}+${X}+${Y} --ontop=no --vo=gpu-next --gpu-api=d3d11 --hwdec=d3d11va --gpu-context=d3d11 --panscan=1.0 --vf=$filterChain --demuxer-max-bytes=32M --demuxer-max-back-bytes=16M --cache=no --vd-lavc-fast --vd-lavc-skiploopfilter=all --vd-lavc-threads=1 --dither-depth=no --icc-profile-auto=no --terminal=no `"$VideoPath`""
+    Write-Host "[Engine] Launching mpv with args: $args" -ForegroundColor Gray
+    
     $stdoutLog = Join-Path $LogDir "mpv_out_$idx.log"
     $stderrLog = Join-Path $LogDir "mpv_err_$idx.log"
     
