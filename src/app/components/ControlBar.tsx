@@ -16,6 +16,7 @@ interface ControlBarProps {
 }
 
 const SOURCES = [
+  { value: "alphacoders", label: "AlphaCoders" },
   { value: "motionbgs", label: "MotionBGs" },
   { value: "redgifs", label: "RedGIFs" },
   { value: "direct", label: "Direct URL / File" },
@@ -60,6 +61,7 @@ export function ControlBar({
             className={`source-pill ${source === item.value ? "source-pill--active" : ""}`}
             onClick={() => onSourceChange(item.value)}
           >
+            {item.value === "alphacoders" && <span style={{ marginRight: "8px" }}>🌌</span>}
             {item.value === "motionbgs" && <span style={{ marginRight: "8px" }}>🌏</span>}
             {item.value === "redgifs" && <span style={{ marginRight: "8px" }}>🎬</span>}
             {item.value === "direct" && <span style={{ marginRight: "8px" }}>🔗</span>}
@@ -100,7 +102,7 @@ export function ControlBar({
         </div>
       </div>
 
-      {source === "motionbgs" && (
+      {(source === "motionbgs" || source === "alphacoders") && (
         <div className="categories-scroll">
           {CATEGORIES.map((cat) => (
             <button

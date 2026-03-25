@@ -6,7 +6,8 @@ param (
     [string]$StartPaused = "false",
     [Int64]$WindowHandle = 0,
     [string]$StartTime = "",
-    [string]$EndTime = ""
+    [string]$EndTime = "",
+    [string]$MpvPath = ""
 )
 
 Write-Host "Cleaning up previous wallpaper engine streams..." -ForegroundColor Yellow
@@ -53,10 +54,14 @@ if ($WindowHandle -ne 0) {
 }
 
 $screens = [System.Windows.Forms.Screen]::AllScreens
-$mpv = "C:\Program Files\MPV Player\mpv.exe"
+$mpv = if ($MpvPath -ne "") { $MpvPath } else { "C:\Program Files\MPV Player\mpv.exe" }
 if (-not (Test-Path $mpv)) {
-    Write-Host "mpv.exe not found at $mpv" -ForegroundColor Red
-    exit
+    Write-Host "mpv.exe not found at $mpv. Attempting 'where mpv' fallback..." -ForegroundColor Yellow
+    $mpv = where.exe mpv | Select-Object -First 1
+    if (-not $mpv -or -not (Test-Path $mpv)) {
+        Write-Host "FATAL: mpv.exe not found. Install from: https://mpv.io/" -ForegroundColor Red
+        exit
+    }
 }
 
 for ($idx = 0; $idx -lt $screens.Count; $idx++) {
@@ -66,42 +71,85 @@ for ($idx = 0; $idx -lt $screens.Count; $idx++) {
     $X = $s.Bounds.X
     $Y = $s.Bounds.Y
 
-    $ScalePercent = [Math]::Min([Math]::Max($ScalePercent, 25), 200)
-    $VolumePercent = [Math]::Min([Math]::Max($VolumePercent, 0), 100)
-    if ($StartPaused -eq "1" -or $StartPaused -eq 1 -or $StartPaused -eq "true" -or $StartPaused -eq "yes") {
-        $StartPaused = $true
-    } else {
-        $StartPaused = $false
-    }
-    Write-Host "[Engine] Initial StartPaused decision: $StartPaused (Input: $args)" -ForegroundColor Gray
     $targetWidth = [Math]::Max(2, [int]([Math]::Round(($width * $ScalePercent / 100.0) / 2) * 2))
     $targetHeight = [Math]::Max(2, [int]([Math]::Round(($height * $ScalePercent / 100.0) / 2) * 2))
     $mute = if ($VolumePercent -le 0 -or $idx -gt 0) { "yes" } else { "no" } # Mute others
-    $pauseArg = if ($StartPaused) { "yes" } else { "no" }
-
+    
     switch ($VideoFilter) {
         "grayscale" { $filterChain = "scale=${targetWidth}:${targetHeight},format=gray" }
-        "vivid" { $filterChain = "scale=${targetWidth}:${targetHeight},eq=contrast=18:brightness=0:saturation=35:gamma=6" }
-        "soft" { $filterChain = "scale=${targetWidth}:${targetHeight},eq=contrast=-8:brightness=4:saturation=-12:gamma=4" }
-        "noir" { $filterChain = "scale=${targetWidth}:${targetHeight},format=gray,eq=contrast=22:brightness=-4" }
-        "retro" { $filterChain = "scale=${targetWidth}:${targetHeight},hue=h=8:s=0.92,eq=contrast=10:brightness=3:saturation=18" }
+        "vivid" { $filterChain = "scale=${targetWidth}:${targetHeight},eq=contrast=1.12:brightness=0:saturation=1.35:gamma=1.0" }
+        "soft" { $filterChain = "scale=${targetWidth}:${targetHeight},eq=contrast=0.94:brightness=0.04:saturation=0.88:gamma=1.0" }
+        "noir" { $filterChain = "scale=${targetWidth}:${targetHeight},format=gray,eq=contrast=1.15:brightness=-0.04" }
+        "retro" { $filterChain = "scale=${targetWidth}:${targetHeight},hue=h=8:s=0.92,eq=contrast=1.05:brightness=0.03:saturation=1.18" }
         default { $filterChain = "scale=${targetWidth}:${targetHeight}" }
     }
 
-    $widArg = if ($WindowHandle -eq 0) { "--wid=0" } else { "" }
     $ipc_server = "\\.\pipe\openclaw-mpv-$idx"
-
     $stArg = if ($StartTime -ne "") { "--start=$StartTime" } else { "" }
     $etArg = if ($EndTime -ne "") { "--end=$EndTime" } else { "" }
+    $pauseVal = if ($StartPaused -match '^(1|true|yes)$') { "yes" } else { "no" }
+    
+    # Build Argument list as a single robust string for maximum compatibility
+    $mpvArgs = @()
+    if ($stArg -ne "") { $mpvArgs += $stArg }
+    if ($etArg -ne "") { $mpvArgs += $etArg }
+    
+    $mpvArgs += @(
+        "--input-ipc-server=$ipc_server",
+        "--loop=inf",
+        "--mute=$mute",
+        "--volume=${VolumePercent}",
+        "--pause=$pauseVal",
+        "--no-osc",
+        "--no-osd-bar",
+        "--no-border",
+        "--no-config",
+        "--input-default-bindings=no",
+        "--input-vo-keyboard=no",
+        "--show-in-taskbar=no",
+        "--keepaspect=no",
+        "--force-window=yes",
+        "--geometry=${width}x${height}+${X}+${Y}",
+        "--ontop=no",
+        "--vo=gpu-next",
+        "--gpu-api=d3d11",
+        "--hwdec=d3d11va",
+        "--gpu-context=d3d11",
+        "--panscan=1.0",
+        "--vf=$filterChain",
+        "--demuxer-max-bytes=32M",
+        "--demuxer-max-back-bytes=16M",
+        "--cache=no",
+        "--vd-lavc-fast",
+        "--vd-lavc-skiploopfilter=all",
+        "--vd-lavc-threads=1",
+        "--dither-depth=no",
+        "--icc-profile-auto=no",
+        "--terminal=no"
+    )
 
-    $args = "$widArg $stArg $etArg --input-ipc-server=$ipc_server --loop=inf --mute=$mute --volume=${VolumePercent} --pause=$pauseArg --no-osc --no-osd-bar --no-border --no-config --input-default-bindings=no --input-vo-keyboard=no --show-in-taskbar=no --keepaspect=no --force-window=yes --geometry=${width}x${height}+${X}+${Y} --ontop=no --vo=gpu-next --gpu-api=d3d11 --hwdec=d3d11va --gpu-context=d3d11 --panscan=1.0 --vf=$filterChain --demuxer-max-bytes=32M --demuxer-max-back-bytes=16M --cache=no --vd-lavc-fast --vd-lavc-skiploopfilter=all --vd-lavc-threads=1 --dither-depth=no --icc-profile-auto=no --terminal=no `"$VideoPath`""
-    Write-Host "[Engine] Launching mpv with args: $args" -ForegroundColor Gray
+    if ($WindowHandle -eq 0) { $mpvArgs += "--wid=0" }
+
+    # Quoting the VideoPath is CRITICAL for spaces (e.g., HIGH 002.mp4)
+    $FinalArgString = ($mpvArgs -join ' ') + " `"$VideoPath`""
+    
+    Write-Host "[Engine] Video Path: $VideoPath" -ForegroundColor Cyan
+    Write-Host "[Engine] MPV Executable: $mpv" -ForegroundColor Cyan
+    Write-Host "[Engine] Constructed Args: $FinalArgString" -ForegroundColor Gray
     
     $stdoutLog = Join-Path $LogDir "mpv_out_$idx.log"
     $stderrLog = Join-Path $LogDir "mpv_err_$idx.log"
     
-    $mpvProc = Start-Process -FilePath $mpv -ArgumentList $args -RedirectStandardOutput $stdoutLog -RedirectStandardError $stderrLog -PassThru
-    Add-Content -Path $PidFile -Value $mpvProc.Id
+    try {
+        $mpvProc = Start-Process -FilePath $mpv -ArgumentList $FinalArgString -RedirectStandardOutput $stdoutLog -RedirectStandardError $stderrLog -PassThru -NoNewWindow
+        if ($null -eq $mpvProc) {
+            Write-Host "CRITICAL: Start-Process returned null!" -ForegroundColor Red
+        } else {
+            Add-Content -Path $PidFile -Value $mpvProc.Id
+        }
+    } catch {
+        Write-Host "CRITICAL ERROR: Failed to launch mpv: $_" -ForegroundColor Red
+    }
 
     if ($WindowHandle -ne 0) {
         $shell_hwnd = [Win32]::FindWindowEx([IntPtr]$WindowHandle, [IntPtr]::Zero, "SHELLDLL_DefView", $null)

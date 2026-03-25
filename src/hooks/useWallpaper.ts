@@ -359,6 +359,7 @@ export function useWallpaper() {
         ...applyPersistedState(persisted, s),
         currentVideo: video,
         isPlaying: true,
+        paused: false,
         error: null,
         errorHint: null,
       }));
@@ -719,6 +720,7 @@ export function useWallpaper() {
         setState((s) => ({
           ...applyPersistedState(advanced.state, s),
           currentVideo: advanced.video,
+          paused: false,
           error: null,
           errorHint: null,
         }));

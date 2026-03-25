@@ -53,7 +53,7 @@ impl Default for WallpaperState {
             queue_cursor: 0,
             rotation_enabled: false,
             rotation_interval_seconds: 300,
-            auto_pause_enabled: true,
+            auto_pause_enabled: false,
             paused: false,
             volume_percent: 0,
             video_filter: "none".to_string(),

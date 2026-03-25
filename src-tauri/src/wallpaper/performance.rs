@@ -36,8 +36,8 @@ pub fn start_monitor(state_store: AppStateStore) {
                 continue;
             }
 
-            let mut should_pause = force_paused();
-            let mut reason = if should_pause { "Force-pause flag" } else { "None" };
+            let mut should_pause = state.paused || force_paused();
+            let mut reason = if state.paused { "Manual User Pause" } else if force_paused() { "Force-pause flag" } else { "None" };
 
             #[cfg(windows)]
             {
@@ -83,13 +83,8 @@ fn set_mpv_pause(pause: bool) -> bool {
 #[cfg(windows)]
 fn check_should_pause_detailed() -> Option<&'static str> {
     unsafe {
-        // 1. Check power state (Battery vs AC)
-        let mut status = SYSTEM_POWER_STATUS::default();
-        if GetSystemPowerStatus(&mut status).is_ok() {
-            if status.ACLineStatus == 0 {
-                return Some("System is on battery power (Auto-Pause)");
-            }
-        }
+        // 1. Check for manual/forced conditions that override auto-logic
+        // (Previously battery check was here, removed to avoid immediate pause on apply)
 
         // 2. Check current active window
         let hwnd = GetForegroundWindow();

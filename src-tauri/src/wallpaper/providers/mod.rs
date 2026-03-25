@@ -4,6 +4,7 @@
 
 pub mod direct_url;
 pub mod motionbgs;
+pub mod alphacoders;
 pub mod redgifs;
 pub mod youtube;
 
@@ -113,10 +114,11 @@ pub fn get_provider(source: &str) -> Result<Box<dyn VideoProvider>, String> {
     match source.to_lowercase().as_str() {
         "redgifs" => Ok(Box::new(redgifs::RedGifsProvider)),
         "motionbgs" => Ok(Box::new(motionbgs::MotionBgsProvider)),
+        "alphacoders" => Ok(Box::new(alphacoders::AlphaCodersProvider)),
         "youtube" | "yt" => Ok(Box::new(youtube::YouTubeProvider)),
         "direct" | "url" => Ok(Box::new(direct_url::DirectUrlProvider)),
         _ => Err(format!(
-            "Unknown video source: '{}'. Available: redgifs, motionbgs, youtube, direct",
+            "Unknown video source: '{}'. Available: redgifs, motionbgs, alphacoders, youtube, direct",
             source
         )),
     }
@@ -124,6 +126,6 @@ pub fn get_provider(source: &str) -> Result<Box<dyn VideoProvider>, String> {
 
 /// Lists all available provider names.
 pub fn list_providers() -> Vec<String> {
-    vec!["redgifs".to_string(), "motionbgs".to_string(), "youtube".to_string(), "direct".to_string()]
+    vec!["redgifs".to_string(), "motionbgs".to_string(), "alphacoders".to_string(), "youtube".to_string(), "direct".to_string()]
 }
 

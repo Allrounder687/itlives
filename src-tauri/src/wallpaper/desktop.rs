@@ -179,6 +179,8 @@ pub fn set_video(
             if paused { "1".to_string() } else { "0".to_string() },
             "-WindowHandle".to_string(),
             workerw.to_string(),
+            "-MpvPath".to_string(),
+            _mpv_path.to_string(),
         ];
 
         if let Some(st) = start_time {
