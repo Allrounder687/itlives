@@ -7,6 +7,7 @@ import { VideoResult, PersistedState, WallpaperState, applyPersistedState } from
 export function useWallpaperActions(state: WallpaperState, setState: React.Dispatch<React.SetStateAction<WallpaperState>>) {
   
   const applyWallpaper = useCallback(async (video: VideoResult, startTime?: number, endTime?: number) => {
+    setState((s) => ({ ...s, isLoading: true, error: null }));
     try {
       const { invoke } = await getCoreApi();
       const persisted = await invoke<PersistedState>("apply_wallpaper", {
@@ -20,17 +21,18 @@ export function useWallpaperActions(state: WallpaperState, setState: React.Dispa
         currentVideo: video,
         isPlaying: true,
         paused: false,
+        isLoading: false,
         error: null,
         errorHint: null,
       }));
     } catch (error: any) {
-      setState((s) => ({ ...s, error: error.toString() }));
+      setState((s) => ({ ...s, isLoading: false, error: error.toString() }));
     }
   }, [state.wallpaperScalePercent, setState]);
 
   const fetchVideosList = useCallback(async () => {
     if (state.source === "direct") return [];
-    setState((s) => ({ ...s, isLoading: true, error: null }));
+    setState((s) => ({ ...s, isLoading: true, error: null, duplicateNotice: null }));
     try {
       const { invoke } = await getCoreApi();
       const results = await invoke<VideoResult[]>("fetch_videos_list", {
@@ -39,7 +41,43 @@ export function useWallpaperActions(state: WallpaperState, setState: React.Dispa
         order: "trending",
         page: state.page,
       });
-      setState((s) => ({ ...s, searchResults: results, isLoading: false }));
+      setState((s) => {
+        // If this is page 1, we start clean and don't count existing results as duplicates
+        const existingKeys = s.page === 1 ? new Set<string>() : new Set(s.searchResults.map(item => `${item.source}:${item.id}`));
+        const duplicates: string[] = [];
+        const uniqueNewResults = results.filter(item => {
+          const key = `${item.source}:${item.id}`;
+          if (existingKeys.has(key)) {
+            duplicates.push(item.id);
+            return false;
+          }
+          return true;
+        });
+
+        if (duplicates.length > 0) {
+          console.warn(`[OpenClaw LWP] Prevented ${duplicates.length} duplicate wallpapers from repeating:`, duplicates);
+        }
+
+        const combinedResults = s.page === 1 ? results : [...s.searchResults, ...uniqueNewResults];
+        
+        // Final absolute deduplication pass
+        const seen = new Set<string>();
+        const deduplicated = combinedResults.filter(item => {
+          const key = `${item.source}:${item.id}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+
+        const hasMore = results.length > 0 && uniqueNewResults.length > 0;
+        return {
+          ...s,
+          searchResults: deduplicated,
+          isLoading: false,
+          hasMore,
+          duplicateNotice: duplicates.length > 0 ? `Prevented ${duplicates.length} duplicate wallpapers from repeating.` : null
+        };
+      });
       return results;
     } catch (error: any) {
       setState((s) => ({ ...s, isLoading: false, error: error.toString() }));

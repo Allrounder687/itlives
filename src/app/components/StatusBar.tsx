@@ -1,6 +1,7 @@
 "use client";
 
 import { VideoResult } from "@/hooks/useWallpaper";
+import { isStaticWallpaper } from "@/utils/wallpaperTypes";
 
 interface StatusBarProps {
   isPlaying: boolean;
@@ -23,7 +24,7 @@ export function StatusBar({ isPlaying, currentVideo }: StatusBarProps) {
       <div className="status-panel__meta">
         <div>
           <span className="status-meta-label">Source</span>
-          <strong>{currentVideo ? "LIVE WALLPAPER" : "NONE"}</strong>
+          <strong>{currentVideo ? (isStaticWallpaper(currentVideo) ? "STATIC IMAGE" : "LIVE WALLPAPER") : "NONE"}</strong>
         </div>
         <div>
           <span className="status-meta-label">Duration</span>

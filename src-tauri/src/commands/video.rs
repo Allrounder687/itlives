@@ -1,6 +1,26 @@
-use tauri::{State, Window};
+use tauri::{State, Window, Emitter};
 use crate::wallpaper::providers::{self, SearchConfig, VideoResult};
 use crate::wallpaper::state::AppStateStore;
+
+fn clean_search_query(q: &str) -> String {
+    let trimmed = q.trim();
+    if trimmed.is_empty() || trimmed.to_lowercase() == "all" || trimmed.to_lowercase() == "wallpaper" || trimmed.to_lowercase() == "wallpapers" {
+        return trimmed.to_string();
+    }
+    
+    let mut cleaned = trimmed.to_lowercase();
+    if cleaned.ends_with(" wallpapers") {
+        cleaned = cleaned.strip_suffix(" wallpapers").unwrap_or(&cleaned).to_string();
+    } else if cleaned.ends_with(" wallpaper") {
+        cleaned = cleaned.strip_suffix(" wallpaper").unwrap_or(&cleaned).to_string();
+    } else if cleaned.ends_with(" walls") {
+        cleaned = cleaned.strip_suffix(" walls").unwrap_or(&cleaned).to_string();
+    } else if cleaned.ends_with(" wall") {
+        cleaned = cleaned.strip_suffix(" wall").unwrap_or(&cleaned).to_string();
+    }
+    
+    cleaned.trim().to_string()
+}
 
 #[tauri::command]
 pub async fn fetch_video(
@@ -17,9 +37,11 @@ pub async fn fetch_video(
         return Err(format!("The wallpaper source '{}' has been disabled in settings.", source));
     }
 
+    let cleaned_query = clean_search_query(&query);
+
     // For unified source, pick a random SFW provider and fetch from it
     if source == "unified" || source == "all" {
-        let mut sfw_providers = vec!["motionbgs", "alphacoders"];
+        let mut sfw_providers = vec!["motionbgs", "alphacoders", "wallhaven", "pinterest"];
         sfw_providers.retain(|p| !disabled.contains(&p.to_string()));
 
         if sfw_providers.is_empty() {
@@ -32,12 +54,12 @@ pub async fn fetch_video(
             *sfw_providers.choose(&mut rng).unwrap_or(&"motionbgs")
         };
         let provider = providers::get_provider(chosen)?;
-        let config = SearchConfig { query, order, count: 40, page: 1, api_key };
+        let config = SearchConfig { query: cleaned_query, order, count: 40, page: 1, api_key };
         return provider.fetch_video(&config).await;
     }
     let provider = providers::get_provider(&source)?;
     let config = SearchConfig {
-        query,
+        query: cleaned_query,
         order,
         count: 40,
         page: 0,
@@ -62,9 +84,11 @@ pub async fn fetch_videos_list(
         return Err(format!("The wallpaper source '{}' has been disabled in settings.", source));
     }
 
+    let cleaned_query = clean_search_query(&query);
+
     if source == "all" || source == "unified" {
         // Fan out to all SFW providers concurrently and merge results
-        let mut providers_list = vec!["motionbgs", "alphacoders"];
+        let mut providers_list = vec!["motionbgs", "alphacoders", "wallhaven", "pinterest"];
         providers_list.retain(|p| !disabled.contains(&p.to_string()));
 
         if providers_list.is_empty() {
@@ -72,7 +96,7 @@ pub async fn fetch_videos_list(
         }
 
         let config = SearchConfig {
-            query,
+            query: cleaned_query,
             order,
             count: 20, // Fetch fewer per provider to keep weight low
             page,
@@ -110,7 +134,7 @@ pub async fn fetch_videos_list(
 
     let provider = providers::get_provider(&source)?;
     let config = SearchConfig {
-        query,
+        query: cleaned_query,
         order,
         count: 40,
         page,
@@ -212,4 +236,99 @@ pub async fn save_thumbnail(
     std::fs::write(&thumb_path, bytes).map_err(|e| e.to_string())?;
 
     crate::wallpaper::state::set_thumbnail(&state, local_path, thumb_path.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+pub fn check_ytdlp_installed() -> bool {
+    crate::wallpaper::providers::youtube::find_ytdlp().is_ok()
+}
+
+#[tauri::command]
+pub async fn install_ytdlp(window: Window) -> Result<(), String> {
+    use std::fs::File;
+    use std::io::{Read, Write};
+
+    // 1. Get destination path
+    let bin_dir = crate::wallpaper::desktop::app_data_dir().join("bin");
+    std::fs::create_dir_all(&bin_dir).map_err(|e| format!("Failed to create bin directory: {}", e))?;
+    let dest_path = bin_dir.join("yt-dlp.exe");
+
+    // 2. Perform download in blocking task so we don't block the async executor thread
+    tokio::task::spawn_blocking(move || {
+        let client = reqwest::blocking::Client::builder()
+            .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+            .build()
+            .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
+
+        let url = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe";
+        let mut response = client.get(url)
+            .send()
+            .map_err(|e| format!("Failed to send request: {}", e))?;
+
+        if !response.status().is_success() {
+            return Err(format!("Server returned status: {}", response.status()));
+        }
+
+        let total_size = response.content_length().unwrap_or(0);
+        let mut file = File::create(&dest_path)
+            .map_err(|e| format!("Failed to create executable file: {}", e))?;
+
+        let mut buffer = [0; 16384];
+        let mut downloaded: u64 = 0;
+
+        loop {
+            let bytes_read = response.read(&mut buffer)
+                .map_err(|e| format!("Error reading download stream: {}", e))?;
+
+            if bytes_read == 0 {
+                break;
+            }
+
+            file.write_all(&buffer[..bytes_read])
+                .map_err(|e| format!("Failed to write to file: {}", e))?;
+
+            downloaded += bytes_read as u64;
+
+            if total_size > 0 {
+                let progress = (downloaded as f64 / total_size as f64 * 100.0) as u32;
+                let _ = window.emit("ytdlp-install-progress", progress);
+            }
+        }
+
+        file.flush().map_err(|e| format!("Failed to flush file: {}", e))?;
+        Ok(())
+    })
+    .await
+    .map_err(|e| format!("Task join error: {}", e))?
+}
+
+#[tauri::command]
+pub fn check_ffmpeg_installed() -> bool {
+    crate::wallpaper::providers::youtube::find_ffmpeg().is_some()
+}
+
+#[tauri::command]
+pub async fn install_ffmpeg() -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        let mut cmd = std::process::Command::new("powershell");
+        cmd.args(&[
+            "-NoProfile",
+            "-Command",
+            "Start-Process powershell -ArgumentList '-NoExit -NoProfile -Command winget install Gyan.FFmpeg --accept-package-agreements --accept-source-agreements' -Verb RunAs -Wait"
+        ]);
+        cmd.creation_flags(0x08000000);
+
+        let status = cmd.status().map_err(|e| format!("Failed to spawn winget process: {}", e))?;
+        if status.success() {
+            Ok(())
+        } else {
+            Err("Winget exited with an error code or was cancelled. Please try 'winget install Gyan.FFmpeg' manually in a terminal.".to_string())
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        Err("Auto-install is only supported on Windows.".to_string())
+    }
 }

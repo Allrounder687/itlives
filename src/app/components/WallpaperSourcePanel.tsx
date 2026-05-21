@@ -6,8 +6,10 @@ interface WallpaperSourcePanelProps {
   wallpaper: {
     wallhavenApiKey: string;
     disabledSources: string[];
+    pinterestUrls: string[];
     setWallhavenApiKey: (key: string) => Promise<void>;
     setDisabledSources: (sources: string[]) => Promise<void>;
+    setPinterestUrls: (urls: string[]) => Promise<void>;
   };
 }
 
@@ -30,6 +32,26 @@ export function WallpaperSourcePanel({ wallpaper }: WallpaperSourcePanelProps) {
   const [apiKeyInput, setApiKeyInput] = useState(wallpaper.wallhavenApiKey);
   const [showKey, setShowKey] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const [newPinterestUrl, setNewPinterestUrl] = useState("");
+
+  const handleAddPinterestUrl = async () => {
+    const trimmed = newPinterestUrl.trim();
+    if (!trimmed) return;
+    const currentList = wallpaper.pinterestUrls || [];
+    if (currentList.includes(trimmed)) {
+      setNewPinterestUrl("");
+      return;
+    }
+    const newList = [...currentList, trimmed];
+    await wallpaper.setPinterestUrls(newList);
+    setNewPinterestUrl("");
+  };
+
+  const handleRemovePinterestUrl = async (indexToRemove: number) => {
+    const currentList = wallpaper.pinterestUrls || [];
+    const newList = currentList.filter((_, idx) => idx !== indexToRemove);
+    await wallpaper.setPinterestUrls(newList);
+  };
 
   const handleSaveApiKey = async () => {
     setSaveStatus("saving");
@@ -107,6 +129,93 @@ export function WallpaperSourcePanel({ wallpaper }: WallpaperSourcePanelProps) {
           <span className="field__hint" style={{ fontSize: "11px", opacity: 0.6 }}>
             Adding an API key removes rate limits and unlocks custom search capabilities.
           </span>
+        </div>
+
+        {/* Custom Pinterest URLs / Pages section */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "10px", padding: "16px", background: "rgba(255, 255, 255, 0.01)", border: "1px solid rgba(255, 255, 255, 0.03)", borderRadius: "12px" }}>
+          <label className="field__label" style={{ fontWeight: 600, color: "var(--text-soft)" }}>
+            📌 Pinterest Scraper Sources
+          </label>
+          <span className="field__hint" style={{ fontSize: "11px", opacity: 0.6, marginBottom: "4px" }}>
+            Add your favorite Pinterest boards, searches, or catalog URLs to dynamically source wallpapers from them.
+          </span>
+
+          {/* Add URL form */}
+          <div style={{ display: "flex", gap: "8px" }}>
+            <input
+              type="text"
+              className="input input--hud"
+              placeholder="Paste Pinterest search or board URL (e.g. https://www.pinterest.com/search/pins/?q=fantasy%20wallpaper)..."
+              value={newPinterestUrl}
+              onChange={(e) => setNewPinterestUrl(e.target.value)}
+              style={{ flex: 1, padding: "8px 12px", background: "rgba(0,0,0,0.3)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "6px", color: "#fff" }}
+            />
+            <button
+              type="button"
+              className="action-btn action-btn--primary"
+              onClick={handleAddPinterestUrl}
+              style={{ padding: "8px 16px", borderRadius: "6px", cursor: "pointer", background: "var(--accent)", color: "#000", fontWeight: "bold", border: "none" }}
+            >
+              Add Page
+            </button>
+          </div>
+
+          {/* List of active URLs */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "8px" }}>
+            {wallpaper.pinterestUrls && wallpaper.pinterestUrls.length > 0 ? (
+              wallpaper.pinterestUrls.map((url, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "8px 12px",
+                    borderRadius: "8px",
+                    background: "rgba(255, 255, 255, 0.02)",
+                    border: "1px solid rgba(255, 255, 255, 0.04)"
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: "12px",
+                      color: "rgba(255, 255, 255, 0.8)",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                      maxWidth: "80%",
+                      fontFamily: "monospace"
+                    }}
+                    title={url}
+                  >
+                    {url}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleRemovePinterestUrl(idx)}
+                    style={{
+                      background: "transparent",
+                      border: "none",
+                      color: "rgba(255, 99, 99, 0.7)",
+                      fontSize: "12px",
+                      cursor: "pointer",
+                      padding: "4px 8px",
+                      borderRadius: "4px",
+                      transition: "all 0.2s ease"
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = "rgba(255, 99, 99, 0.1)"}
+                    onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))
+            ) : (
+              <span style={{ fontSize: "11px", opacity: 0.5, fontStyle: "italic", textAlign: "center", padding: "8px" }}>
+                No custom Pinterest pages configured. Defaulting to general wallpaper queries.
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Wallpaper Source Selection section */}

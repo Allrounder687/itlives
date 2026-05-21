@@ -40,6 +40,9 @@ pub struct WallpaperState {
     pub theme: String,
     pub wallhaven_api_key: String,
     pub disabled_sources: Vec<String>,
+    pub pinterest_urls: Vec<String>,
+    pub adult_pin: Option<String>,
+    pub hidden_videos: Vec<String>,
 }
 
 impl Default for WallpaperState {
@@ -67,6 +70,11 @@ impl Default for WallpaperState {
             theme: "master-system".to_string(),
             wallhaven_api_key: "KJ47mwX8D3S61aafbxxv37Rgijm6u4Eq".to_string(),
             disabled_sources: Vec::new(),
+            pinterest_urls: vec![
+                "https://www.pinterest.com/search/pins/?q=fantasy%20wallpaper&rs=ac&len=12&source_id=ac_ysOA3Mkj&eq=fantasy%20wall&etslf=5698".to_string()
+            ],
+            adult_pin: None,
+            hidden_videos: Vec::new(),
         }
     }
 }
@@ -458,6 +466,16 @@ pub fn set_disabled_sources(
     })
 }
 
+pub fn set_pinterest_urls(
+    store: &AppStateStore,
+    urls: Vec<String>,
+) -> Result<WallpaperState, String> {
+    store.update(|state| {
+        state.pinterest_urls = urls;
+        Ok(())
+    })
+}
+
 pub fn advance_queue(store: &AppStateStore) -> Result<QueueAdvanceResult, String> {
     let mut state = store
         .inner
@@ -498,6 +516,8 @@ mod tests {
             width: 1920,
             height: 1080,
             source: "direct".to_string(),
+            start_time: None,
+            end_time: None,
         }
     }
 

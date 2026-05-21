@@ -34,10 +34,16 @@ export function useAppState() {
     theme: "master-system",
     wallhavenApiKey: "KJ47mwX8D3S61aafbxxv37Rgijm6u4Eq",
     disabledSources: [],
+    pinterestUrls: [
+      "https://www.pinterest.com/search/pins/?q=fantasy%20wallpaper&rs=ac&len=12&source_id=ac_ysOA3Mkj&eq=fantasy%20wall&etslf=5698"
+    ],
     searchResults: [],
     page: 1,
     category: "all",
     autostartEnabled: false,
+    hasMore: true,
+    duplicateNotice: null,
+    previewDismissed: true,
   });
 
   useEffect(() => {

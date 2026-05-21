@@ -139,6 +139,10 @@ export function useYouTube() {
     }
   }, [state.url, state.startTime, state.endTime, state.maxHeight]);
 
+  const setError = useCallback((error: string | null) => {
+    setState((s) => ({ ...s, error }));
+  }, []);
+
   return {
     ...state,
     setUrl,
@@ -147,5 +151,6 @@ export function useYouTube() {
     setMaxHeight,
     fetchMeta,
     downloadClip,
+    setError,
   };
 }

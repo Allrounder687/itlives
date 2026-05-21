@@ -75,7 +75,11 @@ pub async fn download_to_cache(
     cache_dir: &PathBuf,
     extra_headers: Option<Vec<(String, String)>>,
 ) -> Result<String, String> {
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(10))
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .map_err(|e| format!("Failed to build reqwest client: {}", e))?;
     let ext = if video_url.contains(".png") {
         "png"
     } else if video_url.contains(".webp") {
@@ -86,6 +90,12 @@ pub async fn download_to_cache(
         "gif"
     } else if video_url.contains(".mp4") {
         "mp4"
+    } else if video_url.contains(".webm") {
+        "webm"
+    } else if video_url.contains(".mov") {
+        "mov"
+    } else if video_url.contains(".m3u8") {
+        "m3u8"
     } else {
         "jpg"
     };
@@ -97,7 +107,10 @@ pub async fn download_to_cache(
 
     std::fs::create_dir_all(cache_dir).map_err(|e| e.to_string())?;
 
-    let mut req = client.get(video_url).header("User-Agent", "Mozilla/5.0");
+    let mut req = client.get(video_url)
+        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+        .header("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
+        .header("Accept-Language", "en-US,en;q=0.9");
 
     if let Some(headers) = extra_headers {
         for (key, value) in headers {
@@ -109,6 +122,11 @@ pub async fn download_to_cache(
         .send()
         .await
         .map_err(|e| format!("Download failed: {}", e))?;
+
+    let status = resp.status();
+    if !status.is_success() {
+        return Err(format!("Download of {} failed with HTTP status: {}", video_url, status));
+    }
 
     let bytes = resp
         .bytes()

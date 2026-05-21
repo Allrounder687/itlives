@@ -110,7 +110,7 @@ impl VideoProvider for MotionBgsProvider {
 
     async fn fetch_videos_list(&self, config: &SearchConfig) -> Result<Vec<VideoResult>, String> {
         let client = reqwest::Client::new();
-        let query = config.query.to_lowercase();
+        let query = config.query.to_lowercase().trim().replace(' ', "-");
         let page = if config.page == 0 { 1 } else { config.page };
 
         let url = if query == "all" || query.is_empty() {

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { formatSavedAt } from "./LibraryList";
+import { isStaticWallpaper } from "@/utils/wallpaperTypes";
 
 interface QueuePanelProps {
   wallpaper: any; // mapping wallpaper module from hook feeds.
@@ -65,7 +66,7 @@ export function QueuePanel({ wallpaper }: QueuePanelProps) {
             >
               <div className="library-item__copy" style={{ pointerEvents: "none" }}>
                 <strong>{index + 1}. {item.video.id}</strong>
-                <span>LIVE WALLPAPER - queued {formatSavedAt(item.saved_at)}</span>
+                <span>{isStaticWallpaper(item.video) ? "STATIC IMAGE" : "LIVE WALLPAPER"} - queued {formatSavedAt(item.saved_at)}</span>
               </div>
               <div className="library-item__actions">
                 <button

@@ -59,6 +59,14 @@ export function useWallpaper() {
     } catch (e) { console.error("Disabled sources failed", e); }
   }, [setState]);
 
+  const setPinterestUrls = useCallback(async (urls: string[]) => {
+    try {
+      const { invoke } = await getCoreApi();
+      const persisted = await invoke<PersistedState>("set_pinterest_urls", { urls });
+      setState((s) => ({ ...applyPersistedState(persisted, s), page: 1 }));
+    } catch (e) { console.error("Pinterest URLs failed", e); }
+  }, [setState]);
+
   // Composition: Add any other missing simple setters here
   const browseLocalVideo = useCallback(async () => {
     try {
@@ -100,6 +108,7 @@ export function useWallpaper() {
     setVolumePercent,
     setWallhavenApiKey,
     setDisabledSources,
+    setPinterestUrls,
     browseLocalVideo,
     isFavorite,
     isQueued,
@@ -108,6 +117,7 @@ export function useWallpaper() {
     setQuery: (query: string) => setState(s => ({ ...s, query, page: 1 })),
     setPage: (page: number) => setState(s => ({ ...s, page })),
     setCategory: (category: string) => setState(s => ({ ...s, category, query: category, page: 1 })),
-    selectVideo: (video: VideoResult) => setState(s => ({ ...s, currentVideo: video })),
+    selectVideo: (video: VideoResult) => setState(s => ({ ...s, currentVideo: video, previewDismissed: false })),
+    dismissPreview: () => setState(s => ({ ...s, previewDismissed: true })),
   };
 }

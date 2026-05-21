@@ -123,3 +123,11 @@ pub fn set_disabled_sources(
 ) -> Result<WallpaperState, String> {
     wallpaper::state::set_disabled_sources(&state, disabled)
 }
+
+#[tauri::command]
+pub fn set_pinterest_urls(
+    state: State<'_, AppStateStore>,
+    urls: Vec<String>,
+) -> Result<WallpaperState, String> {
+    wallpaper::state::set_pinterest_urls(&state, urls)
+}

@@ -2,6 +2,7 @@
 
 import { useRef, useState, useEffect } from "react";
 import { VideoResult } from "@/hooks/useWallpaper";
+import { isStaticWallpaper } from "@/utils/wallpaperTypes";
 import { convertFileSrc } from "@tauri-apps/api/core";
 
 interface HoverVideoProps {
@@ -18,12 +19,7 @@ export function HoverVideo({ video, className, onClick }: HoverVideoProps) {
     ? convertFileSrc(video.local_path)
     : video.video_url;
 
-  const isStaticImage = video.video_url.endsWith(".jpg")
-    || video.video_url.endsWith(".jpeg")
-    || video.video_url.endsWith(".png")
-    || video.video_url.endsWith(".webp")
-    || video.source === "wallhaven"
-    || video.source === "pinterest";
+  const isStaticImage = isStaticWallpaper(video);
 
   const shouldRenderVideo = isHovered || (!video.thumbnail_url && video.local_path);
 

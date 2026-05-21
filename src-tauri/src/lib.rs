@@ -189,6 +189,10 @@ pub fn run() {
             commands::settings::remove_recent_video,
             commands::video::fetch_youtube_meta,
             commands::video::download_youtube_clip,
+            commands::video::check_ytdlp_installed,
+            commands::video::install_ytdlp,
+            commands::video::check_ffmpeg_installed,
+            commands::video::install_ffmpeg,
             commands::queue::reorder_queue,
             commands::video::save_thumbnail,
             commands::wallpaper_control::apply_desktop_effects,
@@ -200,6 +204,7 @@ pub fn run() {
             commands::settings::install_mpv,
             commands::settings::set_wallhaven_api_key,
             commands::settings::set_disabled_sources,
+            commands::settings::set_pinterest_urls,
         ])
         .run(tauri::generate_context!())
 

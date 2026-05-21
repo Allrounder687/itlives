@@ -37,6 +37,7 @@ export interface PersistedState {
   theme: string;
   wallhaven_api_key: string;
   disabled_sources: string[];
+  pinterest_urls: string[];
 }
 
 export interface WallpaperState {
@@ -68,10 +69,14 @@ export interface WallpaperState {
   theme: string;
   wallhavenApiKey: string;
   disabledSources: string[];
+  pinterestUrls: string[];
   searchResults: VideoResult[];
   page: number;
   category: string;
   autostartEnabled: boolean;
+  hasMore?: boolean;
+  duplicateNotice?: string | null;
+  previewDismissed: boolean;
 }
 
 export function applyPersistedState(persisted: PersistedState, current: WallpaperState): WallpaperState {
@@ -99,5 +104,25 @@ export function applyPersistedState(persisted: PersistedState, current: Wallpape
     theme: persisted.theme || "master-system",
     wallhavenApiKey: persisted.wallhaven_api_key ?? "KJ47mwX8D3S61aafbxxv37Rgijm6u4Eq",
     disabledSources: persisted.disabled_sources ?? [],
+    pinterestUrls: persisted.pinterest_urls ?? [
+      "https://www.pinterest.com/search/pins/?q=fantasy%20wallpaper&rs=ac&len=12&source_id=ac_ysOA3Mkj&eq=fantasy%20wall&etslf=5698"
+    ],
   };
 }
+
+export function isStaticWallpaper(video?: { video_url?: string; local_path?: string; source?: string } | null): boolean {
+  if (!video) return false;
+  const url = (video.video_url || "").toLowerCase();
+  const path = (video.local_path || "").toLowerCase();
+  const src = (video.source || "").toLowerCase();
+  
+  if (url.includes(".mp4") || url.includes(".webm") || url.includes(".mov") || url.includes(".m3u8") ||
+      path.includes(".mp4") || path.includes(".webm") || path.includes(".mov") || path.includes(".m3u8")) {
+    return false;
+  }
+  
+  return url.endsWith(".jpg") || url.endsWith(".jpeg") || url.endsWith(".png") || url.endsWith(".webp") ||
+         path.endsWith(".jpg") || path.endsWith(".jpeg") || path.endsWith(".png") || path.endsWith(".webp") ||
+         src === "wallhaven" || src === "pinterest";
+}
+

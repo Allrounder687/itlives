@@ -28,6 +28,8 @@ pub async fn apply_wallpaper(
     }
 
     let current = wallpaper::state::get(&state);
+    let _ = wallpaper::state::set_rotation(&state, false, current.rotation_interval_seconds);
+    
     let path_lower = video.local_path.to_lowercase();
     let is_static_image = path_lower.ends_with(".jpg") 
         || path_lower.ends_with(".jpeg") 
@@ -37,7 +39,12 @@ pub async fn apply_wallpaper(
         || video.source == "pinterest";
 
     if is_static_image {
-        wallpaper::desktop::set_static_image(&video.local_path)?;
+        let local_path = video.local_path.clone();
+        tokio::task::spawn_blocking(move || {
+            wallpaper::desktop::set_static_image(&local_path)
+        })
+        .await
+        .map_err(|e| format!("Static image processing task failed: {}", e))??;
     } else {
         wallpaper::desktop::set_video(
             &video.local_path,
@@ -80,7 +87,9 @@ pub fn set_wallpaper_paused(
 ) -> Result<WallpaperState, String> {
     let persisted = wallpaper::state::set_paused(&state, paused)?;
     if persisted.is_playing {
-        wallpaper::desktop::set_paused(paused)?;
+        if let Err(e) = wallpaper::desktop::set_paused(paused) {
+            log::warn!("Failed to apply paused state: {}", e);
+        }
     }
     Ok(persisted)
 }
@@ -92,7 +101,9 @@ pub fn set_wallpaper_volume(
 ) -> Result<WallpaperState, String> {
     let persisted = wallpaper::state::set_volume_percent(&state, volume_percent)?;
     if persisted.is_playing {
-        wallpaper::desktop::set_volume(persisted.volume_percent)?;
+        if let Err(e) = wallpaper::desktop::set_volume(persisted.volume_percent) {
+            log::warn!("Failed to apply volume: {}", e);
+        }
     }
     Ok(persisted)
 }
@@ -105,17 +116,33 @@ pub fn set_wallpaper_filter(
     let persisted = wallpaper::state::set_video_filter(&state, video_filter)?;
     if persisted.is_playing {
         if let Some(video) = persisted.current_video.as_ref() {
-            wallpaper::desktop::set_video(
-                &video.local_path,
-                persisted.wallpaper_scale_percent,
-                persisted.volume_percent,
-                &persisted.video_filter,
-                persisted.playback_speed,
-                persisted.blur_strength,
-                persisted.paused,
-                None,
-                None,
-            )?;
+            let path_lower = video.local_path.to_lowercase();
+            let is_static = path_lower.ends_with(".jpg") 
+                || path_lower.ends_with(".jpeg") 
+                || path_lower.ends_with(".png") 
+                || path_lower.ends_with(".webp")
+                || video.source == "wallhaven"
+                || video.source == "pinterest";
+
+            if is_static {
+                if let Err(e) = wallpaper::desktop::set_static_image(&video.local_path) {
+                    log::warn!("Failed to set static image filter: {}", e);
+                }
+            } else {
+                if let Err(e) = wallpaper::desktop::set_video(
+                    &video.local_path,
+                    persisted.wallpaper_scale_percent,
+                    persisted.volume_percent,
+                    &persisted.video_filter,
+                    persisted.playback_speed,
+                    persisted.blur_strength,
+                    persisted.paused,
+                    None,
+                    None,
+                ) {
+                    log::warn!("Failed to set video filter: {}", e);
+                }
+            }
         }
     }
     Ok(persisted)
@@ -129,17 +156,33 @@ pub fn set_wallpaper_scale(
     let persisted = wallpaper::state::set_wallpaper_scale_percent(&state, scale_percent)?;
     if persisted.is_playing {
         if let Some(video) = persisted.current_video.as_ref() {
-            wallpaper::desktop::set_video(
-                &video.local_path,
-                persisted.wallpaper_scale_percent,
-                persisted.volume_percent,
-                &persisted.video_filter,
-                persisted.playback_speed,
-                persisted.blur_strength,
-                persisted.paused,
-                None,
-                None,
-            )?;
+            let path_lower = video.local_path.to_lowercase();
+            let is_static = path_lower.ends_with(".jpg") 
+                || path_lower.ends_with(".jpeg") 
+                || path_lower.ends_with(".png") 
+                || path_lower.ends_with(".webp")
+                || video.source == "wallhaven"
+                || video.source == "pinterest";
+
+            if is_static {
+                if let Err(e) = wallpaper::desktop::set_static_image(&video.local_path) {
+                    log::warn!("Failed to set static image scale: {}", e);
+                }
+            } else {
+                if let Err(e) = wallpaper::desktop::set_video(
+                    &video.local_path,
+                    persisted.wallpaper_scale_percent,
+                    persisted.volume_percent,
+                    &persisted.video_filter,
+                    persisted.playback_speed,
+                    persisted.blur_strength,
+                    persisted.paused,
+                    None,
+                    None,
+                ) {
+                    log::warn!("Failed to set video scale: {}", e);
+                }
+            }
         }
     }
     Ok(persisted)
@@ -152,7 +195,9 @@ pub fn set_wallpaper_speed(
 ) -> Result<WallpaperState, String> {
     let persisted = wallpaper::state::set_playback_speed(&state, speed)?;
     if persisted.is_playing {
-        wallpaper::desktop::set_speed(persisted.playback_speed)?;
+        if let Err(e) = wallpaper::desktop::set_speed(persisted.playback_speed) {
+            log::warn!("Failed to apply speed: {}", e);
+        }
     }
     Ok(persisted)
 }
@@ -165,17 +210,33 @@ pub fn set_wallpaper_blur(
     let persisted = wallpaper::state::set_blur_strength(&state, blur)?;
     if persisted.is_playing {
        if let Some(video) = persisted.current_video.as_ref() {
-           wallpaper::desktop::set_video(
-               &video.local_path,
-               persisted.wallpaper_scale_percent,
-               persisted.volume_percent,
-               &persisted.video_filter,
-               persisted.playback_speed,
-               persisted.blur_strength,
-               persisted.paused,
-               None,
-               None
-           )?;
+            let path_lower = video.local_path.to_lowercase();
+            let is_static = path_lower.ends_with(".jpg") 
+                || path_lower.ends_with(".jpeg") 
+                || path_lower.ends_with(".png") 
+                || path_lower.ends_with(".webp")
+                || video.source == "wallhaven"
+                || video.source == "pinterest";
+
+            if is_static {
+                if let Err(e) = wallpaper::desktop::set_static_image(&video.local_path) {
+                    log::warn!("Failed to set static image blur: {}", e);
+                }
+            } else {
+                if let Err(e) = wallpaper::desktop::set_video(
+                    &video.local_path,
+                    persisted.wallpaper_scale_percent,
+                    persisted.volume_percent,
+                    &persisted.video_filter,
+                    persisted.playback_speed,
+                    persisted.blur_strength,
+                    persisted.paused,
+                    None,
+                    None
+                ) {
+                    log::warn!("Failed to set video blur: {}", e);
+                }
+            }
        }
     }
     Ok(persisted)

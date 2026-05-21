@@ -13,10 +13,18 @@ interface ControlBarProps {
   onFetch: () => void;
   onFetchAndApply: () => void;
   onStop: () => void;
+  pinterestUrls?: string[];
+  onSetPinterestUrls?: (urls: string[]) => Promise<void>;
 }
 
 const CATEGORIES = [
-  "All", "Anime", "Games", "Superhero", "Nature", "Car", "Tv", "Holiday", "Animal", "Fantasy", "Space", "Horror", "Technology", "Football", "Japan"
+  "All", "Fantasy", "Aesthetic", "Anime", "Cyberpunk", "Minimalist", "Games", "Vaporwave", 
+  "Lo-Fi", "Pixel Art", "Sci-Fi", "Superhero", "Nature", "Space", "Abstract", 
+  "Synthwave", "Cityscape", "Car", "Landscape", "Neon", "Dark", "Futuristic",
+  "Tv", "Holiday", "Animal", "Horror", "Technology", "Football", 
+  "Japan", "Vintage", "3D Renders", "Illustration", "Architecture",
+  "Steampunk", "Retro", "Cosmic", "Forest", "Ocean", "Glitch Art", 
+  "Dark Academia", "Cottagecore", "Magical", "Vector", "Pastel"
 ];
 
 export function ControlBar({
@@ -30,8 +38,33 @@ export function ControlBar({
   onFetch,
   onFetchAndApply,
   onStop,
+  pinterestUrls = [],
+  onSetPinterestUrls,
 }: ControlBarProps) {
   const [showRedGifs, setShowRedGifs] = useState(false);
+  const [showPinterestSources, setShowPinterestSources] = useState(true);
+  const [newPinUrl, setNewPinUrl] = useState("");
+  const [pinAddStatus, setPinAddStatus] = useState<"idle" | "adding" | "added" | "duplicate">("idle");
+
+  const handleAddPinUrl = async () => {
+    const trimmed = newPinUrl.trim();
+    if (!trimmed || !onSetPinterestUrls) return;
+    if (pinterestUrls.includes(trimmed)) {
+      setPinAddStatus("duplicate");
+      setTimeout(() => setPinAddStatus("idle"), 2000);
+      return;
+    }
+    setPinAddStatus("adding");
+    await onSetPinterestUrls([...pinterestUrls, trimmed]);
+    setNewPinUrl("");
+    setPinAddStatus("added");
+    setTimeout(() => setPinAddStatus("idle"), 1500);
+  };
+
+  const handleRemovePinUrl = async (idx: number) => {
+    if (!onSetPinterestUrls) return;
+    await onSetPinterestUrls(pinterestUrls.filter((_, i) => i !== idx));
+  };
 
   useEffect(() => {
     const checkUnlock = () => {
@@ -115,6 +148,208 @@ export function ControlBar({
               <span style={{ fontSize: "9px", opacity: 0.6 }}>{src.desc}</span>
             </button>
           ))}
+        </div>
+      )}
+
+      {/* Inline Pinterest Source Manager — visible when Pinterest is active source */}
+      {source === "pinterest" && onSetPinterestUrls && (
+        <div style={{
+          background: "rgba(255, 255, 255, 0.02)",
+          border: "1px solid rgba(255, 255, 255, 0.06)",
+          borderRadius: "10px",
+          marginBottom: "12px",
+          overflow: "hidden",
+          transition: "all 0.3s ease"
+        }}>
+          {/* Header / Toggle */}
+          <button
+            type="button"
+            onClick={() => setShowPinterestSources(!showPinterestSources)}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              width: "100%",
+              padding: "10px 14px",
+              background: "transparent",
+              border: "none",
+              color: "#fff",
+              cursor: "pointer",
+              transition: "background 0.2s ease"
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.background = "rgba(255,255,255,0.03)"}
+            onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <span style={{ fontSize: "14px" }}>📌</span>
+              <span style={{ fontSize: "12px", fontWeight: 600 }}>Pinterest Sources</span>
+              <span style={{
+                fontSize: "10px",
+                background: pinterestUrls.length > 0 ? "var(--accent-soft)" : "rgba(255,99,99,0.15)",
+                color: pinterestUrls.length > 0 ? "var(--accent)" : "rgba(255,99,99,0.9)",
+                padding: "2px 8px",
+                borderRadius: "99px",
+                fontWeight: 700
+              }}>
+                {pinterestUrls.length} active
+              </span>
+            </div>
+            <span style={{
+              fontSize: "10px",
+              opacity: 0.5,
+              transform: showPinterestSources ? "rotate(180deg)" : "rotate(0deg)",
+              transition: "transform 0.2s ease"
+            }}>▼</span>
+          </button>
+
+          {/* Expandable Content */}
+          {showPinterestSources && (
+            <div style={{ padding: "0 14px 14px 14px", display: "flex", flexDirection: "column", gap: "10px" }}>
+              {/* Add URL form */}
+              <div style={{ display: "flex", gap: "6px" }}>
+                <input
+                  type="text"
+                  className="input input--hud"
+                  placeholder="Paste Pinterest board/search URL..."
+                  value={newPinUrl}
+                  onChange={(e) => setNewPinUrl(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") handleAddPinUrl(); }}
+                  style={{
+                    flex: 1,
+                    padding: "8px 12px",
+                    background: "rgba(0,0,0,0.35)",
+                    border: "1px solid rgba(255,255,255,0.08)",
+                    borderRadius: "6px",
+                    color: "#fff",
+                    fontSize: "11px"
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={handleAddPinUrl}
+                  disabled={pinAddStatus === "adding"}
+                  style={{
+                    padding: "8px 14px",
+                    borderRadius: "6px",
+                    cursor: "pointer",
+                    background: pinAddStatus === "added" ? "rgba(100,255,100,0.15)" : pinAddStatus === "duplicate" ? "rgba(255,170,0,0.15)" : "var(--accent)",
+                    color: pinAddStatus === "added" ? "#8f8" : pinAddStatus === "duplicate" ? "#fca" : "#000",
+                    fontWeight: "bold",
+                    border: "none",
+                    fontSize: "11px",
+                    transition: "all 0.2s ease",
+                    whiteSpace: "nowrap"
+                  }}
+                >
+                  {pinAddStatus === "adding" ? "Adding..." : pinAddStatus === "added" ? "Added ✓" : pinAddStatus === "duplicate" ? "Duplicate!" : "+ Add"}
+                </button>
+              </div>
+
+              {/* List of active sources */}
+              <div style={{ display: "flex", flexDirection: "column", gap: "4px", maxHeight: "160px", overflowY: "auto" }}>
+                {pinterestUrls.length > 0 ? (
+                  pinterestUrls.map((url, idx) => {
+                    // Extract a readable label from the URL
+                    let label = url;
+                    try {
+                      const parsed = new URL(url);
+                      const q = parsed.searchParams.get("q");
+                      if (q) {
+                        label = `🔍 ${decodeURIComponent(q)}`;
+                      } else {
+                        const pathParts = parsed.pathname.split("/").filter(Boolean);
+                        label = pathParts.length > 0 ? `📋 ${pathParts.join(" / ")}` : url;
+                      }
+                    } catch { /* keep raw url */ }
+
+                    return (
+                      <div
+                        key={idx}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          padding: "6px 10px",
+                          borderRadius: "6px",
+                          background: "rgba(255, 255, 255, 0.02)",
+                          border: "1px solid rgba(255, 255, 255, 0.04)",
+                          transition: "all 0.15s ease"
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.background = "rgba(255,255,255,0.04)"}
+                        onMouseLeave={(e) => e.currentTarget.style.background = "rgba(255,255,255,0.02)"}
+                      >
+                        <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
+                          <span style={{
+                            fontSize: "11px",
+                            color: "rgba(255, 255, 255, 0.85)",
+                            fontWeight: 500,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap"
+                          }}>
+                            {label}
+                          </span>
+                          <span style={{
+                            fontSize: "9px",
+                            color: "rgba(255, 255, 255, 0.35)",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                            fontFamily: "monospace"
+                          }} title={url}>
+                            {url}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleRemovePinUrl(idx)}
+                          style={{
+                            background: "transparent",
+                            border: "none",
+                            color: "rgba(255, 99, 99, 0.6)",
+                            fontSize: "11px",
+                            cursor: "pointer",
+                            padding: "4px 8px",
+                            borderRadius: "4px",
+                            transition: "all 0.15s ease",
+                            flexShrink: 0
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = "rgba(255, 99, 99, 0.1)";
+                            e.currentTarget.style.color = "rgba(255, 99, 99, 0.9)";
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = "transparent";
+                            e.currentTarget.style.color = "rgba(255, 99, 99, 0.6)";
+                          }}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div style={{
+                    textAlign: "center",
+                    padding: "12px",
+                    fontSize: "11px",
+                    color: "rgba(255, 255, 255, 0.35)",
+                    fontStyle: "italic",
+                    background: "rgba(255,99,99,0.04)",
+                    borderRadius: "6px",
+                    border: "1px dashed rgba(255,99,99,0.12)"
+                  }}>
+                    No Pinterest sources configured. Add a board or search URL above to start browsing.
+                  </div>
+                )}
+              </div>
+
+              {/* Quick tip */}
+              <span style={{ fontSize: "9px", opacity: 0.4, fontStyle: "italic" }}>
+                Tip: Add Pinterest search or board URLs. Wallpapers are scraped from all active sources.
+              </span>
+            </div>
+          )}
         </div>
       )}
 

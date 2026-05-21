@@ -2,6 +2,7 @@
 
 import { useWallpaper } from "@/hooks/useWallpaper";
 import { VolumeSlider } from "./VolumeSlider";
+import { isStaticWallpaper } from "@/utils/wallpaperTypes";
 
 type WallpaperState = ReturnType<typeof useWallpaper>;
 
@@ -33,7 +34,7 @@ export function HeroPanel({ wallpaper }: HeroPanelProps) {
         </div>
         <div className="hud-metric">
           <span>Provider</span>
-          <strong>{wallpaper.currentVideo ? "LIVE WALLPAPER" : "READY"}</strong>
+          <strong>{wallpaper.currentVideo ? (isStaticWallpaper(wallpaper.currentVideo) ? "STATIC IMAGE" : "LIVE WALLPAPER") : "READY"}</strong>
         </div>
         <div className="hud-metric">
           <span>Volume</span>

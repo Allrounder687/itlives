@@ -35,9 +35,9 @@
 
 .workspace {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto;
   gap: 14px;
-  overflow: auto;
+  overflow-y: auto;
   padding-right: 4px;
   background-image: 
     radial-gradient(circle at 1px 1px, rgba(154, 230, 0, 0.04) 1px, transparent 0);

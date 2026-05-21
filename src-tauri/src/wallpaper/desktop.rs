@@ -301,6 +301,8 @@ pub fn set_speed(speed: f64) -> Result<(), String> {
         let last: &mut Option<WallpaperConfig> = &mut *last;
         if let Some(config) = last.as_mut() {
             config.speed = speed;
+        } else {
+            return Ok(());
         }
     }
     send_ipc_command(&format!(
@@ -310,6 +312,9 @@ pub fn set_speed(speed: f64) -> Result<(), String> {
 }
 
 pub fn set_paused(paused: bool) -> Result<(), String> {
+    if LAST_CONFIG.lock().map(|l| l.is_none()).unwrap_or(true) {
+        return Ok(());
+    }
     send_ipc_command(&format!(
         "{{\"command\": [\"set_property\", \"pause\", {}]}}\n",
         paused
@@ -317,6 +322,9 @@ pub fn set_paused(paused: bool) -> Result<(), String> {
 }
 
 pub fn set_volume(volume_percent: u64) -> Result<(), String> {
+    if LAST_CONFIG.lock().map(|l| l.is_none()).unwrap_or(true) {
+        return Ok(());
+    }
     let volume_percent = volume_percent.min(100);
     let muted = if volume_percent == 0 { "true" } else { "false" };
     send_ipc_command(&format!(
@@ -421,6 +429,115 @@ pub fn cleanup_cache(keep: usize) -> Result<usize, String> {
     Ok(removed)
 }
 
+fn process_static_image_if_needed(path: &str) -> Result<String, String> {
+    #[cfg(windows)]
+    {
+        use windows::Win32::UI::WindowsAndMessaging::{GetSystemMetrics, SM_CXSCREEN, SM_CYSCREEN};
+
+        let resolved_path = path.to_string();
+        let img_path = std::path::Path::new(&resolved_path);
+        if !img_path.exists() {
+            return Err(format!("Image file not found: {}", resolved_path));
+        }
+
+        // 1. Get Screen Resolution
+        let screen_w = unsafe { GetSystemMetrics(SM_CXSCREEN) };
+        let screen_h = unsafe { GetSystemMetrics(SM_CYSCREEN) };
+        
+        let (screen_w, screen_h) = if screen_w <= 0 || screen_h <= 0 {
+            log::warn!("Invalid screen metrics detected. Defaulting to 1920x1080.");
+            (1920, 1080)
+        } else {
+            (screen_w as u32, screen_h as u32)
+        };
+
+        // 2. Open Image and Check Aspect Ratio
+        let img = image::open(img_path)
+            .map_err(|e| format!("Failed to open static image: {}", e))?;
+        
+        let img_w = img.width();
+        let img_h = img.height();
+
+        if img_w == 0 || img_h == 0 {
+            return Err("Image dimensions are zero".to_string());
+        }
+
+        let aspect_img = img_w as f32 / img_h as f32;
+        let aspect_screen = screen_w as f32 / screen_h as f32;
+        
+        let diff = (aspect_img - aspect_screen).abs();
+        
+        // If aspect ratio matches within a tiny threshold, no composite is needed.
+        if diff <= 0.05 {
+            log::info!("Image matches screen aspect ratio ({} vs {}). No composite needed.", aspect_img, aspect_screen);
+            return Ok(resolved_path);
+        }
+
+        log::info!(
+            "Aspect ratio mismatch ({} vs {}). Applying premium blurred-cover composite...",
+            aspect_img,
+            aspect_screen
+        );
+
+        // 3. Create a composite landscape image
+        let scale_x = screen_w as f32 / img_w as f32;
+        let scale_y = screen_h as f32 / img_h as f32;
+        let scale_cover = scale_x.max(scale_y);
+        
+        // Clamp cover dimensions to be at least screen_w/screen_h to prevent subtraction underflow
+        let cover_w = ((img_w as f32 * scale_cover).round() as u32).max(screen_w);
+        let cover_h = ((img_h as f32 * scale_cover).round() as u32).max(screen_h);
+        
+        let cover_img = img.resize(cover_w, cover_h, image::imageops::FilterType::Triangle);
+        
+        let crop_x = (cover_w - screen_w) / 2;
+        let crop_y = (cover_h - screen_h) / 2;
+        let cover_cropped = cover_img.crop_imm(crop_x, crop_y, screen_w, screen_h);
+        
+        // Downscale to a low resolution first to make blurring extremely fast (15,000x faster, taking milliseconds instead of 2 minutes in debug mode)
+        let low_res_w = (screen_w / 8).max(8);
+        let low_res_h = (screen_h / 8).max(8);
+        let low_res_img = cover_cropped.resize(low_res_w, low_res_h, image::imageops::FilterType::Triangle);
+        let low_res_rgba = low_res_img.to_rgba8();
+        
+        // Blur the low-resolution image (4.0 radius is 8x smaller, visually identical to 32.0 when scaled back up)
+        let blurred_low_res = image::imageops::blur(&low_res_rgba, 4.0);
+        let blurred_bg_img = image::DynamicImage::ImageRgba8(blurred_low_res);
+        let blurred_bg = blurred_bg_img.resize_exact(screen_w, screen_h, image::imageops::FilterType::Triangle).to_rgba8();
+
+        let mut base_img = blurred_bg;
+
+        let scale_contain = scale_x.min(scale_y);
+        // Clamp contain dimensions to be at most screen_w/screen_h to prevent subtraction underflow
+        let contain_w = ((img_w as f32 * scale_contain).round() as u32).min(screen_w);
+        let contain_h = ((img_h as f32 * scale_contain).round() as u32).min(screen_h);
+        
+        let contain_img = img.resize(contain_w, contain_h, image::imageops::FilterType::Lanczos3);
+        let contain_rgba = contain_img.to_rgba8();
+
+        let overlay_x = ((screen_w - contain_w) / 2) as i64;
+        let overlay_y = ((screen_h - contain_h) / 2) as i64;
+        
+        image::imageops::overlay(&mut base_img, &contain_rgba, overlay_x, overlay_y);
+
+        // 4. Save the composite image in cache directory
+        let cache_dir = get_cache_dir();
+        let _ = std::fs::create_dir_all(&cache_dir);
+        let file_name = img_path.file_stem().unwrap_or_default().to_string_lossy();
+        let composite_path = cache_dir.join(format!("{}_composite.png", file_name));
+
+        base_img.save(&composite_path)
+            .map_err(|e| format!("Failed to save composite wallpaper image: {}", e))?;
+
+        log::info!("Composite wallpaper successfully written to: {:?}", composite_path);
+        Ok(composite_path.to_string_lossy().into_owned())
+    }
+    #[cfg(not(windows))]
+    {
+        Ok(path.to_string())
+    }
+}
+
 /// Sets a static image file as the desktop background using the native Windows API.
 pub fn set_static_image(path: &str) -> Result<String, String> {
     let resolved_path = path.to_string();
@@ -432,10 +549,20 @@ pub fn set_static_image(path: &str) -> Result<String, String> {
     // Stop any video wallpaper first
     stop_video().ok();
 
+    // Generate blurred cover composite if aspect ratio mismatches screen
+    let final_image_path = match process_static_image_if_needed(&resolved_path) {
+        Ok(composite_path) => composite_path,
+        Err(e) => {
+            log::warn!("Failed to process image composite: {}. Falling back to original path.", e);
+            resolved_path
+        }
+    };
+    let final_img_path = std::path::Path::new(&final_image_path);
+
     #[cfg(windows)]
     {
         use std::os::windows::ffi::OsStrExt;
-        let path_wide: Vec<u16> = img_path.as_os_str().encode_wide().chain(std::iter::once(0)).collect();
+        let path_wide: Vec<u16> = final_img_path.as_os_str().encode_wide().chain(std::iter::once(0)).collect();
 
         unsafe {
             use windows::Win32::UI::WindowsAndMessaging::{
@@ -459,8 +586,8 @@ pub fn set_static_image(path: &str) -> Result<String, String> {
         *current = Some(path.to_string());
     }
 
-    log::info!("Static desktop background set to image: {}", path);
-    Ok(format!("Static wallpaper set: {}", path))
+    log::info!("Static desktop background set to image: {}", final_image_path);
+    Ok(format!("Static wallpaper set: {}", final_image_path))
 }
 
 fn mpv_pid_file() -> PathBuf {

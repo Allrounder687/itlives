@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { LibraryItem } from "@/hooks/useWallpaper";
+import { isStaticWallpaper } from "@/utils/wallpaperTypes";
 import { HoverVideo } from "./HoverVideo";
 
 interface UnifiedLibraryProps {
@@ -38,6 +39,7 @@ export function UnifiedLibrary({
   onRemoveImport,
 }: UnifiedLibraryProps) {
   const [filter, setFilter] = useState<"all" | "favorites" | "recents" | "local">("all");
+  const [typeFilter, setTypeFilter] = useState<"all" | "live" | "static">("all");
 
   const getCombinedItems = () => {
     const map = new Map<string, LibraryItem & { isFavorite?: boolean; isRecent?: boolean; isLocal?: boolean }>();
@@ -71,11 +73,13 @@ export function UnifiedLibrary({
   const combinedItems = getCombinedItems();
 
   const filteredItems = combinedItems.filter(item => {
-    if (filter === "all") return true;
-    if (filter === "favorites") return item.isFavorite;
-    if (filter === "recents") return item.isRecent;
-    if (filter === "local") return item.isLocal;
-    return true;
+    if (filter === "favorites" && !item.isFavorite) return false;
+    if (filter === "recents" && !item.isRecent) return false;
+    if (filter === "local" && !item.isLocal) return false;
+
+    if (typeFilter === "all") return true;
+    const isStatic = isStaticWallpaper(item.video);
+    return typeFilter === "static" ? isStatic : !isStatic;
   });
 
   const [gridSize, setGridSize] = useState<"S" | "M" | "L" | "XL">("M");
@@ -88,17 +92,32 @@ export function UnifiedLibrary({
       </div>
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem", flexWrap: "wrap", gap: "10px" }}>
-        <div className="library-filter-bar" style={{ marginBottom: 0 }}>
-          {(["all", "favorites", "recents", "local"] as const).map((f) => (
-            <button
-              key={f}
-              type="button"
-              className={`library-filter-btn ${filter === f ? "library-filter-btn--active" : ""}`}
-              onClick={() => setFilter(f)}
-            >
-              {f.charAt(0).toUpperCase() + f.slice(1)}
-            </button>
-          ))}
+        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", flex: 1 }}>
+          <div className="library-filter-bar" style={{ marginBottom: 0 }}>
+            {(["all", "favorites", "recents", "local"] as const).map((f) => (
+              <button
+                key={f}
+                type="button"
+                className={`library-filter-btn ${filter === f ? "library-filter-btn--active" : ""}`}
+                onClick={() => setFilter(f)}
+              >
+                {f.charAt(0).toUpperCase() + f.slice(1)}
+              </button>
+            ))}
+          </div>
+
+          <div className="library-filter-bar" style={{ marginBottom: 0 }}>
+            {(["all", "live", "static"] as const).map((t) => (
+              <button
+                key={t}
+                type="button"
+                className={`library-filter-btn ${typeFilter === t ? "library-filter-btn--active" : ""}`}
+                onClick={() => setTypeFilter(t)}
+              >
+                {t === "all" ? "All Types" : t === "live" ? "Live" : "Static"}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="library-filter-bar" style={{ marginBottom: 0 }}>
@@ -117,7 +136,7 @@ export function UnifiedLibrary({
       </div>
 
       {filteredItems.length === 0 ? (
-        <p className="library-empty">No wallpapers found in {filter} view.</p>
+        <p className="library-empty">No wallpapers found in {filter} view {typeFilter !== "all" ? `(${typeFilter} filter active)` : ""}.</p>
       ) : (
         <div className={`library-grid-view library-grid-view--${gridSize.toLowerCase()}`}>
           {filteredItems.map((item) => {
@@ -198,7 +217,7 @@ export function UnifiedLibrary({
                     )}
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: "10px", color: "var(--text-soft)", marginTop: "1px" }}>
-                    <span style={{ fontSize: "9px" }}>LIVE WALLPAPER {item.video.local_path ? " (Local)" : ""} - {formatSavedAt(item.saved_at)}</span>
+                    <span style={{ fontSize: "9px" }}>{isStaticWallpaper(item.video) ? "STATIC IMAGE" : "LIVE WALLPAPER"}{item.video.local_path ? " (Local)" : ""} - {formatSavedAt(item.saved_at)}</span>
                     {item.video.duration > 0 && <span style={{ fontSize: "9px" }}>{Math.floor(item.video.duration / 60)}m {Math.floor(item.video.duration % 60)}s</span>}
                   </div>
                 </div>

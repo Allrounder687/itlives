@@ -80,19 +80,23 @@ function Home() {
   const fetchVideosListRef = useRef(wallpaper.fetchVideosList);
   fetchVideosListRef.current = wallpaper.fetchVideosList;
 
-  const lastFetchedRef = useRef<{ source: string; query: string; page: number; category: string } | null>(null);
+  const lastFetchedRef = useRef<{ source: string; query: string; page: number; category: string; urlsHash: string } | null>(null);
 
-  // Automatically fetch wallpapers when hydration finishes or when source/query/page/category changes
+  // Automatically fetch wallpapers when hydration finishes or when source/query/page/category/pinterestUrls/activeTab changes
   useEffect(() => {
     if (wallpaper.isHydrating) return;
     if (wallpaper.source === "direct") return;
+    if (activeTab !== "discover") return;
 
-    // Prevent duplicate concurrent/overlapping fetches for the exact same query/page/source/category
+    const urlsHash = JSON.stringify(wallpaper.pinterestUrls);
+
+    // Prevent duplicate concurrent/overlapping fetches for the exact same query/page/source/category/pinterestUrls
     const currentFetchKey = {
       source: wallpaper.source,
       query: wallpaper.query,
       page: wallpaper.page,
       category: wallpaper.category,
+      urlsHash,
     };
 
     if (
@@ -100,7 +104,8 @@ function Home() {
       lastFetchedRef.current.source === currentFetchKey.source &&
       lastFetchedRef.current.query === currentFetchKey.query &&
       lastFetchedRef.current.page === currentFetchKey.page &&
-      lastFetchedRef.current.category === currentFetchKey.category
+      lastFetchedRef.current.category === currentFetchKey.category &&
+      lastFetchedRef.current.urlsHash === currentFetchKey.urlsHash
     ) {
       return;
     }
@@ -127,7 +132,9 @@ function Home() {
     wallpaper.source,
     wallpaper.query,
     wallpaper.page,
-    wallpaper.category
+    wallpaper.category,
+    wallpaper.pinterestUrls,
+    activeTab
   ]);
 
   const handleFetchAndApply = async () => {
@@ -203,12 +210,17 @@ function Home() {
                 onCategoryChange={wallpaper.setCategory} onBrowseLocalFile={wallpaper.browseLocalVideo}
                 onFetch={() => wallpaper.fetchVideosList()} onFetchAndApply={handleFetchAndApply}
                 onStop={wallpaper.stopWallpaper}
+                pinterestUrls={wallpaper.pinterestUrls}
+                onSetPinterestUrls={wallpaper.setPinterestUrls}
               />
               <SearchResults
                 results={wallpaper.searchResults} onSelect={wallpaper.selectVideo}
                 page={wallpaper.page} onPageChange={wallpaper.setPage}
+                isLoading={wallpaper.isLoading}
+                hasMore={wallpaper.hasMore ?? true}
+                duplicateNotice={wallpaper.duplicateNotice}
               />
-              {wallpaper.isLoading && <div className="skeleton skeleton-preview" />}
+              {wallpaper.isLoading && wallpaper.page === 1 && <div className="skeleton skeleton-preview" />}
             </section>
           )}
 
@@ -309,7 +321,7 @@ function Home() {
         </main>
       </div>
 
-      {wallpaper.currentVideo && !wallpaper.isLoading && activeTab !== "preview" && (
+      {wallpaper.currentVideo && activeTab !== "preview" && !wallpaper.previewDismissed && (
         <FloatingPreview
           video={wallpaper.currentVideo}
           volumePercent={wallpaper.volumePercent}
@@ -323,7 +335,8 @@ function Home() {
           onToggleQueue={toggleCurrentQueue}
           onSetSpeed={wallpaper.setPlaybackSpeed}
           onSetBlur={wallpaper.setBlurStrength}
-          onClose={() => wallpaper.selectVideo(null as any)}
+          onClose={() => wallpaper.dismissPreview()}
+          isLoading={wallpaper.isLoading}
         />
       )}
     </div>
