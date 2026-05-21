@@ -15,15 +15,8 @@ interface ControlBarProps {
   onStop: () => void;
 }
 
-const SOURCES = [
-  { value: "alphacoders", label: "AlphaCoders" },
-  { value: "motionbgs", label: "MotionBGs" },
-  { value: "redgifs", label: "RedGIFs" },
-  { value: "direct", label: "Direct URL / File" },
-];
-
 const CATEGORIES = [
-  "Anime", "Games", "Superhero", "Nature", "Car", "Tv", "Holiday", "Animal", "Fantasy", "Space", "Horror", "Technology", "Football", "Japan"
+  "All", "Anime", "Games", "Superhero", "Nature", "Car", "Tv", "Holiday", "Animal", "Fantasy", "Space", "Horror", "Technology", "Football", "Japan"
 ];
 
 export function ControlBar({
@@ -49,26 +42,81 @@ export function ControlBar({
     return () => window.removeEventListener("unlock_redgifs", checkUnlock);
   }, []);
 
-  const visibleSources = SOURCES.filter((item) => item.value !== "redgifs" || showRedGifs);
+  const handleQueryChange = (val: string) => {
+    if (val.trim().toLowerCase() === "unlock_redgifs") {
+        localStorage.setItem("unlock_redgifs", "true");
+        window.dispatchEvent(new Event("unlock_redgifs"));
+        onQueryChange("");
+        onSourceChange("redgifs");
+        return;
+    }
+    if (val.trim().toLowerCase() === "lock_redgifs") {
+        localStorage.setItem("unlock_redgifs", "false");
+        window.dispatchEvent(new Event("unlock_redgifs"));
+        onQueryChange("");
+        onSourceChange("unified");
+        return;
+    }
+    onQueryChange(val);
+  };
 
   return (
-    <div className="control-shell">
-      <div className="source-pills">
-        {visibleSources.map((item) => (
-          <button
-            key={item.value}
-            type="button"
-            className={`source-pill ${source === item.value ? "source-pill--active" : ""}`}
-            onClick={() => onSourceChange(item.value)}
-          >
-            {item.value === "alphacoders" && <span style={{ marginRight: "8px" }}>🌌</span>}
-            {item.value === "motionbgs" && <span style={{ marginRight: "8px" }}>🌏</span>}
-            {item.value === "redgifs" && <span style={{ marginRight: "8px" }}>🎬</span>}
-            {item.value === "direct" && <span style={{ marginRight: "8px" }}>🔗</span>}
-            {item.label}
-          </button>
-        ))}
+    <div className="control-shell" style={{ marginTop: "4px", gap: "8px", padding: "10px 14px" }}>
+      <div className="control-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
+        <span className="eyebrow" style={{ color: "var(--accent)" }}>
+          {source === "direct" ? "Direct Media Entry" : source === "redgifs" ? "NSFW Engine" : source === "wallhaven" ? "WallHaven Static Feed" : source === "pinterest" ? "Pinterest Static Feed" : "Discover Unified Feed"}
+        </span>
+        {showRedGifs && (
+            <button
+                type="button"
+                className={`action-btn ${source === "redgifs" ? "action-btn--primary" : "action-btn--ghost"}`}
+                style={{ fontSize: "10px", padding: "4px 8px" }}
+                onClick={() => onSourceChange(source === "redgifs" ? "unified" : "redgifs")}
+            >
+                {source === "redgifs" ? "Exit NSFW Engine" : "Enter NSFW Engine"}
+            </button>
+        )}
       </div>
+
+      {source !== "direct" && (
+        <div className="source-selector" style={{ 
+          display: "flex", 
+          gap: "6px", 
+          background: "rgba(0, 0, 0, 0.25)", 
+          padding: "4px", 
+          borderRadius: "8px",
+          border: "1px solid rgba(255, 255, 255, 0.05)",
+          marginBottom: "12px"
+        }}>
+          {[
+            { id: "unified", label: "🎥 Unified Live", desc: "Live video loops" },
+            { id: "wallhaven", label: "🖼️ WallHaven", desc: "Premium static images" },
+            { id: "pinterest", label: "📌 Pinterest", desc: "Art & static designs" },
+            ...(showRedGifs ? [{ id: "redgifs", label: "🔞 NSFW Loop", desc: "Adult content" }] : [])
+          ].map((src) => (
+            <button
+              key={src.id}
+              type="button"
+              className={`action-btn ${source === src.id ? "action-btn--primary" : "action-btn--ghost"}`}
+              style={{ 
+                flex: 1, 
+                fontSize: "12px", 
+                padding: "8px 12px", 
+                borderRadius: "6px", 
+                transition: "all 0.2s ease",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: "2px"
+              }}
+              onClick={() => onSourceChange(src.id)}
+            >
+              <span style={{ fontWeight: "bold" }}>{src.label}</span>
+              <span style={{ fontSize: "9px", opacity: 0.6 }}>{src.desc}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="control-grid-v2">
         <div className="field">
@@ -79,9 +127,9 @@ export function ControlBar({
             <input
               className="input input--hud"
               type="text"
-              placeholder={source === "direct" ? "Paste an .mp4 URL or local file path" : "Search clips..."}
+              placeholder={source === "direct" ? "Paste an .mp4 URL or local file path" : "Search worldwide live wallpapers..."}
               value={query}
-              onChange={(e) => onQueryChange(e.target.value)}
+              onChange={(e) => handleQueryChange(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   onFetchAndApply();
@@ -102,14 +150,14 @@ export function ControlBar({
         </div>
       </div>
 
-      {(source === "motionbgs" || source === "alphacoders") && (
-        <div className="categories-scroll">
+      {source !== "direct" && (
+        <div className="categories-scroll" style={{ display: "flex", gap: "8px", overflowX: "auto", paddingBottom: "8px", scrollbarWidth: "none" }}>
           {CATEGORIES.map((cat) => (
             <button
               key={cat}
               type="button"
               className={`pill ${query.toLowerCase() === cat.toLowerCase() ? "" : "pill--muted"}`}
-              style={{ padding: "8px 16px", cursor: "pointer", border: "none" }}
+              style={{ padding: "8px 16px", cursor: "pointer", border: "none", whiteSpace: "nowrap" }}
               onClick={() => onCategoryChange && onCategoryChange(cat.toLowerCase())}
             >
               {cat}
@@ -118,7 +166,7 @@ export function ControlBar({
         </div>
       )}
 
-      <div className="action-row action-row--hud">
+      <div className="action-row action-row--hud" style={{ marginTop: "4px" }}>
         <button className="action-btn action-btn--primary" onClick={onFetchAndApply} disabled={isLoading}>
           {isLoading ? "Syncing..." : "Fetch and Deploy"}
         </button>

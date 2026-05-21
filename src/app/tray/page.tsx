@@ -14,6 +14,22 @@ function TrayMenu() {
   }, []);
 
   useEffect(() => {
+    // Resize based on favorites list length to fix empty space
+    const updateSize = async () => {
+        try {
+            const { getCurrentWindow } = await import("@tauri-apps/api/window");
+            let win = getCurrentWindow();
+            const { LogicalSize } = await import("@tauri-apps/api/dpi");
+            const height = 240 + Math.min(wallpaper.favorites.length, 3) * 55;
+            await win.setSize(new LogicalSize(380, height));
+        } catch (e) {}
+    };
+    if (typeof window !== "undefined") {
+        updateSize();
+    }
+  }, [wallpaper.favorites.length]);
+
+  useEffect(() => {
     setLocalVolume(wallpaper.volumePercent);
   }, [wallpaper.volumePercent]);
 
@@ -44,7 +60,7 @@ function TrayMenu() {
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
           <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: wallpaper.isPlaying ? "var(--accent)" : "#666", boxShadow: wallpaper.isPlaying ? "0 0 10px var(--accent)" : "none" }} />
-          <span style={{ fontSize: "13px", fontWeight: "bold", letterSpacing: "0.5px" }}>OpenClaw Live</span>
+          <span style={{ fontSize: "13px", fontWeight: "bold", letterSpacing: "0.5px" }}>OpenClaw LWP</span>
         </div>
         <button 
           onClick={async () => {

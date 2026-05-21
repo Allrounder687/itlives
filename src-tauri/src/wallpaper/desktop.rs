@@ -3,10 +3,29 @@
 
 use std::path::PathBuf;
 use std::process::Command;
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 use std::sync::Mutex;
+use lazy_static::lazy_static;
 
-/// Global state tracking the currently playing wallpaper video path.
-static CURRENT_VIDEO: Mutex<Option<String>> = Mutex::new(None);
+lazy_static! {
+    static ref CURRENT_VIDEO: Mutex<Option<String>> = Mutex::new(None);
+    static ref LAST_CONFIG: Mutex<Option<WallpaperConfig>> = Mutex::new(None);
+}
+
+#[derive(Clone, PartialEq, Debug)]
+struct WallpaperConfig {
+    path: String,
+    scale: u64,
+    volume: u64,
+    filter: String,
+    speed: f64,
+    blur: u32,
+    paused: bool,
+    start_time: Option<f64>,
+    end_time: Option<f64>,
+}
+
 #[cfg(windows)]
 pub mod win32 {
 
@@ -14,8 +33,7 @@ pub mod win32 {
     use windows::core::PCWSTR;
     use windows::Win32::Foundation::{BOOL, HWND, LPARAM, WPARAM};
     use windows::Win32::UI::WindowsAndMessaging::{
-        EnumWindows, FindWindowExW, FindWindowW, SendMessageTimeoutW, SetWindowPos, SMTO_NORMAL,
-        SWP_NOACTIVATE, SWP_NOZORDER, SWP_SHOWWINDOW,
+        EnumWindows, FindWindowExW, FindWindowW, SendMessageTimeoutW, SMTO_NORMAL,
     };
 
     static FOUND_WORKERW: Mutex<isize> = Mutex::new(0);
@@ -130,22 +148,43 @@ pub fn set_video(
     scale_percent: u64,
     volume_percent: u64,
     video_filter: &str,
+    speed: f64,
+    blur: u32,
     paused: bool,
     start_time: Option<f64>,
     end_time: Option<f64>,
 ) -> Result<String, String> {
     let resolved_path = path.to_string();
-    let is_url = path.starts_with("http://") || path.starts_with("https://");
+    let is_url = resolved_path.starts_with("http");
     let scale_percent = scale_percent.clamp(25, 200);
     let volume_percent = volume_percent.min(100);
 
-    if is_url && path.contains("motionbgs.com") && !path.ends_with(".mp4") {
-        log::info!("Detected motionbgs webpage. Applying automatic extractor...");
-    }
-
-    let video_path = PathBuf::from(&resolved_path);
+    let video_path = std::path::Path::new(&resolved_path);
     if !is_url && !video_path.exists() {
         return Err(format!("Video file not found: {}", resolved_path));
+    }
+
+    // --- Smart Skip Check ---
+    let new_config = WallpaperConfig {
+        path: path.to_string(),
+        scale: scale_percent,
+        volume: volume_percent,
+        filter: video_filter.to_string(),
+        speed,
+        blur,
+        paused,
+        start_time,
+        end_time,
+    };
+
+    if let Ok(last) = LAST_CONFIG.lock() {
+        let last: &Option<WallpaperConfig> = &*last;
+        if let Some(config) = last.as_ref() {
+            if config == &new_config {
+                log::info!("Skip re-apply: Configuration is identical to active wallpaper.");
+                return Ok("Skipped redundant re-apply".to_string());
+            }
+        }
     }
 
     // Kill any existing mpv wallpaper process
@@ -158,9 +197,12 @@ pub fn set_video(
         let workerw = win32::get_desktop_workerw().unwrap_or(0);
         log::info!("Spawning standalone PowerShell self-healing script fix wrapper layout... WorkerW: {}", workerw);
 
-        let script_path = app_root_dir()
-            .join("scripts")
-            .join("set_wallpaper_cli_v2.ps1");
+        let script_content = include_str!("../../../scripts/set_wallpaper_cli_v2.ps1");
+        let script_dir = app_data_dir().join("scripts");
+        let _ = std::fs::create_dir_all(&script_dir);
+        let script_path = script_dir.join("set_wallpaper_cli_v2.ps1");
+        let _ = std::fs::write(&script_path, script_content);
+
         let mut args = vec![
             "-NoProfile".to_string(),
             "-ExecutionPolicy".to_string(),
@@ -181,6 +223,10 @@ pub fn set_video(
             workerw.to_string(),
             "-MpvPath".to_string(),
             _mpv_path.to_string(),
+            "-Speed".to_string(),
+            speed.to_string(),
+            "-BlurStrength".to_string(),
+            blur.to_string(),
         ];
 
         if let Some(st) = start_time {
@@ -193,14 +239,23 @@ pub fn set_video(
             args.push(et.to_string());
         }
 
-        let _child = Command::new("powershell")
-            .args(&args)
-            .spawn()
+        let mut cmd = Command::new("powershell");
+        cmd.args(&args);
+        #[cfg(windows)]
+        cmd.creation_flags(0x08000000);
+        
+        let _child = cmd.spawn()
             .map_err(|e| format!("Failed to launch powershell self-healing wrapper: {}", e))?;
     }
 
     if let Ok(mut current) = CURRENT_VIDEO.lock() {
+        let current: &mut Option<String> = &mut *current;
         *current = Some(path.to_string());
+    }
+
+    if let Ok(mut last) = LAST_CONFIG.lock() {
+        let last: &mut Option<WallpaperConfig> = &mut *last;
+        *last = Some(new_config);
     }
 
     log::info!("Video wallpaper set to: {}", path);
@@ -212,9 +267,11 @@ pub fn stop_video() -> Result<String, String> {
     if let Ok(content) = std::fs::read_to_string(mpv_pid_file()) {
         for pid_str in content.lines() {
             if let Ok(pid) = pid_str.trim().parse::<u32>() {
-                let _ = Command::new("taskkill")
-                    .args(&["/PID", &pid.to_string(), "/T", "/F"])
-                    .output();
+                let mut cmd = Command::new("taskkill");
+                cmd.args(&["/PID", &pid.to_string(), "/T", "/F"]);
+                #[cfg(windows)]
+                cmd.creation_flags(0x08000000);
+                let _ = cmd.output();
             }
         }
     }
@@ -222,12 +279,34 @@ pub fn stop_video() -> Result<String, String> {
     if let Ok(mut current) = CURRENT_VIDEO.lock() {
         *current = None;
     }
+    if let Ok(mut last) = LAST_CONFIG.lock() {
+        let last: &mut Option<WallpaperConfig> = &mut *last;
+        *last = None;
+    }
     Ok("Wallpaper stopped".to_string())
 }
 
 /// Returns the currently playing video path.
 pub fn get_current() -> Option<String> {
-    CURRENT_VIDEO.lock().ok().and_then(|v| v.clone())
+    if let Ok(guard) = CURRENT_VIDEO.lock() {
+        return guard.clone();
+    }
+    None
+}
+
+pub fn set_speed(speed: f64) -> Result<(), String> {
+    let speed = speed.clamp(0.1, 4.0);
+    // Also update last config cache so we don't accidentally re-apply with old speed later
+    if let Ok(mut last) = LAST_CONFIG.lock() {
+        let last: &mut Option<WallpaperConfig> = &mut *last;
+        if let Some(config) = last.as_mut() {
+            config.speed = speed;
+        }
+    }
+    send_ipc_command(&format!(
+        "{{\"command\": [\"set_property\", \"speed\", {}]}}\n",
+        speed
+    ))
 }
 
 pub fn set_paused(paused: bool) -> Result<(), String> {
@@ -246,6 +325,39 @@ pub fn set_volume(volume_percent: u64) -> Result<(), String> {
     ))
 }
 
+/// Helper to generate the combined filter chain (v2)
+fn get_filter_chain(target_width: u64, target_height: u64, preset: &str, blur: u32) -> String {
+    let mut filters = Vec::new();
+    
+    // 1. Initial Scale
+    filters.push(format!("scale={}:{}", target_width, target_height));
+
+    // 2. Preset Filters
+    match preset {
+        "grayscale" => filters.push("format=gray".to_string()),
+        "vivid" => filters.push("eq=contrast=1.12:brightness=0:saturation=1.35:gamma=1.0".to_string()),
+        "soft" => filters.push("eq=contrast=0.94:brightness=0.04:saturation=0.88:gamma=1.0".to_string()),
+        "noir" => filters.push("format=gray,eq=contrast=1.15:brightness=-0.04".to_string()),
+        "retro" => filters.push("hue=h=8:s=0.92,eq=contrast=1.05:brightness=0.03:saturation=1.18".to_string()),
+        _ => {}
+    }
+
+    // 3. Dynamic Blur
+    if blur > 0 {
+        filters.push(format!("boxblur={}:{}", blur, (blur as f64 * 0.5) as u32));
+    }
+
+    filters.join(",")
+}
+
+pub fn set_blur(_blur: u32) -> Result<(), String> {
+    // Note: This requires re-applying the whole filter chain via IPC.
+    // For simplicity, we'll usually trigger set_video for filter changes or skip live blur if too complex.
+    // However, we can try to update 'vf' property.
+    // We'll leave this to be triggered by set_video for now as it's more robust.
+    Ok(())
+}
+
 /// Gets the cache directory for downloaded videos.
 pub fn get_cache_dir() -> PathBuf {
     app_data_dir().join("wallpapers").join("redgifs")
@@ -254,21 +366,26 @@ pub fn get_cache_dir() -> PathBuf {
 pub fn app_data_dir() -> PathBuf {
     std::env::var("OPENCLAW_LWP_RUNTIME_DIR")
         .map(PathBuf::from)
-        .unwrap_or_else(|_| app_root_dir().join("runtime"))
+        .unwrap_or_else(|_| {
+            let app_data = std::env::var("LOCALAPPDATA").unwrap_or_else(|_| ".".to_string());
+            let path = PathBuf::from(app_data).join("OpenClaw_LWP");
+            let _ = std::fs::create_dir_all(&path);
+            path
+        })
 }
 
 pub fn app_root_dir() -> PathBuf {
     std::env::var("OPENCLAW_LWP_APP_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|_| {
-            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                .parent()
-                .map(PathBuf::from)
+            std::env::current_exe()
+                .ok()
+                .and_then(|p| p.parent().map(PathBuf::from))
                 .unwrap_or_else(|| PathBuf::from("."))
         })
 }
 
-/// Cleans up old cached videos.
+/// Cleans up old cached videos and images.
 pub fn cleanup_cache(keep: usize) -> Result<usize, String> {
     let cache_dir = get_cache_dir();
     if !cache_dir.exists() {
@@ -278,7 +395,10 @@ pub fn cleanup_cache(keep: usize) -> Result<usize, String> {
     let mut entries: Vec<_> = std::fs::read_dir(&cache_dir)
         .map_err(|e| e.to_string())?
         .filter_map(|e| e.ok())
-        .filter(|e| e.path().extension().is_some_and(|ext| ext == "mp4"))
+        .filter(|e| e.path().extension().is_some_and(|ext| {
+            let ext_str = ext.to_string_lossy().to_lowercase();
+            ext_str == "mp4" || ext_str == "jpg" || ext_str == "jpeg" || ext_str == "png" || ext_str == "webp"
+        }))
         .collect();
 
     entries.sort_by_key(|e| {
@@ -299,6 +419,48 @@ pub fn cleanup_cache(keep: usize) -> Result<usize, String> {
         }
     }
     Ok(removed)
+}
+
+/// Sets a static image file as the desktop background using the native Windows API.
+pub fn set_static_image(path: &str) -> Result<String, String> {
+    let resolved_path = path.to_string();
+    let img_path = std::path::Path::new(&resolved_path);
+    if !img_path.exists() {
+        return Err(format!("Image file not found: {}", resolved_path));
+    }
+
+    // Stop any video wallpaper first
+    stop_video().ok();
+
+    #[cfg(windows)]
+    {
+        use std::os::windows::ffi::OsStrExt;
+        let path_wide: Vec<u16> = img_path.as_os_str().encode_wide().chain(std::iter::once(0)).collect();
+
+        unsafe {
+            use windows::Win32::UI::WindowsAndMessaging::{
+                SystemParametersInfoW, SPI_SETDESKWALLPAPER, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS
+            };
+
+            let res = SystemParametersInfoW(
+                SPI_SETDESKWALLPAPER,
+                0,
+                Some(path_wide.as_ptr() as *mut std::ffi::c_void),
+                SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS(0x01 | 0x02), // SPIF_UPDATEINIFILE | SPIF_SENDCHANGE
+            );
+
+            if res.is_err() {
+                return Err(format!("SystemParametersInfoW failed: {:?}", res));
+            }
+        }
+    }
+
+    if let Ok(mut current) = CURRENT_VIDEO.lock() {
+        *current = Some(path.to_string());
+    }
+
+    log::info!("Static desktop background set to image: {}", path);
+    Ok(format!("Static wallpaper set: {}", path))
 }
 
 fn mpv_pid_file() -> PathBuf {
@@ -349,7 +511,13 @@ pub(crate) fn find_mpv() -> Option<String> {
             return Some(p.to_string());
         }
     }
-    if let Ok(out) = Command::new("where").arg("mpv").output() {
+    if let Ok(out) = {
+        let mut cmd = Command::new("where");
+        cmd.arg("mpv");
+        #[cfg(windows)]
+        cmd.creation_flags(0x08000000);
+        cmd.output()
+    } {
         if out.status.success() {
             let p = String::from_utf8_lossy(&out.stdout)
                 .lines()

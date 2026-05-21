@@ -7,6 +7,8 @@ pub mod motionbgs;
 pub mod alphacoders;
 pub mod redgifs;
 pub mod youtube;
+pub mod wallhaven;
+pub mod pinterest;
 
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -33,6 +35,7 @@ pub struct SearchConfig {
     pub order: String,
     pub count: u32,
     pub page: u32,
+    pub api_key: Option<String>,
 }
 
 impl Default for SearchConfig {
@@ -42,6 +45,7 @@ impl Default for SearchConfig {
             order: "trending".to_string(),
             count: 40,
             page: 1,
+            api_key: None,
         }
     }
 }
@@ -72,7 +76,20 @@ pub async fn download_to_cache(
     extra_headers: Option<Vec<(String, String)>>,
 ) -> Result<String, String> {
     let client = reqwest::Client::new();
-    let dest = cache_dir.join(format!("{}_{}.mp4", source, video_id));
+    let ext = if video_url.contains(".png") {
+        "png"
+    } else if video_url.contains(".webp") {
+        "webp"
+    } else if video_url.contains(".jpeg") {
+        "jpeg"
+    } else if video_url.contains(".gif") {
+        "gif"
+    } else if video_url.contains(".mp4") {
+        "mp4"
+    } else {
+        "jpg"
+    };
+    let dest = cache_dir.join(format!("{}_{}.{}", source, video_id, ext));
 
     if dest.exists() {
         return Ok(dest.to_string_lossy().to_string());
@@ -117,8 +134,10 @@ pub fn get_provider(source: &str) -> Result<Box<dyn VideoProvider>, String> {
         "alphacoders" => Ok(Box::new(alphacoders::AlphaCodersProvider)),
         "youtube" | "yt" => Ok(Box::new(youtube::YouTubeProvider)),
         "direct" | "url" => Ok(Box::new(direct_url::DirectUrlProvider)),
+        "wallhaven" => Ok(Box::new(wallhaven::WallhavenProvider)),
+        "pinterest" => Ok(Box::new(pinterest::PinterestProvider)),
         _ => Err(format!(
-            "Unknown video source: '{}'. Available: redgifs, motionbgs, alphacoders, youtube, direct",
+            "Unknown video source: '{}'. Available: redgifs, motionbgs, alphacoders, youtube, direct, wallhaven, pinterest",
             source
         )),
     }
@@ -126,6 +145,14 @@ pub fn get_provider(source: &str) -> Result<Box<dyn VideoProvider>, String> {
 
 /// Lists all available provider names.
 pub fn list_providers() -> Vec<String> {
-    vec!["redgifs".to_string(), "motionbgs".to_string(), "alphacoders".to_string(), "youtube".to_string(), "direct".to_string()]
+    vec![
+        "redgifs".to_string(),
+        "motionbgs".to_string(),
+        "alphacoders".to_string(),
+        "youtube".to_string(),
+        "direct".to_string(),
+        "wallhaven".to_string(),
+        "pinterest".to_string(),
+    ]
 }
 

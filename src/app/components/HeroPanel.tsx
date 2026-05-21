@@ -15,14 +15,14 @@ export function HeroPanel({ wallpaper }: HeroPanelProps) {
     : "Awaiting media";
 
   return (
-    <section className="hero panel hero--hud">
+    <section className="hero panel hero--hud" style={{ padding: "10px 18px", marginBottom: "8px" }}>
       <div className="hero__status">
         <div className={`engine-orb ${wallpaper.isPlaying ? "engine-orb--active" : ""}`}>
           <div className="engine-pulse" />
         </div>
         <div className="hero__meta">
           <p className="eyebrow">{wallpaper.isPlaying ? "Engine Active" : "Engine Standby"}</p>
-          <h2>{wallpaper.currentVideo?.id.replace(/-/g, " ") || "it Lives - Motion Studio"}</h2>
+          <h2>{wallpaper.currentVideo?.id.replace(/-/g, " ") || "OpenClaw LWP"}</h2>
         </div>
       </div>
 
@@ -33,7 +33,7 @@ export function HeroPanel({ wallpaper }: HeroPanelProps) {
         </div>
         <div className="hud-metric">
           <span>Provider</span>
-          <strong>{wallpaper.currentVideo?.source.toUpperCase() || "READY"}</strong>
+          <strong>{wallpaper.currentVideo ? "LIVE WALLPAPER" : "READY"}</strong>
         </div>
         <div className="hud-metric">
           <span>Volume</span>

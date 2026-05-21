@@ -198,7 +198,7 @@ export function UnifiedLibrary({
                     )}
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: "10px", color: "var(--text-soft)", marginTop: "1px" }}>
-                    <span style={{ fontSize: "9px" }}>{item.video.source.toUpperCase()} {item.video.local_path ? " (Local)" : ""} - {formatSavedAt(item.saved_at)}</span>
+                    <span style={{ fontSize: "9px" }}>LIVE WALLPAPER {item.video.local_path ? " (Local)" : ""} - {formatSavedAt(item.saved_at)}</span>
                     {item.video.duration > 0 && <span style={{ fontSize: "9px" }}>{Math.floor(item.video.duration / 60)}m {Math.floor(item.video.duration % 60)}s</span>}
                   </div>
                 </div>

@@ -35,6 +35,11 @@ pub struct WallpaperState {
     pub paused: bool,
     pub volume_percent: u64,
     pub video_filter: String,
+    pub playback_speed: f64,
+    pub blur_strength: u32,
+    pub theme: String,
+    pub wallhaven_api_key: String,
+    pub disabled_sources: Vec<String>,
 }
 
 impl Default for WallpaperState {
@@ -57,6 +62,11 @@ impl Default for WallpaperState {
             paused: false,
             volume_percent: 0,
             video_filter: "none".to_string(),
+            playback_speed: 1.0,
+            blur_strength: 0,
+            theme: "master-system".to_string(),
+            wallhaven_api_key: "KJ47mwX8D3S61aafbxxv37Rgijm6u4Eq".to_string(),
+            disabled_sources: Vec::new(),
         }
     }
 }
@@ -243,6 +253,26 @@ pub fn set_video_filter(
     })
 }
 
+pub fn set_playback_speed(
+    store: &AppStateStore,
+    speed: f64,
+) -> Result<WallpaperState, String> {
+    store.update(|state| {
+        state.playback_speed = speed.clamp(0.1, 4.0);
+        Ok(())
+    })
+}
+
+pub fn set_blur_strength(
+    store: &AppStateStore,
+    strength: u32,
+) -> Result<WallpaperState, String> {
+    store.update(|state| {
+        state.blur_strength = strength.min(100);
+        Ok(())
+    })
+}
+
 pub fn set_window_behavior(
     store: &AppStateStore,
     close_to_tray: bool,
@@ -251,6 +281,13 @@ pub fn set_window_behavior(
     store.update(|state| {
         state.close_to_tray = close_to_tray;
         state.minimize_to_tray = minimize_to_tray;
+        Ok(())
+    })
+}
+
+pub fn set_theme(store: &AppStateStore, theme: String) -> Result<WallpaperState, String> {
+    store.update(|state| {
+        state.theme = theme;
         Ok(())
     })
 }
@@ -397,6 +434,26 @@ pub fn set_rotation(
     store.update(|state| {
         state.rotation_enabled = enabled && !state.queue.is_empty();
         state.rotation_interval_seconds = interval_seconds.max(30);
+        Ok(())
+    })
+}
+
+pub fn set_wallhaven_api_key(
+    store: &AppStateStore,
+    key: String,
+) -> Result<WallpaperState, String> {
+    store.update(|state| {
+        state.wallhaven_api_key = key;
+        Ok(())
+    })
+}
+
+pub fn set_disabled_sources(
+    store: &AppStateStore,
+    disabled: Vec<String>,
+) -> Result<WallpaperState, String> {
+    store.update(|state| {
+        state.disabled_sources = disabled;
         Ok(())
     })
 }

@@ -23,7 +23,7 @@ export function StatusBar({ isPlaying, currentVideo }: StatusBarProps) {
       <div className="status-panel__meta">
         <div>
           <span className="status-meta-label">Source</span>
-          <strong>{currentVideo?.source?.toUpperCase() ?? "NONE"}</strong>
+          <strong>{currentVideo ? "LIVE WALLPAPER" : "NONE"}</strong>
         </div>
         <div>
           <span className="status-meta-label">Duration</span>

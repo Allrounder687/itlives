@@ -1,0 +1,94 @@
+
+.panel {
+  background: var(--bg-strong);
+  border: 1px solid var(--panel-stroke);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03), var(--shadow);
+  border-radius: var(--radius);
+  backdrop-filter: blur(8px);
+}
+
+.hero h2,
+
+
+.hero {
+  padding: 16px 18px;
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: end;
+}
+
+
+.hero__copy {
+  max-width: 680px;
+}
+
+
+.hero__copy h2 {
+  font-size: 28px;
+  line-height: 1.05;
+}
+
+
+.hero__badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+
+.hero-badge {
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-soft);
+  font-size: 11px;
+}
+
+
+.panel--main {
+  padding: 12px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background: linear-gradient(135deg, var(--bg-strong) 0%, var(--bg-elevated) 100%);
+  border-left: 4px solid var(--accent);
+  min-height: 80px;
+}
+
+
+
+.stack > .panel,
+
+.hero--hud {
+  padding: 12px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: linear-gradient(135deg, var(--bg-strong) 0%, var(--bg-elevated) 100%);
+  border-left: 4px solid var(--accent);
+  min-height: 80px;
+}
+
+
+.hero__status {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+
+.hero__meta h2 {
+  font-size: 20px;
+  letter-spacing: -0.01em;
+  margin: 0;
+  font-weight: 600;
+}
+
+
+.hero__metrics {
+  display: flex;
+  gap: 32px;
+}

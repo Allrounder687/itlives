@@ -18,6 +18,7 @@ const EFFECT_TEMPLATES: Record<string, Omit<EffectLayer, "id">> = {
   vignette: { type: "vignette", name: "Vignette Frame", enabled: true, params: { intensity: 0.6 } },
   "cursor-trail": { type: "cursor-trail", name: "Sparkle Trail 🌟", enabled: true, params: {} },
   "click-ripple": { type: "click-ripple", name: "Click Burst 💥", enabled: true, params: {} },
+  "blur-region": { type: "blur-region", name: "Blur Mask 🌫️", enabled: true, params: { x: 10, y: 10, w: 30, h: 20, blur: 15 } },
 };
 
 export function EditorWorkspace({ currentVideo, onApplyWallpaper }: EditorWorkspaceProps) {
@@ -141,7 +142,16 @@ export function EditorWorkspace({ currentVideo, onApplyWallpaper }: EditorWorksp
             <button 
               type="button" 
               className="action-btn action-btn--secondary" 
-              style={{ display: "flex", flexDirection: "column", gap: "6px", padding: "12px", height: "auto", alignItems: "center", borderRadius: "16px", gridColumn: "span 2" }}
+              style={{ display: "flex", flexDirection: "column", gap: "6px", padding: "12px", height: "auto", alignItems: "center", borderRadius: "16px" }}
+              onClick={() => addEffect("blur-region")}
+            >
+              <div style={{ fontSize: "24px" }}>🌫️</div>
+              <span style={{ fontSize: "12px", fontWeight: "600" }}>Blur Area</span>
+            </button>
+            <button 
+              type="button" 
+              className="action-btn action-btn--secondary" 
+              style={{ display: "flex", flexDirection: "column", gap: "6px", padding: "12px", height: "auto", alignItems: "center", borderRadius: "16px" }}
               onClick={() => addEffect("vignette")}
             >
               <div style={{ fontSize: "24px" }}>🖼️</div>
@@ -244,6 +254,31 @@ export function EditorWorkspace({ currentVideo, onApplyWallpaper }: EditorWorksp
                     value={selectedLayer.params.speed} 
                     onChange={(e) => updateParam(selectedLayer.id, "speed", parseFloat(e.target.value))} 
                   />
+                </div>
+              </>
+            )}
+
+            {selectedLayer.type === "blur-region" && (
+              <>
+                <div className="property-group">
+                  <label>Position X ({selectedLayer.params.x}%)</label>
+                  <input type="range" min="0" max="100" className="property-control" value={selectedLayer.params.x} onChange={(e) => updateParam(selectedLayer.id, "x", parseInt(e.target.value))} />
+                </div>
+                <div className="property-group">
+                  <label>Position Y ({selectedLayer.params.y}%)</label>
+                  <input type="range" min="0" max="100" className="property-control" value={selectedLayer.params.y} onChange={(e) => updateParam(selectedLayer.id, "y", parseInt(e.target.value))} />
+                </div>
+                <div className="property-group">
+                  <label>Width ({selectedLayer.params.w}%)</label>
+                  <input type="range" min="5" max="100" className="property-control" value={selectedLayer.params.w} onChange={(e) => updateParam(selectedLayer.id, "w", parseInt(e.target.value))} />
+                </div>
+                <div className="property-group">
+                  <label>Height ({selectedLayer.params.h}%)</label>
+                  <input type="range" min="5" max="100" className="property-control" value={selectedLayer.params.h} onChange={(e) => updateParam(selectedLayer.id, "h", parseInt(e.target.value))} />
+                </div>
+                <div className="property-group">
+                  <label>Blur Intensity ({selectedLayer.params.blur})</label>
+                  <input type="range" min="2" max="100" className="property-control" value={selectedLayer.params.blur} onChange={(e) => updateParam(selectedLayer.id, "blur", parseInt(e.target.value))} />
                 </div>
               </>
             )}

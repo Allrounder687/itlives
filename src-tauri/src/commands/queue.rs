@@ -45,6 +45,8 @@ pub fn advance_rotation(
         scale_percent,
         current.volume_percent,
         &current.video_filter,
+        current.playback_speed,
+        current.blur_strength,
         false, 
         None,
         None,

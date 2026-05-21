@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useWallpaper } from "@/hooks/useWallpaper";
 import { TitleBar } from "./components/TitleBar";
 import { Sidebar, TabState } from "./components/Sidebar";
@@ -12,11 +12,16 @@ import { SearchResults } from "./components/SearchResults";
 import { FloatingPreview } from "./components/FloatingPreview";
 import { UnifiedLibrary } from "./components/LibraryList";
 import { AutomationPanel } from "./components/AutomationPanel";
+import { VideoPreview } from "./components/VideoPreview";
 import { QueuePanel } from "./components/QueuePanel";
 import { YouTubePanel } from "./components/YouTubePanel";
 import { EditorWorkspace } from "./components/EditorWorkspace";
 import { CanvasEffectRenderer } from "./components/CanvasEffectRenderer";
 import { ParallaxWorkspace } from "./components/ParallaxWorkspace";
+import { ThemeSelector } from "./components/ThemeSelector";
+import { CommunityPanel } from "./components/CommunityPanel";
+import { DependencyChecker } from "./components/DependencyChecker";
+import { WallpaperSourcePanel } from "./components/WallpaperSourcePanel";
 
 function Home() {
   const wallpaper = useWallpaper();
@@ -24,6 +29,12 @@ function Home() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isOverlayMode, setIsOverlayMode] = useState(false);
   const [overlayConfig, setOverlayConfig] = useState<{ videoSrc?: string; layers?: any[] }>({});
+
+  useEffect(() => {
+    if (typeof document !== "undefined") {
+      document.documentElement.setAttribute("data-theme", wallpaper.theme || "master-system");
+    }
+  }, [wallpaper.theme]);
 
   useEffect(() => {
     if (typeof window !== "undefined" && window.location.search.includes("mode=desktop-overlay")) {
@@ -63,6 +74,61 @@ function Home() {
       return () => { if (unlistenRef.current) unlistenRef.current(); };
     }
   }, [isOverlayMode]);
+
+  const prevQueryRef = useRef(wallpaper.query);
+  const prevCategoryRef = useRef(wallpaper.category);
+  const fetchVideosListRef = useRef(wallpaper.fetchVideosList);
+  fetchVideosListRef.current = wallpaper.fetchVideosList;
+
+  const lastFetchedRef = useRef<{ source: string; query: string; page: number; category: string } | null>(null);
+
+  // Automatically fetch wallpapers when hydration finishes or when source/query/page/category changes
+  useEffect(() => {
+    if (wallpaper.isHydrating) return;
+    if (wallpaper.source === "direct") return;
+
+    // Prevent duplicate concurrent/overlapping fetches for the exact same query/page/source/category
+    const currentFetchKey = {
+      source: wallpaper.source,
+      query: wallpaper.query,
+      page: wallpaper.page,
+      category: wallpaper.category,
+    };
+
+    if (
+      lastFetchedRef.current &&
+      lastFetchedRef.current.source === currentFetchKey.source &&
+      lastFetchedRef.current.query === currentFetchKey.query &&
+      lastFetchedRef.current.page === currentFetchKey.page &&
+      lastFetchedRef.current.category === currentFetchKey.category
+    ) {
+      return;
+    }
+
+    lastFetchedRef.current = currentFetchKey;
+
+    const queryChanged = prevQueryRef.current !== wallpaper.query;
+    const categoryChanged = prevCategoryRef.current !== wallpaper.category;
+
+    prevQueryRef.current = wallpaper.query;
+    prevCategoryRef.current = wallpaper.category;
+
+    // Use a 400ms debounce ONLY when manual text query typing is in progress
+    // If it's a category click, source change, page change, or initial load, fetch immediately (0ms delay)
+    const delay = (queryChanged && !categoryChanged) ? 400 : 0;
+
+    const t = setTimeout(() => {
+      fetchVideosListRef.current();
+    }, delay);
+
+    return () => clearTimeout(t);
+  }, [
+    wallpaper.isHydrating,
+    wallpaper.source,
+    wallpaper.query,
+    wallpaper.page,
+    wallpaper.category
+  ]);
 
   const handleFetchAndApply = async () => {
     const result = await wallpaper.fetchVideo();
@@ -112,6 +178,21 @@ function Home() {
         />
 
         <main className="workspace">
+          <DependencyChecker />
+          {wallpaper.error && (
+            <div className="callout callout--error" style={{ margin: "1rem 0" }}>
+              <span className="callout__label">Engine Error</span>
+              <p>{wallpaper.error}</p>
+              {wallpaper.errorHint && <p>{wallpaper.errorHint}</p>}
+              {wallpaper.error.includes("mpv not found") && (
+                <div style={{ marginTop: "1rem" }}>
+                   <p className="muted">This application requires <strong>mpv</strong> to render video wallpapers.</p>
+                   <code style={{ background: "rgba(0,0,0,0.3)", padding: "4px 8px", borderRadius: "4px" }}>winget install shinchiro.mpv</code>
+                </div>
+              )}
+            </div>
+          )}
+
           <HeroPanel wallpaper={wallpaper} />
 
           {activeTab === "discover" && (
@@ -127,27 +208,7 @@ function Home() {
                 results={wallpaper.searchResults} onSelect={wallpaper.selectVideo}
                 page={wallpaper.page} onPageChange={wallpaper.setPage}
               />
-              {wallpaper.error && (
-                <div className="callout callout--error">
-                  <span className="callout__label">Engine Error</span>
-                  <p>{wallpaper.error}</p>
-                  {wallpaper.errorHint && <p>{wallpaper.errorHint}</p>}
-                </div>
-              )}
               {wallpaper.isLoading && <div className="skeleton skeleton-preview" />}
-              {wallpaper.currentVideo && !wallpaper.isLoading && (
-                <FloatingPreview
-                  video={wallpaper.currentVideo}
-                  volumePercent={wallpaper.volumePercent}
-                  filterPreset={wallpaper.videoFilter}
-                  isFavorite={wallpaper.isFavorite(wallpaper.currentVideo)}
-                  isQueued={wallpaper.isQueued(wallpaper.currentVideo)}
-                  onApply={(st, et) => wallpaper.applyWallpaper(wallpaper.currentVideo!, st, et)}
-                  onToggleFavorite={() => wallpaper.toggleFavorite(wallpaper.currentVideo!)}
-                  onToggleQueue={toggleCurrentQueue}
-                  onClose={() => wallpaper.selectVideo(null as any)}
-                />
-              )}
             </section>
           )}
 
@@ -164,13 +225,19 @@ function Home() {
             />
           )}
 
+          {activeTab === "community" && (
+            <CommunityPanel currentWallpaper={wallpaper.currentVideo} />
+          )}
+
           {activeTab === "settings" && (
             <section className="panel" style={{ padding: "16px", marginTop: "1rem" }}>
               <div className="section-head" style={{ marginBottom: "1.5rem" }}>
-                <span className="eyebrow">Controls & Queue</span>
+                <span className="eyebrow">Controls & Appearance</span>
                 <h2>Application Settings</h2>
               </div>
               <div className="support-grid">
+                <ThemeSelector currentTheme={wallpaper.theme} onThemeChange={wallpaper.setTheme} />
+                <WallpaperSourcePanel wallpaper={wallpaper} />
                 <AutomationPanel wallpaper={wallpaper} />
                 <QueuePanel wallpaper={wallpaper} />
               </div>
@@ -203,13 +270,19 @@ function Home() {
                 <h2>Wallpaper Playback</h2>
               </div>
               {wallpaper.currentVideo && !wallpaper.isLoading ? (
-                <FloatingPreview
-                  video={wallpaper.currentVideo} volumePercent={wallpaper.volumePercent}
-                  filterPreset={wallpaper.videoFilter} isFavorite={wallpaper.isFavorite(wallpaper.currentVideo)}
+                <VideoPreview
+                  video={wallpaper.currentVideo}
+                  volumePercent={wallpaper.volumePercent}
+                  filterPreset={wallpaper.videoFilter}
+                  isFavorite={wallpaper.isFavorite(wallpaper.currentVideo)}
                   isQueued={wallpaper.isQueued(wallpaper.currentVideo)}
-                  onApply={(st, et) => wallpaper.applyWallpaper(wallpaper.currentVideo!, st, et)}
+                  playbackSpeed={wallpaper.playbackSpeed}
+                  blurStrength={wallpaper.blurStrength}
+                  onApply={(st?: number, et?: number) => wallpaper.applyWallpaper(wallpaper.currentVideo!, st, et)}
                   onToggleFavorite={() => wallpaper.toggleFavorite(wallpaper.currentVideo!)}
-                  onToggleQueue={toggleCurrentQueue} onClose={() => wallpaper.selectVideo(null as any)}
+                  onToggleQueue={toggleCurrentQueue}
+                  onSetSpeed={wallpaper.setPlaybackSpeed}
+                  onSetBlur={wallpaper.setBlurStrength}
                 />
               ) : !wallpaper.isLoading ? (
                 <div className="preview-empty">
@@ -235,6 +308,24 @@ function Home() {
           <MasterHUD wallpaper={wallpaper} />
         </main>
       </div>
+
+      {wallpaper.currentVideo && !wallpaper.isLoading && activeTab !== "preview" && (
+        <FloatingPreview
+          video={wallpaper.currentVideo}
+          volumePercent={wallpaper.volumePercent}
+          filterPreset={wallpaper.videoFilter}
+          isFavorite={wallpaper.isFavorite(wallpaper.currentVideo)}
+          isQueued={wallpaper.isQueued(wallpaper.currentVideo)}
+          playbackSpeed={wallpaper.playbackSpeed}
+          blurStrength={wallpaper.blurStrength}
+          onApply={(st?: number, et?: number) => wallpaper.applyWallpaper(wallpaper.currentVideo!, st, et)}
+          onToggleFavorite={() => wallpaper.toggleFavorite(wallpaper.currentVideo!)}
+          onToggleQueue={toggleCurrentQueue}
+          onSetSpeed={wallpaper.setPlaybackSpeed}
+          onSetBlur={wallpaper.setBlurStrength}
+          onClose={() => wallpaper.selectVideo(null as any)}
+        />
+      )}
     </div>
   );
 }

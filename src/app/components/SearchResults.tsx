@@ -27,8 +27,8 @@ export function SearchResults({ results, onSelect, page, onPageChange }: SearchR
               <HoverVideo video={item} onClick={() => onSelect(item)} />
             </div>
             <div className="search-card__copy">
-              <strong>{item.id.replace(/-/g, " ")}</strong>
-              <span>{item.source.toUpperCase()}</span>
+              <strong>{/^[0-9-]+$/.test(item.id) ? "Live Wallpaper" : item.id.replace(/-/g, " ")}</strong>
+              <span>LIVE WALLPAPER</span>
             </div>
           </article>
         ))}

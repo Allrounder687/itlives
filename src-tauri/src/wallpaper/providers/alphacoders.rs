@@ -45,7 +45,7 @@ impl VideoProvider for AlphaCodersProvider {
 
         // For alphacoders, the search parameter is simply search=...
         // and pagination is page=...
-        let url = if query.is_empty() {
+        let url = if query.is_empty() || query == "all" {
             format!("https://alphacoders.com/live-wallpapers?page={}", page)
         } else {
             // NOTE: AlphaCoders search usually goes to the search endpoint.
@@ -97,7 +97,7 @@ impl VideoProvider for AlphaCodersProvider {
             // Fortunately, alphacoders often provides JPG thumbs as well: "thumb-350-1407175.webp" or ".jpg"
             // Let's generate a webp/jpg URL for the thumbnail.
             // Typical picture thumb: https://images2.alphacoders.com/140/thumb-350-1407175.webp
-            let thumbnail_url = format!("https://{}thumb-350-{}.webp", prefix, id);
+            let thumbnail_url = format!("https://{}thumb-350-{}.jpg", prefix, id);
 
             let result = VideoResult {
                 id: id.clone(),

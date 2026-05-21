@@ -1,0 +1,60 @@
+.action-btn {
+  min-height: 42px;
+  border-radius: 13px;
+  padding: 0 14px;
+  border: 1px solid var(--panel-stroke);
+  cursor: pointer;
+  transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
+  font-family: var(--font-body);
+  font-weight: 500;
+}
+
+.action-btn--primary {
+  background: var(--primary-gradient);
+  color: var(--bg);
+  border-color: rgba(255, 255, 255, 0.2);
+  font-weight: 700;
+}
+
+.action-btn--secondary {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+}
+
+.input {
+  width: 100%;
+  border: 1px solid var(--panel-stroke);
+  background: var(--bg-elevated);
+  color: var(--text);
+  border-radius: 13px;
+  padding: 12px 14px;
+  outline: none;
+  transition: border-color 140ms ease, background 140ms ease;
+}
+
+.input:focus {
+  border-color: var(--accent);
+  background: var(--bg-strong);
+}
+
+.scale-slider {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.source-pill {
+  border: 1px solid var(--panel-stroke);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-soft);
+  padding: 10px 12px;
+  border-radius: 14px;
+  cursor: pointer;
+  transition: 140ms ease;
+}
+
+.source-pill:hover,
+.source-pill--active {
+  color: var(--text);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}

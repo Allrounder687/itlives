@@ -53,6 +53,14 @@ export function AutomationPanel({ wallpaper }: AutomationPanelProps) {
           />
         </label>
         <label className="toggle-row">
+          <span>Start OpenClaw LWP on system startup</span>
+          <input
+            type="checkbox"
+            checked={wallpaper.autostartEnabled}
+            onChange={(event) => wallpaper.setAutostartEnabled(event.target.checked)}
+          />
+        </label>
+        <label className="toggle-row">
           <span>Restore wallpaper on app launch</span>
           <input
             type="checkbox"
@@ -163,8 +171,9 @@ export function AutomationPanel({ wallpaper }: AutomationPanelProps) {
               min={25}
               max={200}
               step={5}
-              value={wallpaper.wallpaperScalePercent}
-              onChange={onWallpaperScaleChange}
+              defaultValue={wallpaper.wallpaperScalePercent}
+              onMouseUp={(e) => wallpaper.setWallpaperScale(parseInt((e.target as HTMLInputElement).value))}
+              onTouchEnd={(e) => wallpaper.setWallpaperScale(parseInt((e.target as HTMLInputElement).value))}
             />
             <input
               className="input scale-input"
@@ -173,7 +182,7 @@ export function AutomationPanel({ wallpaper }: AutomationPanelProps) {
               max={200}
               step={5}
               value={wallpaper.wallpaperScalePercent}
-              onChange={onWallpaperScaleChange}
+              onChange={(e) => wallpaper.setWallpaperScale(parseInt(e.target.value))}
             />
             <span className="scale-suffix">%</span>
           </div>

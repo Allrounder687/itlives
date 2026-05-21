@@ -7,8 +7,6 @@ use crate::wallpaper::state::AppStateStore;
 #[cfg(windows)]
 use windows::Win32::Foundation::RECT;
 #[cfg(windows)]
-use windows::Win32::System::Power::{GetSystemPowerStatus, SYSTEM_POWER_STATUS};
-#[cfg(windows)]
 use windows::Win32::UI::WindowsAndMessaging::{
     GetClassNameW, GetForegroundWindow, GetSystemMetrics, GetWindowRect, SM_CXSCREEN, SM_CYSCREEN,
 };

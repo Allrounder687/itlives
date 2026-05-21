@@ -4,6 +4,8 @@
 use super::{SearchConfig, VideoProvider, VideoResult};
 use serde::Deserialize;
 use std::process::Command;
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 use tauri::Emitter;
 
 pub struct YouTubeProvider;
@@ -22,7 +24,13 @@ pub struct YtMeta {
 
 /// Check whether yt-dlp is available on the system.
 fn find_ytdlp() -> Result<String, String> {
-    if let Ok(out) = Command::new("where").arg("yt-dlp").output() {
+    if let Ok(out) = {
+        let mut cmd = Command::new("where");
+        cmd.arg("yt-dlp");
+        #[cfg(windows)]
+        cmd.creation_flags(0x08000000);
+        cmd.output()
+    } {
         if out.status.success() {
             let path = String::from_utf8_lossy(&out.stdout)
                 .lines()
@@ -55,14 +63,17 @@ fn find_ytdlp() -> Result<String, String> {
 pub fn fetch_metadata(url: &str) -> Result<YtMeta, String> {
     let ytdlp = find_ytdlp()?;
 
-    let output = Command::new(&ytdlp)
-        .args([
-            "--dump-json",
-            "--no-playlist",
-            "--no-warnings",
-            url,
-        ])
-        .output()
+    let mut cmd = Command::new(&ytdlp);
+    cmd.args([
+        "--dump-json",
+        "--no-playlist",
+        "--no-warnings",
+        url,
+    ]);
+    #[cfg(windows)]
+    cmd.creation_flags(0x08000000);
+
+    let output = cmd.output()
         .map_err(|e| format!("Failed to run yt-dlp: {}", e))?;
 
     if !output.status.success() {
@@ -118,23 +129,26 @@ pub fn download_clip(
     use std::io::{BufRead, BufReader};
     use std::process::Stdio;
 
-    let mut child = Command::new(&ytdlp)
-        .args([
-            "--no-playlist",
-            "--no-warnings",
-            "--download-sections",
-            &section_arg,
-            "-f",
-            &format_arg,
-            "--merge-output-format",
-            "mp4",
-            "--newline",
-            "--progress",
-            "-o",
-            &dest.to_string_lossy(),
-            url,
-        ])
-        .stdout(Stdio::piped())
+    let mut cmd = Command::new(&ytdlp);
+    cmd.args([
+        "--no-playlist",
+        "--no-warnings",
+        "--download-sections",
+        &section_arg,
+        "-f",
+        &format_arg,
+        "--merge-output-format",
+        "mp4",
+        "--newline",
+        "--progress",
+        "-o",
+        &dest.to_string_lossy(),
+        url,
+    ]);
+    #[cfg(windows)]
+    cmd.creation_flags(0x08000000);
+
+    let mut child = cmd.stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
         .map_err(|e| format!("Failed to spawn yt-dlp: {}", e))?;

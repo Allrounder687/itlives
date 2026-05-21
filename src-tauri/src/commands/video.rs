@@ -3,25 +3,118 @@ use crate::wallpaper::providers::{self, SearchConfig, VideoResult};
 use crate::wallpaper::state::AppStateStore;
 
 #[tauri::command]
-pub async fn fetch_video(source: String, query: String, order: String) -> Result<VideoResult, String> {
+pub async fn fetch_video(
+    state: State<'_, AppStateStore>,
+    source: String,
+    query: String,
+    order: String,
+) -> Result<VideoResult, String> {
+    let app_state = state.snapshot();
+    let api_key = Some(app_state.wallhaven_api_key);
+    let disabled = app_state.disabled_sources;
+
+    if disabled.contains(&source) {
+        return Err(format!("The wallpaper source '{}' has been disabled in settings.", source));
+    }
+
+    // For unified source, pick a random SFW provider and fetch from it
+    if source == "unified" || source == "all" {
+        let mut sfw_providers = vec!["motionbgs", "alphacoders"];
+        sfw_providers.retain(|p| !disabled.contains(&p.to_string()));
+
+        if sfw_providers.is_empty() {
+            return Err("All unified live wallpaper sources have been disabled in settings.".to_string());
+        }
+
+        let chosen = {
+            use rand::seq::SliceRandom;
+            let mut rng = rand::thread_rng();
+            *sfw_providers.choose(&mut rng).unwrap_or(&"motionbgs")
+        };
+        let provider = providers::get_provider(chosen)?;
+        let config = SearchConfig { query, order, count: 40, page: 1, api_key };
+        return provider.fetch_video(&config).await;
+    }
     let provider = providers::get_provider(&source)?;
     let config = SearchConfig {
         query,
         order,
         count: 40,
         page: 0,
+        api_key,
     };
     provider.fetch_video(&config).await
 }
 
 #[tauri::command]
-pub async fn fetch_videos_list(source: String, query: String, order: String, page: u32) -> Result<Vec<VideoResult>, String> {
+pub async fn fetch_videos_list(
+    state: State<'_, AppStateStore>,
+    source: String,
+    query: String,
+    order: String,
+    page: u32,
+) -> Result<Vec<VideoResult>, String> {
+    let app_state = state.snapshot();
+    let api_key = Some(app_state.wallhaven_api_key);
+    let disabled = app_state.disabled_sources;
+
+    if disabled.contains(&source) {
+        return Err(format!("The wallpaper source '{}' has been disabled in settings.", source));
+    }
+
+    if source == "all" || source == "unified" {
+        // Fan out to all SFW providers concurrently and merge results
+        let mut providers_list = vec!["motionbgs", "alphacoders"];
+        providers_list.retain(|p| !disabled.contains(&p.to_string()));
+
+        if providers_list.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let config = SearchConfig {
+            query,
+            order,
+            count: 20, // Fetch fewer per provider to keep weight low
+            page,
+            api_key: api_key.clone(),
+        };
+
+        let mut all_results = Vec::new();
+        
+        // Concurrent fetching for better performance
+        let mut tasks = Vec::new();
+        for p_name in providers_list {
+            let config_clone = config.clone();
+            tasks.push(tokio::spawn(async move {
+                if let Ok(p) = providers::get_provider(p_name) {
+                    p.fetch_videos_list(&config_clone).await.unwrap_or_default()
+                } else {
+                    Vec::new()
+                }
+            }));
+        }
+
+        for task in tasks {
+            if let Ok(res) = task.await {
+                all_results.extend(res);
+            }
+        }
+        
+        // Sort by ID or shuffle? Shuffling makes it feel more "unified"
+        use rand::seq::SliceRandom;
+        let mut rng = rand::thread_rng();
+        all_results.shuffle(&mut rng);
+        
+        return Ok(all_results);
+    }
+
     let provider = providers::get_provider(&source)?;
     let config = SearchConfig {
         query,
         order,
         count: 40,
         page,
+        api_key,
     };
     provider.fetch_videos_list(&config).await
 }

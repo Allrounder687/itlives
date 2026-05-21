@@ -5,6 +5,8 @@ use crate::wallpaper;
 
 use std::sync::atomic::{AtomicBool, Ordering};
 static TRACKING_STARTED: AtomicBool = AtomicBool::new(false);
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 
 
 
@@ -26,15 +28,29 @@ pub async fn apply_wallpaper(
     }
 
     let current = wallpaper::state::get(&state);
-    wallpaper::desktop::set_video(
-        &video.local_path,
-        scale_percent,
-        current.volume_percent,
-        &current.video_filter,
-        false, 
-        start_time,
-        end_time,
-    )?;
+    let path_lower = video.local_path.to_lowercase();
+    let is_static_image = path_lower.ends_with(".jpg") 
+        || path_lower.ends_with(".jpeg") 
+        || path_lower.ends_with(".png") 
+        || path_lower.ends_with(".webp")
+        || video.source == "wallhaven"
+        || video.source == "pinterest";
+
+    if is_static_image {
+        wallpaper::desktop::set_static_image(&video.local_path)?;
+    } else {
+        wallpaper::desktop::set_video(
+            &video.local_path,
+            scale_percent,
+            current.volume_percent,
+            &current.video_filter,
+            current.playback_speed,
+            current.blur_strength,
+            false, 
+            start_time,
+            end_time,
+        )?;
+    }
     wallpaper::state::mark_active(&state, video)
 }
 
@@ -94,6 +110,8 @@ pub fn set_wallpaper_filter(
                 persisted.wallpaper_scale_percent,
                 persisted.volume_percent,
                 &persisted.video_filter,
+                persisted.playback_speed,
+                persisted.blur_strength,
                 persisted.paused,
                 None,
                 None,
@@ -116,11 +134,49 @@ pub fn set_wallpaper_scale(
                 persisted.wallpaper_scale_percent,
                 persisted.volume_percent,
                 &persisted.video_filter,
+                persisted.playback_speed,
+                persisted.blur_strength,
                 persisted.paused,
                 None,
                 None,
             )?;
         }
+    }
+    Ok(persisted)
+}
+
+#[tauri::command]
+pub fn set_wallpaper_speed(
+    state: State<'_, AppStateStore>,
+    speed: f64,
+) -> Result<WallpaperState, String> {
+    let persisted = wallpaper::state::set_playback_speed(&state, speed)?;
+    if persisted.is_playing {
+        wallpaper::desktop::set_speed(persisted.playback_speed)?;
+    }
+    Ok(persisted)
+}
+
+#[tauri::command]
+pub fn set_wallpaper_blur(
+    state: State<'_, AppStateStore>,
+    blur: u32,
+) -> Result<WallpaperState, String> {
+    let persisted = wallpaper::state::set_blur_strength(&state, blur)?;
+    if persisted.is_playing {
+       if let Some(video) = persisted.current_video.as_ref() {
+           wallpaper::desktop::set_video(
+               &video.local_path,
+               persisted.wallpaper_scale_percent,
+               persisted.volume_percent,
+               &persisted.video_filter,
+               persisted.playback_speed,
+               persisted.blur_strength,
+               persisted.paused,
+               None,
+               None
+           )?;
+       }
     }
     Ok(persisted)
 }
@@ -187,14 +243,17 @@ pub fn apply_desktop_effects(
                         log::info!("[Overlay] Script written to {:?}", script_path);
                     }
 
-                    match std::process::Command::new("powershell")
-                        .args(&[
-                            "-NoProfile",
-                            "-WindowStyle", "Hidden",
-                            "-ExecutionPolicy", "Bypass",
-                            "-File", script_path.to_str().unwrap()
-                        ])
-                        .spawn() {
+                    let mut cmd = std::process::Command::new("powershell");
+                    cmd.args(&[
+                        "-NoProfile",
+                        "-WindowStyle", "Hidden",
+                        "-ExecutionPolicy", "Bypass",
+                        "-File", script_path.to_str().unwrap()
+                    ]);
+                    #[cfg(windows)]
+                    cmd.creation_flags(0x08000000);
+
+                    match cmd.spawn() {
                             Ok(p) => {
                                 log::info!("[Overlay] Powershell process spawned with PID: {:?}", p.id());
                                 start_mouse_tracking(app_handle.clone());
@@ -233,7 +292,7 @@ pub fn start_mouse_tracking(app_handle: tauri::AppHandle) {
                     let _ = app_handle.emit("cursor-moved", (pt.x - vx, pt.y - vy));
                 }
             }
-            std::thread::sleep(std::time::Duration::from_millis(16)); // ~60fps
+            std::thread::sleep(std::time::Duration::from_millis(32)); // ~30fps for smoother balance between perf and response
         }
     });
 }

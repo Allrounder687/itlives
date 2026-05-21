@@ -5,7 +5,7 @@ pub mod integrations;
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Manager, State, Position, PhysicalPosition, Size, LogicalSize
+    Manager, Position, PhysicalPosition, Size, LogicalSize
 };
 use wallpaper::state::AppStateStore;
 
@@ -13,15 +13,29 @@ fn restore_wallpaper_if_enabled(store: &AppStateStore) {
     let state = wallpaper::state::get(store);
     if state.restore_on_launch && state.is_playing {
         if let Some(video) = state.current_video.as_ref() {
-            let _ = wallpaper::desktop::set_video(
-                &video.local_path,
-                state.wallpaper_scale_percent,
-                state.volume_percent,
-                &state.video_filter,
-                state.paused,
-                None,
-                None,
-            );
+            let path_lower = video.local_path.to_lowercase();
+            let is_static_image = path_lower.ends_with(".jpg") 
+                || path_lower.ends_with(".jpeg") 
+                || path_lower.ends_with(".png") 
+                || path_lower.ends_with(".webp")
+                || video.source == "wallhaven"
+                || video.source == "pinterest";
+
+            if is_static_image {
+                let _ = wallpaper::desktop::set_static_image(&video.local_path);
+            } else {
+                let _ = wallpaper::desktop::set_video(
+                    &video.local_path,
+                    state.wallpaper_scale_percent,
+                    state.volume_percent,
+                    &state.video_filter,
+                    state.playback_speed,
+                    state.blur_strength,
+                    state.paused,
+                    None,
+                    None,
+                );
+            }
         }
     }
 }
@@ -60,7 +74,17 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
                 let store = app_handle.state::<AppStateStore>();
                 let state = wallpaper::state::get(&store);
                 if let Some(video) = state.current_video.as_ref() {
-                    let _ = wallpaper::desktop::set_video(&video.local_path, state.wallpaper_scale_percent, state.volume_percent, &state.video_filter, state.paused, None, None);
+                    let _ = wallpaper::desktop::set_video(
+                        &video.local_path,
+                        state.wallpaper_scale_percent,
+                        state.volume_percent,
+                        &state.video_filter,
+                        state.playback_speed,
+                        state.blur_strength,
+                        state.paused,
+                        None,
+                        None
+                    );
                 }
             }
             "stop_wallpaper" => {
@@ -116,6 +140,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, Some(vec!["--minimized"])))
         .manage(state_store)
         .setup(move |app| {
             if cfg!(debug_assertions) {
@@ -127,7 +152,13 @@ pub fn run() {
             }
 
             wallpaper::performance::start_monitor(monitor_store.clone());
-            restore_wallpaper_if_enabled(&restore_store);
+
+            // Moving wallpaper restoration to a background thread to prevent GUI hang on startup.
+            // set_video contains Win32 calls and sleeps that block the main thread.
+            tauri::async_runtime::spawn(async move {
+                restore_wallpaper_if_enabled(&restore_store);
+            });
+
             build_tray(app)?;
             Ok(())
         })
@@ -162,6 +193,13 @@ pub fn run() {
             commands::video::save_thumbnail,
             commands::wallpaper_control::apply_desktop_effects,
             commands::wallpaper_control::get_current_effects,
+            commands::wallpaper_control::set_wallpaper_speed,
+            commands::wallpaper_control::set_wallpaper_blur,
+            commands::settings::set_theme,
+            commands::settings::check_dependencies,
+            commands::settings::install_mpv,
+            commands::settings::set_wallhaven_api_key,
+            commands::settings::set_disabled_sources,
         ])
         .run(tauri::generate_context!())
 

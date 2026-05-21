@@ -10,9 +10,13 @@ interface FloatingPreviewProps {
   filterPreset: string;
   isFavorite: boolean;
   isQueued: boolean;
+  playbackSpeed?: number;
+  blurStrength?: number;
   onApply: (start?: number, end?: number) => void;
   onToggleFavorite: () => void;
   onToggleQueue: () => void;
+  onSetSpeed?: (s: number) => void;
+  onSetBlur?: (b: number) => void;
   onClose: () => void;
 }
 

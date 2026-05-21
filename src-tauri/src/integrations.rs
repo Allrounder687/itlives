@@ -3,6 +3,8 @@ use std::io::{Read, Write};
 use std::thread;
 use crate::wallpaper::state::{AppStateStore, WallpaperState};
 use crate::wallpaper;
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 
 pub fn start(state: AppStateStore) {
     thread::spawn(move || {
@@ -93,6 +95,8 @@ fn handle_request(stream: &mut std::net::TcpStream, path: &str, state: &AppState
                     current.wallpaper_scale_percent,
                     current.volume_percent,
                     &current.video_filter,
+                    current.playback_speed,
+                    current.blur_strength,
                     false,
                     None,
                     None,
@@ -111,6 +115,8 @@ fn handle_request(stream: &mut std::net::TcpStream, path: &str, state: &AppState
                     current.wallpaper_scale_percent,
                     current.volume_percent,
                     &current.video_filter,
+                    current.playback_speed,
+                    current.blur_strength,
                     false,
                     None,
                     None,
@@ -168,24 +174,28 @@ pub fn save_rainmeter_inc(state: &WallpaperState) {
                 if let Ok(bytes) = resp.bytes() {
                     let _ = std::fs::write(&thumb_file_path, bytes);
                     // Trigger Rainmeter to refresh the OpenClaw skin after download is complete
-                    let _ = std::process::Command::new("powershell")
-                        .args(&[
-                            "-NoProfile",
-                            "-Command",
-                            "if (Get-Process Rainmeter -ErrorAction SilentlyContinue) { & 'C:\\Program Files\\Rainmeter\\Rainmeter.exe' !Refresh OpenClaw }"
-                        ])
-                        .spawn();
+                    let mut cmd = std::process::Command::new("powershell");
+                    cmd.args(&[
+                        "-NoProfile",
+                        "-Command",
+                        "if (Get-Process Rainmeter -ErrorAction SilentlyContinue) { & 'C:\\Program Files\\Rainmeter\\Rainmeter.exe' !Refresh OpenClaw }"
+                    ]);
+                    #[cfg(windows)]
+                    cmd.creation_flags(0x08000000);
+                    let _ = cmd.spawn();
                 }
             }
         });
     } else {
         // Trigger Rainmeter immediately if already local or empty
-        let _ = std::process::Command::new("powershell")
-            .args(&[
-                "-NoProfile",
-                "-Command",
-                "if (Get-Process Rainmeter -ErrorAction SilentlyContinue) { & 'C:\\Program Files\\Rainmeter\\Rainmeter.exe' !Refresh OpenClaw }"
-            ])
-            .spawn();
+        let mut cmd = std::process::Command::new("powershell");
+        cmd.args(&[
+            "-NoProfile",
+            "-Command",
+            "if (Get-Process Rainmeter -ErrorAction SilentlyContinue) { & 'C:\\Program Files\\Rainmeter\\Rainmeter.exe' !Refresh OpenClaw }"
+        ]);
+        #[cfg(windows)]
+        cmd.creation_flags(0x08000000);
+        let _ = cmd.spawn();
     }
 }

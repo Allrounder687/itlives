@@ -7,7 +7,9 @@ param (
     [Int64]$WindowHandle = 0,
     [string]$StartTime = "",
     [string]$EndTime = "",
-    [string]$MpvPath = ""
+    [string]$MpvPath = "",
+    [double]$Speed = 1.0,
+    [int]$BlurStrength = 0
 )
 
 Write-Host "Cleaning up previous wallpaper engine streams..." -ForegroundColor Yellow
@@ -84,6 +86,10 @@ for ($idx = 0; $idx -lt $screens.Count; $idx++) {
         default { $filterChain = "scale=${targetWidth}:${targetHeight}" }
     }
 
+    if ($BlurStrength -gt 0) {
+        $filterChain += ",boxblur=${BlurStrength}:${BlurStrength}"
+    }
+
     $ipc_server = "\\.\pipe\openclaw-mpv-$idx"
     $stArg = if ($StartTime -ne "") { "--start=$StartTime" } else { "" }
     $etArg = if ($EndTime -ne "") { "--end=$EndTime" } else { "" }
@@ -99,6 +105,7 @@ for ($idx = 0; $idx -lt $screens.Count; $idx++) {
         "--loop=inf",
         "--mute=$mute",
         "--volume=${VolumePercent}",
+        "--speed=${Speed}",
         "--pause=$pauseVal",
         "--no-osc",
         "--no-osd-bar",

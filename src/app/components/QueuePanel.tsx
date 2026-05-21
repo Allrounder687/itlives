@@ -65,7 +65,7 @@ export function QueuePanel({ wallpaper }: QueuePanelProps) {
             >
               <div className="library-item__copy" style={{ pointerEvents: "none" }}>
                 <strong>{index + 1}. {item.video.id}</strong>
-                <span>{item.video.source.toUpperCase()} - queued {formatSavedAt(item.saved_at)}</span>
+                <span>LIVE WALLPAPER - queued {formatSavedAt(item.saved_at)}</span>
               </div>
               <div className="library-item__actions">
                 <button

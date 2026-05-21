@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 
 export interface EffectLayer {
   id: string;
-  type: "snow" | "rain" | "vignette" | "light-leak" | "cursor-trail" | "click-ripple";
+  type: "snow" | "rain" | "vignette" | "light-leak" | "cursor-trail" | "click-ripple" | "blur-region";
   name: string;
   enabled: boolean;
   params: Record<string, any>;
@@ -87,12 +87,29 @@ export function CanvasEffectRenderer({ videoSrc, effects, isOverlay = false }: C
     }));
   };
 
+  // Pre-calculated effect cache for render loop performance
+  const cachedEffectsRef = useRef<any>({});
+  
+  useEffect(() => {
+    const rawEffects: any = liveEffects || [];
+    const currentEffects: EffectLayer[] = Array.isArray(rawEffects) ? rawEffects : (rawEffects.layers || []);
+    
+    cachedEffectsRef.current = {
+      vignette: currentEffects.find(e => e.type === "vignette" && e.enabled),
+      snowEffect: currentEffects.find(e => e.type === "snow" && e.enabled),
+      rainEffect: currentEffects.find(e => e.type === "rain" && e.enabled),
+      trailEffect: currentEffects.find(e => e.type === "cursor-trail" && e.enabled),
+      rippleEffect: currentEffects.find(e => e.type === "click-ripple" && e.enabled),
+      blurRegions: currentEffects.filter(e => e.type === "blur-region" && e.enabled),
+    };
+  }, [liveEffects]);
+
   // Main Canvas Setup & Loop
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", { alpha: true, desynchronized: true });
     if (!ctx) return;
 
     const updateSize = () => {
@@ -118,16 +135,7 @@ export function CanvasEffectRenderer({ videoSrc, effects, isOverlay = false }: C
       if (!active) return;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // [CRITICAL FIX]: Safely enforce Array type. 
-      // If Editor sends { videoSrc, layers }, gracefully extract layers to prevent `.find()` crashes.
-      const rawEffects: any = effectsRef.current || [];
-      const currentEffects: EffectLayer[] = Array.isArray(rawEffects) ? rawEffects : (rawEffects.layers || []);
-      
-      const vignette = currentEffects.find(e => e.type === "vignette" && e.enabled);
-      const snowEffect = currentEffects.find(e => e.type === "snow" && e.enabled);
-      const rainEffect = currentEffects.find(e => e.type === "rain" && e.enabled);
-      const trailEffect = currentEffects.find(e => e.type === "cursor-trail" && e.enabled);
-      const rippleEffect = currentEffects.find(e => e.type === "click-ripple" && e.enabled);
+      const { vignette, snowEffect, rainEffect, trailEffect, rippleEffect, blurRegions } = cachedEffectsRef.current;
 
       // 1. Vignette
       if (vignette) {
@@ -140,6 +148,25 @@ export function CanvasEffectRenderer({ videoSrc, effects, isOverlay = false }: C
         gradient.addColorStop(1, `rgba(0,0,0,${intensity})`);
         ctx.fillStyle = gradient;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
+
+      // 1.5. Blur Regions
+      const media = mediaRef.current;
+      if (blurRegions.length > 0 && media) {
+          (blurRegions as EffectLayer[]).forEach((region: EffectLayer) => {
+              const { x = 10, y = 10, w = 200, h = 100, blur = 10 } = region.params;
+              ctx.save();
+              ctx.filter = `blur(${blur}px)`;
+              // Draw the media (video/image) onto itself but filtered, limited to the region
+              ctx.drawImage(
+                  media, 
+                  (x / 100) * media.clientWidth, (y / 100) * media.clientHeight, 
+                  (w / 100) * media.clientWidth, (h / 100) * media.clientHeight,
+                  (x / 100) * canvas.width, (y / 100) * canvas.height, 
+                  (w / 100) * canvas.width, (h / 100) * canvas.height
+              );
+              ctx.restore();
+          });
       }
 
       // 2. Snow

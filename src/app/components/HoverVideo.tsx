@@ -12,24 +12,27 @@ interface HoverVideoProps {
 
 export function HoverVideo({ video, className, onClick }: HoverVideoProps) {
   const [isHovered, setIsHovered] = useState(false);
+  const [imgError, setImgError] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const src = video.local_path
     ? convertFileSrc(video.local_path)
     : video.video_url;
 
+  const isStaticImage = video.video_url.endsWith(".jpg")
+    || video.video_url.endsWith(".jpeg")
+    || video.video_url.endsWith(".png")
+    || video.video_url.endsWith(".webp")
+    || video.source === "wallhaven"
+    || video.source === "pinterest";
+
+  const shouldRenderVideo = isHovered || (!video.thumbnail_url && video.local_path);
+
   const handleMouseEnter = () => {
     setIsHovered(true);
-    if (videoRef.current) {
-      videoRef.current.currentTime = 0;
-      videoRef.current.play().catch(() => {});
-    }
   };
 
   const handleMouseLeave = () => {
     setIsHovered(false);
-    if (videoRef.current) {
-      videoRef.current.pause();
-    }
   };
 
   const handleLoadedData = async () => {
@@ -57,6 +60,8 @@ export function HoverVideo({ video, className, onClick }: HoverVideoProps) {
     }
   };
 
+  const hasValidThumb = !!video.thumbnail_url && !imgError;
+
   return (
     <div 
       className={`hover-video-container ${className || ""}`}
@@ -66,27 +71,48 @@ export function HoverVideo({ video, className, onClick }: HoverVideoProps) {
       style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden", cursor: onClick ? "pointer" : "default" }}
       title={onClick ? "Click to open full preview" : ""}
     >
-      {video.thumbnail_url && (
+      {video.thumbnail_url && !imgError && (
         <img 
           src={video.thumbnail_url} 
-          alt={video.id} 
+          alt={video.id}
+          onError={() => setImgError(true)}
           style={{ 
             position: "absolute", 
             inset: 0, 
             width: "100%", 
             height: "100%", 
             objectFit: "cover",
-            opacity: isHovered && src ? 0 : 1,
-            transition: "opacity 0.3s ease"
+            opacity: (!isStaticImage && isHovered && src) ? 0 : 1,
+            transform: (isStaticImage && isHovered) ? "scale(1.08)" : "scale(1)",
+            transition: "opacity 0.3s ease, transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)"
           }} 
         />
       )}
 
-      {src && (
+      {!hasValidThumb && (
+        <div style={{
+          position: "absolute",
+          inset: 0,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "linear-gradient(135deg, #111 0%, #050505 100%)",
+          color: "rgba(255, 255, 255, 0.15)",
+          fontWeight: 900,
+          fontSize: "1.2rem",
+          letterSpacing: "0.2em",
+          userSelect: "none",
+          fontFamily: "system-ui, sans-serif"
+        }}>
+          IT LIVES
+        </div>
+      )}
+
+      {src && shouldRenderVideo && !isStaticImage && (
         <video 
           ref={videoRef}
           src={src}
-          crossOrigin="anonymous"
+          crossOrigin={video.local_path ? "anonymous" : undefined}
           muted
           loop
           playsInline
@@ -100,7 +126,7 @@ export function HoverVideo({ video, className, onClick }: HoverVideoProps) {
             width: "100%", 
             height: "100%", 
             objectFit: "cover",
-            opacity: isHovered || !video.thumbnail_url ? 1 : 0,
+            opacity: isHovered ? 1 : 0,
             transition: "opacity 0.3s ease"
           }}
         />

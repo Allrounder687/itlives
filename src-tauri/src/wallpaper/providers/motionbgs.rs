@@ -5,7 +5,7 @@ use rand::seq::SliceRandom;
 
 pub struct MotionBgsProvider;
 
-const SEARCH_URL: &str = "https://motionbgs.com/tag:";
+
 
 #[async_trait::async_trait]
 impl VideoProvider for MotionBgsProvider {
@@ -15,13 +15,21 @@ impl VideoProvider for MotionBgsProvider {
 
     async fn fetch_video(&self, config: &SearchConfig) -> Result<VideoResult, String> {
         let client = reqwest::Client::new();
-        let query = if config.query.is_empty() { "anime".to_string() } else { config.query.to_lowercase() };
+        let query = config.query.to_lowercase();
         let page = if config.page == 0 { 1 } else { config.page };
         
-        let url = if page <= 1 {
-            format!("{}{}/", SEARCH_URL, query)
+        let url = if query == "all" || query.is_empty() {
+            if page <= 1 {
+                "https://motionbgs.com/".to_string()
+            } else {
+                format!("https://motionbgs.com/{}/", page)
+            }
         } else {
-            format!("{}{}/{}/", SEARCH_URL, query, page)
+            if page <= 1 {
+                format!("https://motionbgs.com/tag:{}/", query)
+            } else {
+                format!("https://motionbgs.com/tag:{}/{}/", query, page)
+            }
         };
 
         log::info!("[MotionBGs] Fetching search page: {}", url);
@@ -54,8 +62,8 @@ impl VideoProvider for MotionBgsProvider {
         
         // Let's use regular expression or string searches to extract items
         let mut cursor = 0;
-        while let Some(start_idx) = text[cursor..].find("/media/") {
-            let actual_start = cursor + start_idx + 7; // after "/media/"
+        while let Some(start_idx) = text[cursor..].find("546x308/media/") {
+            let actual_start = cursor + start_idx + 14; 
             let remaining = &text[actual_start..];
             
             if let Some(slash_idx) = remaining.find('/') {
@@ -85,61 +93,38 @@ impl VideoProvider for MotionBgsProvider {
 
         log::info!("[MotionBGs] Found {} items from page", items.len());
 
-        // Pick a random wallpaper
-        let (id, slug) = {
+        let mut results = self.fetch_videos_list(config).await?;
+        let chosen = {
             let mut rng = rand::thread_rng();
-            let chosen = items.choose(&mut rng).ok_or("No items selected")?;
-            (chosen.0.clone(), chosen.1.clone())
+            results.shuffle(&mut rng);
+            results.into_iter().next().ok_or("No items found")?
         };
-
-        let mut final_slug = slug.clone();
         
-        if final_slug.ends_with(".webp") {
-            final_slug = final_slug[..final_slug.len() - 5].to_string();
-        }
-        if final_slug.ends_with(".jpg") {
-            final_slug = final_slug[..final_slug.len() - 4].to_string();
-        }
-
-        // 4K download link
-        let video_url = format!("https://motionbgs.com/dl/4k/{}", id);
-        // Thumbnail URL pattern
-        let thumbnail_url = format!("https://motionbgs.com/i/c/546x308/media/{}/{}.jpg", id, final_slug);
-
         let cache_dir = crate::wallpaper::desktop::get_cache_dir();
+        let local_path = download_to_cache(&chosen.video_url, &chosen.id, "motionbgs", &cache_dir, None).await?;
         
-        log::info!("[MotionBGs] Selected Video URL: {}", video_url);
-
-        // Download to cache or trigger direct
-        let local_path =
-            download_to_cache(&video_url, &id, "motionbgs", &cache_dir, None).await?;
-
-        // Cleanup old videos
-        let _ = crate::wallpaper::desktop::cleanup_cache(15);
-
-        Ok(VideoResult {
-            id: id.clone(),
-            video_url,
-            thumbnail_url,
-            local_path,
-            duration: 0.0, // Scrapes do not include duration
-            width: 3840,   // Assuming 4K resolution preferred
-            height: 2160,
-            source: "motionbgs".to_string(),
-            start_time: None,
-            end_time: None,
-        })
+        let mut final_video = chosen;
+        final_video.local_path = local_path;
+        Ok(final_video)
     }
 
     async fn fetch_videos_list(&self, config: &SearchConfig) -> Result<Vec<VideoResult>, String> {
         let client = reqwest::Client::new();
-        let query = if config.query.is_empty() { "anime".to_string() } else { config.query.to_lowercase() };
+        let query = config.query.to_lowercase();
         let page = if config.page == 0 { 1 } else { config.page };
 
-        let url = if page <= 1 {
-            format!("{}{}/", SEARCH_URL, query)
+        let url = if query == "all" || query.is_empty() {
+            if page <= 1 {
+                "https://motionbgs.com/".to_string()
+            } else {
+                format!("https://motionbgs.com/{}/", page)
+            }
         } else {
-            format!("{}{}/{}/", SEARCH_URL, query, page)
+            if page <= 1 {
+                format!("https://motionbgs.com/tag:{}/", query)
+            } else {
+                format!("https://motionbgs.com/tag:{}/{}/", query, page)
+            }
         };
 
         let resp = client
@@ -158,8 +143,8 @@ impl VideoProvider for MotionBgsProvider {
         let mut items = Vec::new();
         let mut cursor = 0;
         
-        while let Some(start_idx) = text[cursor..].find("/media/") {
-            let actual_start = cursor + start_idx + 7;
+        while let Some(start_idx) = text[cursor..].find("546x308/media/") {
+            let actual_start = cursor + start_idx + 14;
             let remaining = &text[actual_start..];
             if let Some(slash_idx) = remaining.find('/') {
                 let id_str = &remaining[..slash_idx];
@@ -182,24 +167,39 @@ impl VideoProvider for MotionBgsProvider {
 
         let mut results = Vec::new();
         for (id, slug) in items {
-            let mut final_slug = slug.clone();
-            
-            // Sequentially strip extensions from the end of parsed slug
-            if final_slug.ends_with(".webp") {
-                final_slug = final_slug[..final_slug.len() - 5].to_string();
+            let mut base_slug = slug.clone();
+            // Sequentially strip extensions (e.g. .jpg.webp -> .jpg -> empty)
+            while base_slug.ends_with(".webp") || base_slug.ends_with(".jpg") || base_slug.ends_with(".png") {
+                if base_slug.ends_with(".webp") { base_slug = base_slug[..base_slug.len() - 5].to_string(); }
+                else if base_slug.ends_with(".jpg") { base_slug = base_slug[..base_slug.len() - 4].to_string(); }
+                else if base_slug.ends_with(".png") { base_slug = base_slug[..base_slug.len() - 4].to_string(); }
             }
-            if final_slug.ends_with(".jpg") {
-                final_slug = final_slug[..final_slug.len() - 4].to_string();
+
+            // Extract resolution from slug if present (e.g. 1920x1080 or 3840x2160)
+            let mut width = 1920;
+            let mut height = 1080;
+            let mut video_res = "1920x1080".to_string();
+            
+            if base_slug.contains("3840x2160") {
+                width = 3840; height = 2160; video_res = "3840x2160".to_string();
+            }
+
+            // Remove resolution from slug for the clean name used in direct path if needed, 
+            // but the direct path actually includes it.
+            // Direct path: https://motionbgs.com/media/ID/SLUG.RESOLUTION.mp4
+            let mut name_only = base_slug.clone();
+            if let Some(pos) = name_only.find('.') {
+                name_only = name_only[..pos].to_string();
             }
 
             results.push(VideoResult {
                 id: id.clone(),
-                video_url: format!("https://motionbgs.com/dl/4k/{}", id),
-                thumbnail_url: format!("https://motionbgs.com/i/c/546x308/media/{}/{}.jpg", id, final_slug),
+                video_url: format!("https://motionbgs.com/media/{}/{}.{}.mp4", id, name_only, video_res),
+                thumbnail_url: format!("https://motionbgs.com/i/c/546x308/media/{}/{}.jpg", id, base_slug),
                 local_path: String::new(),
                 duration: 0.0,
-                width: 3840,
-                height: 2160,
+                width,
+                height,
                 source: "motionbgs".to_string(),
                 start_time: None,
                 end_time: None,

@@ -11,9 +11,13 @@ interface VideoPreviewProps {
   filterPreset: string;
   isFavorite: boolean;
   isQueued: boolean;
+  playbackSpeed?: number;
+  blurStrength?: number;
   onApply: (start?: number, end?: number) => void;
   onToggleFavorite: () => void;
   onToggleQueue: () => void;
+  onSetSpeed?: (s: number) => void;
+  onSetBlur?: (b: number) => void;
 }
 
 export function VideoPreview({
@@ -22,9 +26,13 @@ export function VideoPreview({
   filterPreset,
   isFavorite,
   isQueued,
+  playbackSpeed = 1.0,
+  blurStrength = 0,
   onApply,
   onToggleFavorite,
   onToggleQueue,
+  onSetSpeed,
+  onSetBlur,
 }: VideoPreviewProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [startTime, setStartTime] = useState(0);
@@ -87,7 +95,11 @@ export function VideoPreview({
     } else {
       void element.play().catch(() => undefined);
     }
-  }, [localPaused, volumePercent, videoSrc]);
+
+    element.playbackRate = playbackSpeed;
+  }, [localPaused, volumePercent, videoSrc, playbackSpeed]);
+
+  const previewFilter = previewCssFilter(filterPreset, blurStrength);
 
   const handleError = (event: React.SyntheticEvent<HTMLVideoElement>) => {
     const target = event.target as HTMLVideoElement;
@@ -118,10 +130,10 @@ export function VideoPreview({
                  if (endTime === 0) setEndTime(vid.duration);
              }
           }}
-          style={{ filter: previewCssFilter(filterPreset) }}
+          style={{ filter: previewFilter }}
         />
         <div className="preview-overlay">
-          <span className="preview-chip">{video.source.toUpperCase()}</span>
+          <span className="preview-chip">LIVE WALLPAPER</span>
           <span className="preview-chip">
             {video.duration > 0 ? `${video.duration.toFixed(1)}s` : "Looping"}
           </span>
@@ -183,6 +195,34 @@ export function VideoPreview({
             </div>
           </div>
         )}
+
+        {/* Playback & Blur Controls */}
+        <div className="preview-params-grid" style={{ padding: "12px", background: "rgba(0,0,0,0.15)", borderTop: "1px solid rgba(255,255,255,0.05)", display: "flex", gap: "20px" }}>
+           {onSetSpeed && (
+             <div className="property-group" style={{ flex: 1 }}>
+               <label className="eyebrow" style={{ fontSize: "10px" }}>Engine Speed: {playbackSpeed.toFixed(1)}x</label>
+               <input 
+                 type="range" min="0.1" max="4" step="0.1" 
+                 defaultValue={playbackSpeed} 
+                 className="property-control"
+                 onMouseUp={(e) => onSetSpeed(parseFloat((e.target as HTMLInputElement).value))} 
+                 onTouchEnd={(e) => onSetSpeed(parseFloat((e.target as HTMLInputElement).value))} 
+               />
+             </div>
+           )}
+           {onSetBlur && (
+             <div className="property-group" style={{ flex: 1 }}>
+               <label className="eyebrow" style={{ fontSize: "10px" }}>Scene Blur: {blurStrength}px</label>
+               <input 
+                 type="range" min="0" max="100" step="1" 
+                 defaultValue={blurStrength} 
+                 className="property-control"
+                 onMouseUp={(e) => onSetBlur(parseInt((e.target as HTMLInputElement).value))} 
+                 onTouchEnd={(e) => onSetBlur(parseInt((e.target as HTMLInputElement).value))} 
+               />
+             </div>
+           )}
+        </div>
       </div>
 
       <div className="preview-footer">
@@ -211,19 +251,28 @@ export function VideoPreview({
   );
 }
 
-function previewCssFilter(filterPreset: string) {
+function previewCssFilter(filterPreset: string, blur: number = 0) {
+  let css = "none";
   switch (filterPreset) {
     case "grayscale":
-      return "grayscale(1)";
+      css = "grayscale(1)";
+      break;
     case "vivid":
-      return "contrast(1.12) saturate(1.35)";
+      css = "contrast(1.12) saturate(1.35)";
+      break;
     case "soft":
-      return "brightness(1.04) contrast(0.94) saturate(0.88)";
+      css = "brightness(1.04) contrast(0.94) saturate(0.88)";
+      break;
     case "noir":
-      return "grayscale(1) contrast(1.15) brightness(0.96)";
+      css = "grayscale(1) contrast(1.15) brightness(0.96)";
+      break;
     case "retro":
-      return "sepia(0.35) saturate(1.15) hue-rotate(-8deg) contrast(1.05)";
-    default:
-      return "none";
+      css = "sepia(0.35) saturate(1.15) hue-rotate(-8deg) contrast(1.05)";
+      break;
   }
+  
+  if (blur > 0) {
+    css = (css === "none" ? "" : css + " ") + `blur(${blur}px)`;
+  }
+  return css;
 }
