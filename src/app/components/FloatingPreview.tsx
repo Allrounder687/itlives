@@ -19,6 +19,8 @@ interface FloatingPreviewProps {
   onSetBlur?: (b: number) => void;
   onClose: () => void;
   isLoading?: boolean;
+  isHidden?: boolean;
+  onToggleHide?: () => void;
 }
 
 export function FloatingPreview(props: FloatingPreviewProps) {

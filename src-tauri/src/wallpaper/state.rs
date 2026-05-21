@@ -498,6 +498,34 @@ pub fn advance_queue(store: &AppStateStore) -> Result<QueueAdvanceResult, String
     })
 }
 
+pub fn set_adult_pin(store: &AppStateStore, pin: Option<String>) -> Result<WallpaperState, String> {
+    let state = store.update(|s| {
+        s.adult_pin = pin;
+        Ok(())
+    })?;
+    Ok(state)
+}
+
+pub fn verify_adult_pin(store: &AppStateStore, pin: String) -> bool {
+    let state = get(store);
+    match state.adult_pin {
+        Some(ref p) => p == &pin,
+        None => false,
+    }
+}
+
+pub fn toggle_hide_video(store: &AppStateStore, video_id: String) -> Result<WallpaperState, String> {
+    let state = store.update(|s| {
+        if let Some(pos) = s.hidden_videos.iter().position(|id| id == &video_id) {
+            s.hidden_videos.remove(pos);
+        } else {
+            s.hidden_videos.push(video_id);
+        }
+        Ok(())
+    })?;
+    Ok(state)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

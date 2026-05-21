@@ -20,6 +20,8 @@ interface VideoPreviewProps {
   onSetSpeed?: (s: number) => void;
   onSetBlur?: (b: number) => void;
   isLoading?: boolean;
+  isHidden?: boolean;
+  onToggleHide?: () => void;
 }
 
 export function VideoPreview({
@@ -36,6 +38,8 @@ export function VideoPreview({
   onSetSpeed,
   onSetBlur,
   isLoading = false,
+  isHidden = false,
+  onToggleHide,
 }: VideoPreviewProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [startTime, setStartTime] = useState(0);
@@ -280,6 +284,11 @@ export function VideoPreview({
         </div>
 
         <div className="preview-actions">
+          {onToggleHide && (
+            <button className="action-btn action-btn--secondary" onClick={onToggleHide} disabled={isLoading} title="Hide from library (requires PIN)">
+              {isHidden ? "Unhide 👁️" : "Hide 👁️‍🗨️"}
+            </button>
+          )}
           {!isStaticImage && (
             <button className="action-btn action-btn--secondary" onClick={() => setLocalPaused(!localPaused)} disabled={isLoading}>
               {localPaused ? "Resume" : "Pause"}

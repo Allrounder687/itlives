@@ -44,6 +44,9 @@ export function useAppState() {
     hasMore: true,
     duplicateNotice: null,
     previewDismissed: true,
+    hasAdultPin: false,
+    hiddenVideos: [],
+    isAdultUnlocked: false,
   });
 
   useEffect(() => {

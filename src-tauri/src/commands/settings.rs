@@ -131,3 +131,26 @@ pub fn set_pinterest_urls(
 ) -> Result<WallpaperState, String> {
     wallpaper::state::set_pinterest_urls(&state, urls)
 }
+#[tauri::command]
+pub fn set_adult_pin(
+    state: State<'_, AppStateStore>,
+    pin: Option<String>,
+) -> Result<WallpaperState, String> {
+    wallpaper::state::set_adult_pin(&state, pin)
+}
+
+#[tauri::command]
+pub fn verify_adult_pin(
+    state: State<'_, AppStateStore>,
+    pin: String,
+) -> bool {
+    wallpaper::state::verify_adult_pin(&state, pin)
+}
+
+#[tauri::command]
+pub fn toggle_hide_video(
+    state: State<'_, AppStateStore>,
+    video_id: String,
+) -> Result<WallpaperState, String> {
+    wallpaper::state::toggle_hide_video(&state, video_id)
+}

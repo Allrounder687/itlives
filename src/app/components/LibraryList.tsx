@@ -11,6 +11,10 @@ interface UnifiedLibraryProps {
   imports: LibraryItem[];
   favoriteIds: Set<string>;
   queueIds: Set<string>;
+  hiddenVideos: string[];
+  isAdultUnlocked: boolean;
+  hasAdultPin: boolean;
+  onUnlock: () => void;
   onApply: (item: LibraryItem) => void;
   onPreview: (item: LibraryItem) => void;
   onToggleFavorite: (item: LibraryItem) => void;
@@ -31,6 +35,10 @@ export function UnifiedLibrary({
   imports,
   favoriteIds,
   queueIds,
+  hiddenVideos,
+  isAdultUnlocked,
+  hasAdultPin,
+  onUnlock,
   onApply,
   onPreview,
   onToggleFavorite,
@@ -77,6 +85,8 @@ export function UnifiedLibrary({
     if (filter === "recents" && !item.isRecent) return false;
     if (filter === "local" && !item.isLocal) return false;
 
+    if (!isAdultUnlocked && hiddenVideos.includes(item.video.id)) return false;
+
     if (typeFilter === "all") return true;
     const isStatic = isStaticWallpaper(item.video);
     return typeFilter === "static" ? isStatic : !isStatic;
@@ -86,9 +96,16 @@ export function UnifiedLibrary({
 
   return (
     <div className="library-card panel" style={{ marginTop: "1rem", flex: 1 }}>
-      <div className="section-head" style={{ marginBottom: "1rem" }}>
-        <span className="eyebrow">User Space</span>
-        <h2>Wallpaper Library</h2>
+      <div className="section-head" style={{ marginBottom: "1rem", display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+        <div>
+          <span className="eyebrow">User Space</span>
+          <h2>Wallpaper Library</h2>
+        </div>
+        {hasAdultPin && !isAdultUnlocked && (
+          <button type="button" className="btn btn--secondary" onClick={onUnlock}>
+            Unlock Hidden
+          </button>
+        )}
       </div>
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem", flexWrap: "wrap", gap: "10px" }}>

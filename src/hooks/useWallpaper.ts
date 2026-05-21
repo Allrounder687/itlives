@@ -80,6 +80,77 @@ export function useWallpaper() {
     } catch (e) { console.error("Browse failed", e); }
   }, [setState]);
 
+  const setAdultPin = useCallback(async (pin: string | null) => {
+    try {
+      const { invoke } = await getCoreApi();
+      const persisted = await invoke<PersistedState>("set_adult_pin", { pin });
+      setState((s) => ({ ...applyPersistedState(persisted, s), isAdultUnlocked: true }));
+    } catch (e) { console.error("Set PIN failed", e); }
+  }, [setState]);
+
+  const verifyAdultPin = useCallback(async (pin: string): Promise<boolean> => {
+    try {
+      const { invoke } = await getCoreApi();
+      const valid = await invoke<boolean>("verify_adult_pin", { pin });
+      if (valid) {
+        setState((s) => ({ ...s, isAdultUnlocked: true }));
+      }
+      return valid;
+    } catch (e) {
+      console.error("Verify PIN failed", e);
+      return false;
+    }
+  }, [setState]);
+
+  const toggleHideVideo = useCallback(async (videoId: string) => {
+    try {
+      const { invoke } = await getCoreApi();
+      const persisted = await invoke<PersistedState>("toggle_hide_video", { videoId });
+      setState((s) => applyPersistedState(persisted, s));
+    } catch (e) { console.error("Toggle hide video failed", e); }
+  }, [setState]);
+
+  const setRestoreOnLaunch = useCallback(async (enabled: boolean) => {
+    try {
+      const { invoke } = await getCoreApi();
+      const persisted = await invoke<PersistedState>("set_restore_on_launch", { enabled });
+      setState((s) => applyPersistedState(persisted, s));
+    } catch (e) { console.error("setRestoreOnLaunch failed", e); }
+  }, [setState]);
+
+  const setAutoPauseEnabled = useCallback(async (enabled: boolean) => {
+    try {
+      const { invoke } = await getCoreApi();
+      const persisted = await invoke<PersistedState>("set_auto_pause", { enabled });
+      setState((s) => applyPersistedState(persisted, s));
+    } catch (e) { console.error("setAutoPauseEnabled failed", e); }
+  }, [setState]);
+
+  const setWindowBehavior = useCallback(async (closeToTray: boolean, minimizeToTray: boolean) => {
+    try {
+      const { invoke } = await getCoreApi();
+      const persisted = await invoke<PersistedState>("set_window_behavior", { closeToTray, minimizeToTray });
+      setState((s) => applyPersistedState(persisted, s));
+    } catch (e) { console.error("setWindowBehavior failed", e); }
+  }, [setState]);
+
+  const setAutostartEnabled = useCallback(async (enabled: boolean) => {
+    try {
+      const { enable, disable } = await import("@tauri-apps/plugin-autostart");
+      if (enabled) await enable();
+      else await disable();
+      setState(s => ({ ...s, autostartEnabled: enabled }));
+    } catch (e) { console.error("setAutostartEnabled failed", e); }
+  }, [setState]);
+
+  const setRotationConfig = useCallback(async (enabled: boolean, intervalSeconds: number) => {
+    try {
+      const { invoke } = await getCoreApi();
+      const persisted = await invoke<PersistedState>("set_rotation", { enabled, intervalSeconds });
+      setState((s) => applyPersistedState(persisted, s));
+    } catch (e) { console.error("setRotationConfig failed", e); }
+  }, [setState]);
+
   const isFavorite = useCallback((video: VideoResult) => {
     return state.favorites.some((f) => f.video.id === video.id || f.video.local_path === video.local_path);
   }, [state.favorites]);
@@ -109,6 +180,14 @@ export function useWallpaper() {
     setWallhavenApiKey,
     setDisabledSources,
     setPinterestUrls,
+    setAdultPin,
+    verifyAdultPin,
+    toggleHideVideo,
+    setRestoreOnLaunch,
+    setAutoPauseEnabled,
+    setWindowBehavior,
+    setAutostartEnabled,
+    setRotationConfig,
     browseLocalVideo,
     isFavorite,
     isQueued,
@@ -119,5 +198,6 @@ export function useWallpaper() {
     setCategory: (category: string) => setState(s => ({ ...s, category, query: category, page: 1 })),
     selectVideo: (video: VideoResult) => setState(s => ({ ...s, currentVideo: video, previewDismissed: false })),
     dismissPreview: () => setState(s => ({ ...s, previewDismissed: true })),
+    lockAdult: () => setState(s => ({ ...s, isAdultUnlocked: false })),
   };
 }

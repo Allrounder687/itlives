@@ -17,6 +17,7 @@
     "core:window:allow-toggle-maximize",
     "core:window:allow-unminimize",
     "shell:default",
-    "dialog:default"
+    "dialog:default",
+    "autostart:default"
   ]
 }
