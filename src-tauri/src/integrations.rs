@@ -158,7 +158,7 @@ pub fn save_rainmeter_inc(state: &WallpaperState) {
     let video_thumbnail = current_video.map(|v| v.thumbnail_url.clone()).unwrap_or_else(|| "".to_string());
     
     let content = format!(
-        "[Variables]\nOpenClaw_IsPlaying={}\nOpenClaw_Paused={}\nOpenClaw_Volume={}\nOpenClaw_VideoTitle={}\nOpenClaw_VideoPath={}\nOpenClaw_VideoThumbnail={}\n",
+        "[Variables]\nitLives_IsPlaying={}\nitLives_Paused={}\nitLives_Volume={}\nitLives_VideoTitle={}\nitLives_VideoPath={}\nitLives_VideoThumbnail={}\n",
         if state.is_playing { 1 } else { 0 },
         if state.paused { 1 } else { 0 },
         state.volume_percent,
@@ -177,12 +177,12 @@ pub fn save_rainmeter_inc(state: &WallpaperState) {
             if let Ok(resp) = client.get(&video_thumbnail).send() {
                 if let Ok(bytes) = resp.bytes() {
                     let _ = std::fs::write(&thumb_file_path, bytes);
-                    // Trigger Rainmeter to refresh the OpenClaw skin after download is complete
+                    // Trigger Rainmeter to refresh the itLives skin after download is complete
                     let mut cmd = std::process::Command::new("powershell");
                     cmd.args(&[
                         "-NoProfile",
                         "-Command",
-                        "if (Get-Process Rainmeter -ErrorAction SilentlyContinue) { & 'C:\\Program Files\\Rainmeter\\Rainmeter.exe' !Refresh OpenClaw }"
+                        "if (Get-Process Rainmeter -ErrorAction SilentlyContinue) { & 'C:\\Program Files\\Rainmeter\\Rainmeter.exe' !Refresh itLives }"
                     ]);
                     #[cfg(windows)]
                     cmd.creation_flags(0x08000000);
@@ -196,7 +196,7 @@ pub fn save_rainmeter_inc(state: &WallpaperState) {
         cmd.args(&[
             "-NoProfile",
             "-Command",
-            "if (Get-Process Rainmeter -ErrorAction SilentlyContinue) { & 'C:\\Program Files\\Rainmeter\\Rainmeter.exe' !Refresh OpenClaw }"
+            "if (Get-Process Rainmeter -ErrorAction SilentlyContinue) { & 'C:\\Program Files\\Rainmeter\\Rainmeter.exe' !Refresh itLives }"
         ]);
         #[cfg(windows)]
         cmd.creation_flags(0x08000000);

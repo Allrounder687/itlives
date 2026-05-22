@@ -182,6 +182,12 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::video::fetch_video,
             commands::video::fetch_videos_list,
+            commands::profiles::save_profile,
+            commands::profiles::load_profile,
+            commands::profiles::list_profiles,
+            commands::profiles::delete_profile,
+            crate::wallpaper::audio::start_audio_capture,
+            crate::wallpaper::audio::stop_audio_capture,
             commands::wallpaper_control::apply_wallpaper,
             commands::wallpaper_control::stop_wallpaper,
             commands::wallpaper_control::get_wallpaper_status,

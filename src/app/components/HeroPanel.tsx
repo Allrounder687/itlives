@@ -54,8 +54,8 @@ export function HeroPanel({ wallpaper, activeTab }: HeroPanelProps) {
     : "Awaiting media";
 
   const dynamicTitle = wallpaper.currentVideo?.id.replace(/-/g, " ")
-    || (activeTab ? TAB_TITLES[activeTab] : "OpenClaw LWP")
-    || "OpenClaw LWP";
+    || (activeTab ? TAB_TITLES[activeTab] : "itLives")
+    || "itLives";
 
   return (
     <section className="hero panel hero--hud" style={{ marginBottom: "8px" }}>

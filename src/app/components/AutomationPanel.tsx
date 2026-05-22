@@ -53,7 +53,7 @@ export function AutomationPanel({ wallpaper }: AutomationPanelProps) {
           />
         </label>
         <label className="toggle-row">
-          <span>Start OpenClaw LWP on system startup</span>
+          <span>Start itLives on system startup</span>
           <input
             type="checkbox"
             checked={wallpaper.autostartEnabled}

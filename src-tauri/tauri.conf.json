@@ -1,8 +1,8 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "OpenClaw LWP",
+  "productName": "itLives",
   "version": "0.1.0",
-  "identifier": "com.openclaw.lwp",
+  "identifier": "com.itlives.lwp",
   "build": {
     "frontendDist": "../out",
     "devUrl": "http://localhost:3000",
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "OpenClaw LWP - Live Wallpaper Player",
+        "title": "itLives - Live Wallpaper Player",
         "width": 1480,
         "height": 940,
         "minWidth": 860,

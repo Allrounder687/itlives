@@ -1,7 +1,7 @@
 $mpv = "C:\Program Files\MPV Player\mpv.exe"
 $args = @(
     "--wid=66086",
-    "--input-ipc-server=\\.\pipe\openclaw-mpv",
+    "--input-ipc-server=\\.\pipe\itlives-mpv",
     "--loop=inf",
     "--mute=yes",
     "--volume=0",
@@ -19,10 +19,10 @@ $args = @(
     "--ontop=no",
     "--vo=gpu",
     "--hwdec=auto-safe",
-    "C:\Users\allro\.openclaw\apps\openclaw-lwp\runtime\wallpapers\redgifs\motionbgs_2967.mp4"
+    "C:\Users\allro\.itlives\apps\itlives\runtime\wallpapers\redgifs\motionbgs_2967.mp4"
 )
 
-$out = "c:\Users\allro\.openclaw\apps\openclaw-lwp\mpv_test_out.log"
-$err = "c:\Users\allro\.openclaw\apps\openclaw-lwp\mpv_test_err.log"
+$out = "c:\Users\allro\.itlives\apps\itlives\mpv_test_out.log"
+$err = "c:\Users\allro\.itlives\apps\itlives\mpv_test_err.log"
 
 Start-Process -FilePath $mpv -ArgumentList $args -NoNewWindow -RedirectStandardOutput $out -RedirectStandardError $err -Wait

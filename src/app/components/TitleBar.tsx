@@ -44,7 +44,7 @@ export function TitleBar({ minimizeToTray }: TitleBarProps) {
   return (
     <header className="titlebar" data-tauri-drag-region>
       <div className="titlebar__brand" data-tauri-drag-region onClick={handleSecretClick} style={{ cursor: "pointer" }}>
-        <img src="/favicon.ico" alt="OpenClaw" className="titlebar__icon" />
+        <img src="/favicon.ico" alt="itLives" className="titlebar__icon" />
         <div data-tauri-drag-region>
           <strong>IT LIVES</strong>
           <span>Motion Wallpaper Studio</span>

@@ -140,11 +140,11 @@ fn now_ts() -> u64 {
 }
 
 pub fn state_file() -> PathBuf {
-    base_state_dir().join("openclaw-lwp-state.json")
+    base_state_dir().join("itlives-state.json")
 }
 
 fn base_state_dir() -> PathBuf {
-    std::env::var("OPENCLAW_LWP_STATE_DIR")
+    std::env::var("ITLIVES_STATE_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|_| super::desktop::app_data_dir())
 }
@@ -551,7 +551,7 @@ mod tests {
     }
 
     fn prepare_store(name: &str) -> AppStateStore {
-        let dir = std::env::temp_dir().join(format!("openclaw-lwp-tests-{name}"));
+        let dir = std::env::temp_dir().join(format!("itlives-tests-{name}"));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).expect("temp dir");
         AppStateStore::from_path(dir.join("state.json"))

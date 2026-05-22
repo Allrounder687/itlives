@@ -24,7 +24,7 @@ public class Win32 {
 }
 "@ -ErrorAction SilentlyContinue | Out-Null
 
-$LogFile = "c:\Users\allro\.openclaw\apps\openclaw-lwp\windows_log_tree.txt"
+$LogFile = "c:\Users\allro\.itlives\apps\itlives\windows_log_tree.txt"
 "Starting Complete Desktop Window Tree Inspection..." | Out-File $LogFile
 
 [Win32]::EnumWindows({

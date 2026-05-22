@@ -23,7 +23,7 @@ public class Win32 {
 }
 "@ -ErrorAction SilentlyContinue | Out-Null
 
-$LogFile = "c:\Users\allro\.openclaw\apps\openclaw-lwp\windows_log_0x052C.txt"
+$LogFile = "c:\Users\allro\.itlives\apps\itlives\windows_log_0x052C.txt"
 "Triggering 0x052C with 0, 0..." | Out-File $LogFile
 
 $progman = [Win32]::FindWindow("Progman", $null)

@@ -89,7 +89,7 @@ That older version still used the broken `SetParent` / `WorkerW` embedding logic
 To prevent accidental regressions, it was replaced with a simple delegate:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File "C:\Users\allro\.openclaw\apps\openclaw-lwp\scripts\set_wallpaper_cli_v2.ps1" -VideoPath $VideoPath
+powershell -NoProfile -ExecutionPolicy Bypass -File "C:\Users\allro\.itlives\apps\itlives\scripts\set_wallpaper_cli_v2.ps1" -VideoPath $VideoPath
 ```
 
 So even old entry points now route into the corrected path.
@@ -205,9 +205,9 @@ The stable setup is:
 
 ## Files Touched
 
-- `C:\Users\allro\.openclaw\apps\openclaw-lwp\scripts\set_wallpaper_cli_v2.ps1`
-- `C:\Users\allro\.openclaw\scripts\set_wallpaper_cli.ps1`
-- `C:\Users\allro\.openclaw\scripts\win32_helper.cs`
+- `C:\Users\allro\.itlives\apps\itlives\scripts\set_wallpaper_cli_v2.ps1`
+- `C:\Users\allro\.itlives\scripts\set_wallpaper_cli.ps1`
+- `C:\Users\allro\.itlives\scripts\win32_helper.cs`
 
 ## References
 

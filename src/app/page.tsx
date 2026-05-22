@@ -17,7 +17,7 @@ import { VideoPreview } from "./components/VideoPreview";
 import { QueuePanel } from "./components/QueuePanel";
 import { YouTubePanel } from "./components/YouTubePanel";
 import { EditorWorkspace } from "./components/EditorWorkspace";
-import { CanvasEffectRenderer } from "./components/CanvasEffectRenderer";
+import { WebGLEffectRenderer } from "./components/WebGLEffectRenderer";
 import { ParallaxWorkspace } from "./components/ParallaxWorkspace";
 import { ThemeSelector } from "./components/ThemeSelector";
 import { CommunityPanel } from "./components/CommunityPanel";
@@ -200,7 +200,7 @@ function Home() {
           }
         ` }} />
         {/* Overlay ignores all pointer events at OS level and captures desktop directly */}
-        <CanvasEffectRenderer videoSrc={overlayConfig?.videoSrc || ""} effects={overlayConfig?.layers || []} isOverlay={true} />
+        <WebGLEffectRenderer videoSrc={overlayConfig?.videoSrc || ""} effects={overlayConfig?.layers || []} isOverlay={true} />
       </main>
     );
   }

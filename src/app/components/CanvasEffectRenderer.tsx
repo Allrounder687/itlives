@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 
 export interface EffectLayer {
   id: string;
-  type: "snow" | "rain" | "vignette" | "light-leak" | "cursor-trail" | "click-ripple" | "blur-region";
+  type: "snow" | "rain" | "vignette" | "light-leak" | "cursor-trail" | "click-ripple" | "blur-region" | "bloom" | "glitch" | "audio-visualizer";
   name: string;
   enabled: boolean;
   params: Record<string, any>;

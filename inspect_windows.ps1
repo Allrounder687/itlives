@@ -21,7 +21,7 @@ public class Win32 {
 }
 "@ -ErrorAction SilentlyContinue | Out-Null
 
-$LogFile = "c:\Users\allro\.openclaw\apps\openclaw-lwp\windows_log.txt"
+$LogFile = "c:\Users\allro\.itlives\apps\itlives\windows_log.txt"
 "Starting Window Enumeration..." | Out-File $LogFile
 
 [Win32]::EnumWindows({

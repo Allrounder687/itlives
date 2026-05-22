@@ -90,7 +90,7 @@ for ($idx = 0; $idx -lt $screens.Count; $idx++) {
         $filterChain += ",boxblur=${BlurStrength}:${BlurStrength}"
     }
 
-    $ipc_server = "\\.\pipe\openclaw-mpv-$idx"
+    $ipc_server = "\\.\pipe\itlives-mpv-$idx"
     $stArg = if ($StartTime -ne "") { "--start=$StartTime" } else { "" }
     $etArg = if ($EndTime -ne "") { "--end=$EndTime" } else { "" }
     $pauseVal = if ($StartPaused -match '^(1|true|yes)$') { "yes" } else { "no" }

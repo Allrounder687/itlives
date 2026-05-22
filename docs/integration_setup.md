@@ -13,11 +13,11 @@ To prevent polling overhead, the application now automatically generates a stati
 ### Variable Output Example:
 ```ini
 [Variables]
-OpenClaw_IsPlaying=1
-OpenClaw_Paused=0
-OpenClaw_Volume=50
-OpenClaw_VideoTitle=Sunset_Waves
-OpenClaw_VideoPath=C:\Users\...\runtime\wallpapers\Sunset_Waves.mp4
+itLives_IsPlaying=1
+itLives_Paused=0
+itLives_Volume=50
+itLives_VideoTitle=Sunset_Waves
+itLives_VideoPath=C:\Users\...\runtime\wallpapers\Sunset_Waves.mp4
 ```
 
 ### 🛠️ Rainmeter Skin Setup (Inclusion):
@@ -25,11 +25,11 @@ You can include this file directly into your Rainmeter skin to access variables 
 
 ```ini
 [Variables]
-@include="#CURRENTPATH#\path\to\OpenClaw\runtime\rainmeter_state.inc"
+@include="#CURRENTPATH#\path\to\itLives\runtime\rainmeter_state.inc"
 
 [MeterTitle]
 Meter=String
-Text="Now Playing: #OpenClaw_VideoTitle#"
+Text="Now Playing: #itLives_VideoTitle#"
 ```
 
 ---
@@ -71,7 +71,7 @@ Create a quick **Raycast Script Command** to fetch background endpoints without 
 
 # @raycast.title Pause Wallpaper
 # @raycast.mode silent
-# @raycast.packageName OpenClaw
+# @raycast.packageName itLives
 
 curl -s "http://127.0.0.1:3030/pause"
 ```

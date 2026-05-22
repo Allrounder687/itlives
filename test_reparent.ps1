@@ -33,7 +33,7 @@ $args = @(
     "--input-vo-keyboard=no",
     "--keepaspect=no",
     "--geometry=1920x1080+0+0",
-    "C:\Users\allro\.openclaw\apps\openclaw-lwp\runtime\wallpapers\redgifs\motionbgs_9093.mp4"
+    "C:\Users\allro\.itlives\apps\itlives\runtime\wallpapers\redgifs\motionbgs_9093.mp4"
 )
 
 $mpvProc = Start-Process -FilePath $mpv -ArgumentList $args -PassThru

@@ -3,7 +3,7 @@ setlocal
 cd /d "%~dp0"
 
 echo ------------------------------------------
-echo OpenClaw Live Wallpaper Engine - Launcher
+echo itLives Live Wallpaper Engine - Launcher
 echo ------------------------------------------
 echo.
 

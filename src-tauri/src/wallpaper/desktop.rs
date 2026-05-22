@@ -263,7 +263,7 @@ pub fn set_video(
 
         // Generate a deterministic pipe name based on monitor index or name length
         let pipe_idx = m_key.len() % 10;
-        let ipc_server = format!(r"\\.\pipe\openclaw-mpv-{}", pipe_idx);
+        let ipc_server = format!(r"\\.\pipe\itlives-mpv-{}", pipe_idx);
 
         let mut args = vec![
             format!("--input-ipc-server={}", ipc_server),
@@ -662,18 +662,18 @@ pub fn get_cache_dir() -> PathBuf {
 }
 
 pub fn app_data_dir() -> PathBuf {
-    std::env::var("OPENCLAW_LWP_RUNTIME_DIR")
+    std::env::var("ITLIVES_RUNTIME_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|_| {
             let app_data = std::env::var("LOCALAPPDATA").unwrap_or_else(|_| ".".to_string());
-            let path = PathBuf::from(app_data).join("OpenClaw_LWP");
+            let path = PathBuf::from(app_data).join("itLives");
             let _ = std::fs::create_dir_all(&path);
             path
         })
 }
 
 pub fn app_root_dir() -> PathBuf {
-    std::env::var("OPENCLAW_LWP_APP_DIR")
+    std::env::var("ITLIVES_APP_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|_| {
             std::env::current_exe()
@@ -899,7 +899,7 @@ fn send_ipc_command(payload: &str) -> Result<(), String> {
     let mut last_err = String::new();
 
     for idx in 0..8 {
-        let pipe_name = format!(r"\\.\pipe\openclaw-mpv-{}", idx);
+        let pipe_name = format!(r"\\.\pipe\itlives-mpv-{}", idx);
         
         if let Ok(mut pipe) = OpenOptions::new().write(true).open(&pipe_name) {
             if pipe.write_all(payload.as_bytes()).is_ok() {

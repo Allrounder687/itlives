@@ -69,7 +69,7 @@ export function useWallpaperActions(state: WallpaperState, setState: React.Dispa
         });
 
         if (duplicates.length > 0) {
-          console.warn(`[OpenClaw LWP] Prevented ${duplicates.length} duplicate wallpapers from repeating:`, duplicates);
+          console.warn(`[itLives] Prevented ${duplicates.length} duplicate wallpapers from repeating:`, duplicates);
         }
 
         const combinedResults = s.page === 1 ? results : [...s.searchResults, ...uniqueNewResults];

@@ -60,7 +60,7 @@ function TrayMenu() {
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
           <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: wallpaper.isPlaying ? "var(--accent)" : "#666", boxShadow: wallpaper.isPlaying ? "0 0 10px var(--accent)" : "none" }} />
-          <span style={{ fontSize: "13px", fontWeight: "bold", letterSpacing: "0.5px" }}>OpenClaw LWP</span>
+          <span style={{ fontSize: "13px", fontWeight: "bold", letterSpacing: "0.5px" }}>itLives</span>
         </div>
         <button 
           onClick={async () => {

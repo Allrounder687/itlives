@@ -22,7 +22,7 @@ export function CommunityPanel({ currentWallpaper }: CommunityPanelProps) {
         setTimeout(() => setSuccess(false), 3000);
         
         // Copy shareable link (simulated)
-        const shareLink = `openclaw://wallpaper/${currentWallpaper.id}?source=${currentWallpaper.source}`;
+        const shareLink = `itlives://wallpaper/${currentWallpaper.id}?source=${currentWallpaper.source}`;
         navigator.clipboard.writeText(shareLink).catch(() => {});
     }, 1500);
   };

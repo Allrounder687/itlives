@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { CanvasEffectRenderer, EffectLayer } from "./CanvasEffectRenderer";
+import { EffectLayer } from "./CanvasEffectRenderer";
+import { WebGLEffectRenderer } from "./WebGLEffectRenderer";
 import { VideoResult } from "@/hooks/useWallpaper";
 import "./editor.css";
 
@@ -16,6 +17,9 @@ const EFFECT_TEMPLATES: Record<string, Omit<EffectLayer, "id">> = {
   snow: { type: "snow", name: "Snowfall", enabled: true, params: { count: 120, speed: 1.5 } },
   rain: { type: "rain", name: "Raindrops", enabled: true, params: { count: 150, speed: 1.2 } },
   vignette: { type: "vignette", name: "Vignette Frame", enabled: true, params: { intensity: 0.6 } },
+  bloom: { type: "bloom", name: "Bloom Glow", enabled: true, params: {} },
+  glitch: { type: "glitch", name: "Cyber Glitch", enabled: true, params: {} },
+  "audio-visualizer": { type: "audio-visualizer", name: "Audio Vis 🎵", enabled: true, params: {} },
   "cursor-trail": { type: "cursor-trail", name: "Sparkle Trail 🌟", enabled: true, params: {} },
   "click-ripple": { type: "click-ripple", name: "Click Burst 💥", enabled: true, params: {} },
   "blur-region": { type: "blur-region", name: "Blur Mask 🌫️", enabled: true, params: { x: 10, y: 10, w: 30, h: 20, blur: 15 } },
@@ -46,6 +50,44 @@ export function EditorWorkspace({ currentVideo, onApplyWallpaper }: EditorWorksp
     setLayers(layers.map(l => l.id === id ? { ...l, params: { ...l.params, [key]: value } } : l));
   };
 
+  const handleSaveProfile = async () => {
+    if (!currentVideo) return;
+    try {
+      const name = prompt("Enter a name for this profile:");
+      if (!name) return;
+      const { invoke } = await import("@tauri-apps/api/core");
+      const config = { videoSrc: currentVideo.local_path || currentVideo.video_url, layers };
+      await invoke("save_profile", { name, configJson: JSON.stringify(config) });
+      alert(`Profile '${name}' saved!`);
+    } catch (err) {
+      console.error("Failed to save profile:", err);
+      alert("Failed to save profile.");
+    }
+  };
+
+  const handleLoadProfile = async () => {
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      const profiles = await invoke<string[]>("list_profiles");
+      if (!profiles || profiles.length === 0) {
+        alert("No saved profiles found.");
+        return;
+      }
+      const name = prompt(`Enter profile name to load:\n\n${profiles.map(p => `- ${p}`).join("\n")}`);
+      if (!name || !profiles.includes(name)) return;
+      
+      const configJson = await invoke<string>("load_profile", { name });
+      const config = JSON.parse(configJson);
+      if (config.layers) {
+        setLayers(config.layers);
+        alert(`Profile '${name}' loaded!`);
+      }
+    } catch (err) {
+      console.error("Failed to load profile:", err);
+      alert("Failed to load profile.");
+    }
+  };
+
   const selectedLayer = layers.find(l => l.id === selectedLayerId);
 
   if (!currentVideo) {
@@ -62,8 +104,26 @@ export function EditorWorkspace({ currentVideo, onApplyWallpaper }: EditorWorksp
     <div className="editor-workspace panel">
       {/* Left Sidebar: Layers & Add Tool */}
       <div className="editor-sidebar" style={{ borderRight: "1px solid var(--panel-stroke)" }}>
-        <div className="editor-sidebar-header">
+        <div className="editor-sidebar-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <h3>My Effects</h3>
+          <div style={{ display: "flex", gap: "6px" }}>
+            <button 
+              onClick={handleSaveProfile}
+              className="action-btn action-btn--secondary"
+              style={{ padding: "4px 8px", fontSize: "11px", minHeight: "24px", borderRadius: "8px" }}
+              title="Save Profile"
+            >
+              💾 Save
+            </button>
+            <button 
+              onClick={handleLoadProfile}
+              className="action-btn action-btn--secondary"
+              style={{ padding: "4px 8px", fontSize: "11px", minHeight: "24px", borderRadius: "8px" }}
+              title="Load Profile"
+            >
+              📂 Load
+            </button>
+          </div>
         </div>
 
         <div className="editor-layer-list" style={{ flex: 1 }}>
@@ -155,7 +215,34 @@ export function EditorWorkspace({ currentVideo, onApplyWallpaper }: EditorWorksp
               onClick={() => addEffect("vignette")}
             >
               <div style={{ fontSize: "24px" }}>🖼️</div>
-              <span style={{ fontSize: "12px", fontWeight: "600" }}>Border Frame</span>
+              <span style={{ fontSize: "12px", fontWeight: "600" }}>Vignette</span>
+            </button>
+            <button 
+              type="button" 
+              className="action-btn action-btn--secondary" 
+              style={{ display: "flex", flexDirection: "column", gap: "6px", padding: "12px", height: "auto", alignItems: "center", borderRadius: "16px" }}
+              onClick={() => addEffect("bloom")}
+            >
+              <div style={{ fontSize: "24px" }}>✨</div>
+              <span style={{ fontSize: "12px", fontWeight: "600" }}>Bloom</span>
+            </button>
+            <button 
+              type="button" 
+              className="action-btn action-btn--secondary" 
+              style={{ display: "flex", flexDirection: "column", gap: "6px", padding: "12px", height: "auto", alignItems: "center", borderRadius: "16px" }}
+              onClick={() => addEffect("glitch")}
+            >
+              <div style={{ fontSize: "24px" }}>⚡</div>
+              <span style={{ fontSize: "12px", fontWeight: "600" }}>Glitch</span>
+            </button>
+            <button 
+              type="button" 
+              className="action-btn action-btn--secondary" 
+              style={{ display: "flex", flexDirection: "column", gap: "6px", padding: "12px", height: "auto", alignItems: "center", borderRadius: "16px", gridColumn: "span 3" }}
+              onClick={() => addEffect("audio-visualizer")}
+            >
+              <div style={{ fontSize: "24px" }}>🎵</div>
+              <span style={{ fontSize: "12px", fontWeight: "600" }}>Audio Visualizer</span>
             </button>
           </div>
         </div>
@@ -222,7 +309,7 @@ export function EditorWorkspace({ currentVideo, onApplyWallpaper }: EditorWorksp
           </button>
         </div>
 
-        <CanvasEffectRenderer 
+        <WebGLEffectRenderer 
           videoSrc={currentVideo ? (currentVideo.local_path || currentVideo.video_url) : ""} 
           effects={layers} 
         />

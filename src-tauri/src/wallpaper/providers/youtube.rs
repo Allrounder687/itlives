@@ -220,7 +220,7 @@ fn find_ytdlp_uncached() -> Result<String, String> {
 
     // 2. Check hardcoded fallback local app data path directly (using LOCALAPPDATA env var)
     if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
-        let p = std::path::PathBuf::from(local_app_data).join("OpenClaw_LWP").join("bin").join("yt-dlp.exe");
+        let p = std::path::PathBuf::from(local_app_data).join("itLives").join("bin").join("yt-dlp.exe");
         if p.exists() {
             return Ok(p.to_string_lossy().to_string());
         }
@@ -298,7 +298,7 @@ fn find_ffmpeg_uncached() -> Option<std::path::PathBuf> {
 
     // 2. Check hardcoded fallback local app data path directly (using LOCALAPPDATA env var)
     if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
-        let p = std::path::PathBuf::from(local_app_data).join("OpenClaw_LWP").join("bin").join("ffmpeg.exe");
+        let p = std::path::PathBuf::from(local_app_data).join("itLives").join("bin").join("ffmpeg.exe");
         if p.exists() {
             return Some(p);
         }
