@@ -54,7 +54,7 @@ pub async fn fetch_video(
             *sfw_providers.choose(&mut rng).unwrap_or(&"motionbgs")
         };
         let provider = providers::get_provider(chosen)?;
-        let config = SearchConfig { query: cleaned_query, order, count: 40, page: 1, api_key };
+        let config = SearchConfig { query: cleaned_query, order, count: 40, page: 1, api_key, resolutions: None, ratios: None, colors: None };
         return provider.fetch_video(&config).await;
     }
     let provider = providers::get_provider(&source)?;
@@ -64,6 +64,9 @@ pub async fn fetch_video(
         count: 40,
         page: 0,
         api_key,
+        resolutions: None,
+        ratios: None,
+        colors: None,
     };
     provider.fetch_video(&config).await
 }
@@ -75,10 +78,15 @@ pub async fn fetch_videos_list(
     query: String,
     order: String,
     page: u32,
+    resolutions: Option<String>,
+    ratios: Option<String>,
+    colors: Option<String>,
 ) -> Result<Vec<VideoResult>, String> {
     let app_state = state.snapshot();
     let api_key = Some(app_state.wallhaven_api_key);
     let disabled = app_state.disabled_sources;
+
+    log::info!("[fetch_videos_list] source={}, query={}, res={:?}, rat={:?}, col={:?}", source, query, resolutions, ratios, colors);
 
     if disabled.contains(&source) {
         return Err(format!("The wallpaper source '{}' has been disabled in settings.", source));
@@ -101,6 +109,9 @@ pub async fn fetch_videos_list(
             count: 20, // Fetch fewer per provider to keep weight low
             page,
             api_key: api_key.clone(),
+            resolutions: resolutions.clone(),
+            ratios: ratios.clone(),
+            colors: colors.clone(),
         };
 
         let mut all_results = Vec::new();
@@ -139,6 +150,9 @@ pub async fn fetch_videos_list(
         count: 40,
         page,
         api_key,
+        resolutions,
+        ratios,
+        colors,
     };
     provider.fetch_videos_list(&config).await
 }
@@ -331,4 +345,15 @@ pub async fn install_ffmpeg() -> Result<(), String> {
     {
         Err("Auto-install is only supported on Windows.".to_string())
     }
+}
+
+#[tauri::command]
+pub async fn fetch_wallhaven_collections(username: String) -> Result<String, String> {
+    let url = format!("https://wallhaven.cc/api/v1/collections/{}", username);
+    let client = reqwest::Client::new();
+    let resp = client.get(&url).send().await.map_err(|e| format!("Network error: {}", e))?;
+    if !resp.status().is_success() {
+        return Err(format!("Wallhaven returned status {}", resp.status()));
+    }
+    resp.text().await.map_err(|e| format!("Failed to parse response: {}", e))
 }

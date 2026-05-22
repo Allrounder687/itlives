@@ -41,21 +41,54 @@ impl VideoProvider for WallhavenProvider {
         let query = config.query.trim();
         let page = if config.page == 0 { 1 } else { config.page };
 
-        // Construct search URL
-        // General query search, purity = 100 (sfw only)
         let mut url = format!(
             "https://wallhaven.cc/api/v1/search?purity=100&page={}",
             page
         );
 
         if !query.is_empty() && query != "all" {
-            url = format!("{}&q={}", url, urlencoding::encode(query));
+            if query.starts_with("https://wallhaven.cc/user/") {
+                let parts: Vec<&str> = query.split('/').collect();
+                if parts.len() >= 7 {
+                    let username = parts[4];
+                    let coll_id_with_params = parts[6];
+                    let coll_id = coll_id_with_params.split('?').next().unwrap_or(coll_id_with_params);
+                    url = format!("https://wallhaven.cc/api/v1/collections/{}/{}?page={}", username, coll_id, page);
+                }
+            } else {
+                url = format!("{}&q={}", url, urlencoding::encode(query));
+            }
         }
 
         if let Some(ref key) = config.api_key {
             let trimmed = key.trim();
             if !trimmed.is_empty() {
                 url = format!("{}&apikey={}", url, trimmed);
+            }
+        }
+
+        if let Some(ref res) = config.resolutions {
+            let trimmed = res.trim();
+            if !trimmed.is_empty() {
+                if trimmed.starts_with(">=") {
+                    url = format!("{}&atleast={}", url, &trimmed[2..]);
+                } else {
+                    url = format!("{}&resolutions={}", url, trimmed);
+                }
+            }
+        }
+
+        if let Some(ref ratio) = config.ratios {
+            let trimmed = ratio.trim();
+            if !trimmed.is_empty() {
+                url = format!("{}&ratios={}", url, trimmed);
+            }
+        }
+
+        if let Some(ref color) = config.colors {
+            let trimmed = color.trim();
+            if !trimmed.is_empty() {
+                url = format!("{}&colors={}", url, trimmed);
             }
         }
 

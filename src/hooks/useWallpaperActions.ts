@@ -40,6 +40,9 @@ export function useWallpaperActions(state: WallpaperState, setState: React.Dispa
         query: state.query,
         order: "trending",
         page: state.page,
+        resolutions: state.resolutions,
+        ratios: state.ratios,
+        colors: state.colors,
       });
       setState((s) => {
         // If this is page 1, we start clean and don't count existing results as duplicates
@@ -83,7 +86,7 @@ export function useWallpaperActions(state: WallpaperState, setState: React.Dispa
       setState((s) => ({ ...s, isLoading: false, error: error.toString() }));
       return [];
     }
-  }, [state.source, state.query, state.page, setState]);
+  }, [state.source, state.query, state.page, state.resolutions, state.ratios, state.colors, setState]);
 
   const fetchVideo = useCallback(async () => {
     setState((s) => ({ ...s, isLoading: true, error: null }));
@@ -93,6 +96,9 @@ export function useWallpaperActions(state: WallpaperState, setState: React.Dispa
         source: state.source,
         query: state.query,
         order: "trending",
+        resolutions: state.resolutions,
+        ratios: state.ratios,
+        colors: state.colors,
       });
       setState((s) => ({ ...s, isLoading: false }));
       return video;
@@ -100,7 +106,7 @@ export function useWallpaperActions(state: WallpaperState, setState: React.Dispa
       setState((s) => ({ ...s, isLoading: false, error: error.toString() }));
       return null;
     }
-  }, [state.source, state.query, setState]);
+  }, [state.source, state.query, state.resolutions, state.ratios, state.colors, setState]);
 
   const stopWallpaper = useCallback(async () => {
     try {

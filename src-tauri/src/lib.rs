@@ -220,6 +220,11 @@ pub fn run() {
             commands::settings::set_adult_pin,
             commands::settings::verify_adult_pin,
             commands::settings::toggle_hide_video,
+            commands::video::fetch_wallhaven_collections,
+            commands::batch::start_wallhaven_batch_download,
+            commands::batch::cancel_batch_download,
+            commands::batch::download_single_file,
+            commands::batch::start_wallhaven_selection_download,
         ])
         .run(tauri::generate_context!())
 

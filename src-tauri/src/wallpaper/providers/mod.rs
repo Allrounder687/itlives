@@ -37,6 +37,9 @@ pub struct SearchConfig {
     pub count: u32,
     pub page: u32,
     pub api_key: Option<String>,
+    pub resolutions: Option<String>,
+    pub ratios: Option<String>,
+    pub colors: Option<String>,
 }
 
 impl Default for SearchConfig {
@@ -47,6 +50,9 @@ impl Default for SearchConfig {
             count: 40,
             page: 1,
             api_key: None,
+            resolutions: None,
+            ratios: None,
+            colors: None,
         }
     }
 }

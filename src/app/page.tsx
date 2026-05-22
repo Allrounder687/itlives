@@ -101,7 +101,7 @@ function Home() {
   const fetchVideosListRef = useRef(wallpaper.fetchVideosList);
   fetchVideosListRef.current = wallpaper.fetchVideosList;
 
-  const lastFetchedRef = useRef<{ source: string; query: string; page: number; category: string; urlsHash: string } | null>(null);
+  const lastFetchedRef = useRef<{ source: string; query: string; page: number; category: string; urlsHash: string; resolutions: string | null; ratios: string | null; colors: string | null; } | null>(null);
 
   // Automatically fetch wallpapers when hydration finishes or when source/query/page/category/pinterestUrls/activeTab changes
   useEffect(() => {
@@ -118,6 +118,9 @@ function Home() {
       page: wallpaper.page,
       category: wallpaper.category,
       urlsHash,
+      resolutions: wallpaper.resolutions,
+      ratios: wallpaper.ratios,
+      colors: wallpaper.colors,
     };
 
     if (
@@ -126,7 +129,10 @@ function Home() {
       lastFetchedRef.current.query === currentFetchKey.query &&
       lastFetchedRef.current.page === currentFetchKey.page &&
       lastFetchedRef.current.category === currentFetchKey.category &&
-      lastFetchedRef.current.urlsHash === currentFetchKey.urlsHash
+      lastFetchedRef.current.urlsHash === currentFetchKey.urlsHash &&
+      lastFetchedRef.current.resolutions === currentFetchKey.resolutions &&
+      lastFetchedRef.current.ratios === currentFetchKey.ratios &&
+      lastFetchedRef.current.colors === currentFetchKey.colors
     ) {
       return;
     }
@@ -155,6 +161,9 @@ function Home() {
     wallpaper.page,
     wallpaper.category,
     wallpaper.pinterestUrls,
+    wallpaper.resolutions,
+    wallpaper.ratios,
+    wallpaper.colors,
     activeTab
   ]);
 
@@ -223,6 +232,12 @@ function Home() {
                 category={wallpaper.category}
                 colorFilter={wallpaper.colorFilter}
                 onColorFilterChange={wallpaper.setColorFilter}
+                resolutions={wallpaper.resolutions}
+                ratios={wallpaper.ratios}
+                colors={wallpaper.colors}
+                onResolutionsChange={wallpaper.setResolutions}
+                onRatiosChange={wallpaper.setRatios}
+                onColorsChange={wallpaper.setColors}
               />
               <SearchResults
                 results={wallpaper.searchResults} onSelect={wallpaper.selectVideo}

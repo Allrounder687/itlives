@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { BatchDownloadModal } from "./BatchDownloadModal";
+import { WallhavenFilters } from "./WallhavenFilters";
 
 interface ControlBarProps {
   source: string;
@@ -18,6 +20,12 @@ interface ControlBarProps {
   colorFilter?: string;
   onColorFilterChange?: (color: string) => void;
   category?: string;
+  resolutions?: string | null;
+  ratios?: string | null;
+  colors?: string | null;
+  onResolutionsChange?: (res: string | null) => void;
+  onRatiosChange?: (ratio: string | null) => void;
+  onColorsChange?: (color: string | null) => void;
 }
 
 const CATEGORIES = [
@@ -36,19 +44,20 @@ const WALLPAPERWAVES_CATEGORIES = [
   "Memes", "Pixel Art", "Retro", "Sci-Fi", "TV Movies", "Vehicle"
 ];
 
-const COLORS = [
-  { name: "None", value: "", hex: "transparent" },
-  { name: "Red", value: "red", hex: "#ff3b30" },
-  { name: "Blue", value: "blue", hex: "#007aff" },
-  { name: "Green", value: "green", hex: "#34c759" },
-  { name: "Yellow", value: "yellow", hex: "#ffcc00" },
-  { name: "Purple", value: "purple", hex: "#af52de" },
-  { name: "Pink", value: "pink", hex: "#ff2d55" },
-  { name: "Black", value: "black", hex: "#000000" },
-  { name: "White", value: "white", hex: "#ffffff" },
-  { name: "Orange", value: "orange", hex: "#ff9500" },
-  { name: "Cyan", value: "cyan", hex: "#32ade6" }
-];
+const WALLHAVEN_CATEGORIES = [
+  { label: "All", value: "all", count: 0 },
+  { label: "Nature", value: "https://wallhaven.cc/user/DeviateFish/collections/95531", count: 35786 },
+  { label: "Urban", value: "https://wallhaven.cc/user/DeviateFish/collections/82369", count: 7109 },
+  { label: "Space", value: "https://wallhaven.cc/user/DeviateFish/collections/648901", count: 1344 },
+  { label: "Animals", value: "https://wallhaven.cc/user/DeviateFish/collections/95534", count: 8278 },
+  { label: "Cars", value: "https://wallhaven.cc/user/DeviateFish/collections/89250", count: 2596 },
+  { label: "Games", value: "https://wallhaven.cc/user/DeviateFish/collections/82366", count: 2386 },
+  { label: "Art", value: "https://wallhaven.cc/user/DeviateFish/collections/1036329", count: 1911 },
+  { label: "Digital Art", value: "https://wallhaven.cc/user/DeviateFish/collections/1638210", count: 4471 },
+  { label: "Architecture", value: "https://wallhaven.cc/user/DeviateFish/collections/95532", count: 2329 },
+  { label: "Film/TV", value: "https://wallhaven.cc/user/DeviateFish/collections/340321", count: 730 },
+  { label: "Food/Drink", value: "https://wallhaven.cc/user/DeviateFish/collections/131464", count: 3066 }
+].sort((a, b) => b.count - a.count);
 
 export function ControlBar({
   source,
@@ -66,11 +75,58 @@ export function ControlBar({
   colorFilter = "",
   onColorFilterChange,
   category = "all",
+  resolutions,
+  ratios,
+  colors,
+  onResolutionsChange,
+  onRatiosChange,
+  onColorsChange,
 }: ControlBarProps) {
   const [showRedGifs, setShowRedGifs] = useState(false);
   const [showPinterestSources, setShowPinterestSources] = useState(true);
   const [newPinUrl, setNewPinUrl] = useState("");
   const [pinAddStatus, setPinAddStatus] = useState<"idle" | "adding" | "added" | "duplicate">("idle");
+  
+  const [showWallhavenCollections, setShowWallhavenCollections] = useState(false);
+  const [wallhavenUsername, setWallhavenUsername] = useState("");
+  const [wallhavenCollections, setWallhavenCollections] = useState<any[]>([]);
+  const [fetchingCollections, setFetchingCollections] = useState(false);
+  const [batchDownloadModalOpen, setBatchDownloadModalOpen] = useState(false);
+
+  const getHeatmapColor = (count: number, maxCount: number) => {
+    if (maxCount === 0 || count === 0) return undefined;
+    // Logarithmic scale avoids one massive collection making everything else blue
+    const ratio = Math.log(count + 1) / Math.log(maxCount + 1);
+    // Hue: 320 (Pink/Red/Hot) down to 220 (Blue/Cool)
+    const hue = 220 + (100 * ratio);
+    return `hsla(${hue}, 80%, 60%, ${0.15 + 0.5 * ratio})`;
+  };
+  const maxCollectionCount = wallhavenCollections.length > 0 ? Math.max(...wallhavenCollections.map((c: any) => c.count || 0)) : 0;
+
+  const handleFetchWallhavenCollections = async () => {
+    if (!wallhavenUsername.trim()) return;
+    setFetchingCollections(true);
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      const resp = await invoke<string>("fetch_wallhaven_collections", { username: wallhavenUsername.trim() });
+      const data = JSON.parse(resp);
+      if (data && data.data) {
+        let collections = data.data.map((c: any) => ({
+          label: c.label,
+          value: `https://wallhaven.cc/user/${wallhavenUsername.trim()}/collections/${c.id}`,
+          count: c.count || 0
+        }));
+        // Sort highest count first
+        collections.sort((a: any, b: any) => b.count - a.count);
+        setWallhavenCollections(collections);
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Failed to fetch collections. Username might not exist.");
+    } finally {
+      setFetchingCollections(false);
+    }
+  };
 
   const handleAddPinUrl = async () => {
     const trimmed = newPinUrl.trim();
@@ -388,6 +444,108 @@ export function ControlBar({
         </div>
       )}
 
+      {/* Inline Wallhaven Collections Manager — visible when Wallhaven is active source */}
+      {source === "wallhaven" && (
+        <div style={{
+          background: "rgba(255, 255, 255, 0.02)",
+          border: "1px solid rgba(255, 255, 255, 0.06)",
+          borderRadius: "10px",
+          marginBottom: "12px",
+          overflow: "hidden",
+          transition: "all 0.3s ease"
+        }}>
+          {/* Header / Toggle */}
+          <button
+            type="button"
+            onClick={() => setShowWallhavenCollections(!showWallhavenCollections)}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              width: "100%",
+              padding: "10px 14px",
+              background: "transparent",
+              border: "none",
+              color: "#fff",
+              cursor: "pointer",
+              transition: "background 0.2s ease"
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.background = "rgba(255,255,255,0.03)"}
+            onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <span style={{ fontSize: "14px" }}>🖼️</span>
+              <span style={{ fontSize: "12px", fontWeight: 600 }}>Wallhaven Collections</span>
+              <span style={{
+                fontSize: "10px",
+                background: wallhavenCollections.length > 0 ? "var(--accent-soft)" : "rgba(255,99,99,0.15)",
+                color: wallhavenCollections.length > 0 ? "var(--accent)" : "rgba(255,99,99,0.9)",
+                padding: "2px 8px",
+                borderRadius: "99px",
+                fontWeight: 700
+              }}>
+                {wallhavenCollections.length} found
+              </span>
+            </div>
+            <span style={{
+              fontSize: "10px",
+              opacity: 0.5,
+              transform: showWallhavenCollections ? "rotate(180deg)" : "rotate(0deg)",
+              transition: "transform 0.2s ease"
+            }}>▼</span>
+          </button>
+
+          {/* Expandable Content */}
+          {showWallhavenCollections && (
+            <div style={{ padding: "0 14px 14px 14px", display: "flex", flexDirection: "column", gap: "10px" }}>
+              {/* Fetch form */}
+              <div style={{ display: "flex", gap: "6px" }}>
+                <input
+                  type="text"
+                  className="input input--hud"
+                  placeholder="Enter a Wallhaven Username..."
+                  value={wallhavenUsername}
+                  onChange={(e) => setWallhavenUsername(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") handleFetchWallhavenCollections(); }}
+                  style={{
+                    flex: 1,
+                    padding: "8px 12px",
+                    background: "rgba(0,0,0,0.35)",
+                    border: "1px solid rgba(255,255,255,0.08)",
+                    borderRadius: "6px",
+                    color: "#fff",
+                    fontSize: "11px"
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={handleFetchWallhavenCollections}
+                  disabled={fetchingCollections}
+                  style={{
+                    padding: "8px 14px",
+                    borderRadius: "6px",
+                    cursor: "pointer",
+                    background: "var(--accent)",
+                    color: "#000",
+                    fontWeight: "bold",
+                    border: "none",
+                    fontSize: "11px",
+                    transition: "all 0.2s ease",
+                    whiteSpace: "nowrap"
+                  }}
+                >
+                  {fetchingCollections ? "Fetching..." : "Fetch User"}
+                </button>
+              </div>
+              {/* Quick tip */}
+              <span style={{ fontSize: "9px", opacity: 0.4, fontStyle: "italic" }}>
+                Tip: Enter a Wallhaven username to dynamically load all their public collections as categories below.
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="control-grid-v2">
         <div className="field">
           <span className="field__label">
@@ -423,7 +581,31 @@ export function ControlBar({
       {source !== "direct" && (
         <>
           <div className="categories-scroll" style={{ display: "flex", flexWrap: "wrap", gap: "8px", paddingBottom: "8px" }}>
-            {(source === "wallpaperwaves" ? WALLPAPERWAVES_CATEGORIES : CATEGORIES).map((cat) => (
+            {source === "wallhaven" ? (
+              [{label: "All", value: "all", count: 0}, ...wallhavenCollections].map((cat) => {
+                const isActive = (category || "all").toLowerCase() === cat.value.toLowerCase();
+                const heatmapColor = (!isActive && cat.count) ? getHeatmapColor(cat.count, maxCollectionCount) : undefined;
+                return (
+                  <button
+                    key={cat.label}
+                    type="button"
+                    className={`pill ${isActive ? "" : "pill--muted"}`}
+                    style={{ 
+                      padding: "6px 14px", 
+                      cursor: "pointer", 
+                      border: "none", 
+                      whiteSpace: "nowrap", 
+                      minWidth: "fit-content",
+                      background: heatmapColor,
+                      color: heatmapColor ? "#fff" : undefined
+                    }}
+                    onClick={() => onCategoryChange && onCategoryChange(cat.value)}
+                  >
+                    {cat.label} {cat.count ? `(${cat.count.toLocaleString()})` : ''}
+                  </button>
+                );
+              })
+            ) : (source === "wallpaperwaves" ? WALLPAPERWAVES_CATEGORIES : CATEGORIES).map((cat) => (
               <button
                 key={cat}
                 type="button"
@@ -436,32 +618,29 @@ export function ControlBar({
             ))}
           </div>
           
-          <div className="color-picker-row" style={{ display: "flex", flexWrap: "wrap", gap: "10px", paddingBottom: "12px", alignItems: "center" }}>
-            <span style={{ fontSize: "11px", color: "var(--text-soft)", textTransform: "uppercase", letterSpacing: "0.05em", marginRight: "4px" }}>Filter Color:</span>
-            {COLORS.map((c) => (
+          {source === "wallhaven" && category.startsWith("http") && (
+            <div style={{ marginTop: "4px", marginBottom: "12px", display: "flex", justifyContent: "flex-end" }}>
               <button
-                key={c.value}
                 type="button"
-                title={c.name}
-                onClick={() => onColorFilterChange && onColorFilterChange(c.value)}
-                style={{
-                  width: "20px",
-                  height: "20px",
-                  borderRadius: "50%",
-                  background: c.hex,
-                  border: colorFilter === c.value ? "2px solid var(--accent)" : "1px solid rgba(255,255,255,0.1)",
-                  cursor: "pointer",
-                  position: "relative",
-                  boxShadow: colorFilter === c.value ? "0 0 8px var(--accent)" : "none",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center"
-                }}
+                className="action-btn action-btn--secondary"
+                style={{ padding: "4px 12px", fontSize: "11px", gap: "6px" }}
+                onClick={() => setBatchDownloadModalOpen(true)}
               >
-                {c.value === "" && <div style={{ width: "100%", height: "1px", background: "red", transform: "rotate(45deg)", position: "absolute" }} />}
+                ⬇️ Batch Download Collection
               </button>
-            ))}
-          </div>
+            </div>
+          )}
+          
+          {source === "wallhaven" && !category.startsWith("http") && (
+            <WallhavenFilters 
+              resolutionFilter={resolutions || null}
+              ratioFilter={ratios || null}
+              colorFilter={colors || null}
+              onResolutionChange={onResolutionsChange || (() => {})}
+              onRatioChange={onRatiosChange || (() => {})}
+              onColorChange={onColorsChange || (() => {})}
+            />
+          )}
         </>
       )}
 
@@ -478,6 +657,14 @@ export function ControlBar({
           Unload Engine
         </button>
       </div>
+
+      {batchDownloadModalOpen && (
+        <BatchDownloadModal
+          collectionUrl={category}
+          collectionName={wallhavenCollections.find(c => c.value === category)?.label || "Wallhaven Collection"}
+          onClose={() => setBatchDownloadModalOpen(false)}
+        />
+      )}
     </div>
   );
 }

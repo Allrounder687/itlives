@@ -195,12 +195,15 @@ export function useWallpaper() {
     setSource: (source: string) => setState(s => ({ ...s, source, page: 1 })),
     setQuery: (query: string) => setState(s => ({ ...s, query, page: 1 })),
     setPage: (page: number) => setState(s => ({ ...s, page })),
+    setResolutions: (resolutions: string | null) => setState(s => ({ ...s, resolutions, page: 1 })),
+    setRatios: (ratios: string | null) => setState(s => ({ ...s, ratios, page: 1 })),
+    setColors: (colors: string | null) => setState(s => ({ ...s, colors, page: 1 })),
     setColorFilter: (colorFilter: string) => setState(s => {
-      const q = s.category === "all" ? colorFilter : `${s.category} ${colorFilter}`;
-      return { ...s, colorFilter, query: q.trim(), page: 1 };
+      // Keep old colorFilter logic just in case it's used elsewhere, but we map to colors
+      return { ...s, colorFilter, colors: colorFilter || null, page: 1 };
     }),
     setCategory: (category: string) => setState(s => {
-      const q = category === "all" ? s.colorFilter : `${category} ${s.colorFilter}`;
+      const q = category === "all" ? "" : category;
       return { ...s, category, query: q.trim(), page: 1 };
     }),
     selectVideo: (video: VideoResult) => setState(s => ({ ...s, currentVideo: video, previewDismissed: false })),
