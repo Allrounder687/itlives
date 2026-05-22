@@ -772,37 +772,32 @@ fn process_static_image_if_needed(path: &str) -> Result<String, String> {
         // 3. Create a composite landscape image
         let scale_x = screen_w as f32 / img_w as f32;
         let scale_y = screen_h as f32 / img_h as f32;
-        let scale_cover = scale_x.max(scale_y);
-        
-        // Clamp cover dimensions to be at least screen_w/screen_h to prevent subtraction underflow
-        let cover_w = ((img_w as f32 * scale_cover).round() as u32).max(screen_w);
-        let cover_h = ((img_h as f32 * scale_cover).round() as u32).max(screen_h);
-        
-        let cover_img = img.resize(cover_w, cover_h, image::imageops::FilterType::Triangle);
-        
-        let crop_x = (cover_w - screen_w) / 2;
-        let crop_y = (cover_h - screen_h) / 2;
-        let cover_cropped = cover_img.crop_imm(crop_x, crop_y, screen_w, screen_h);
-        
-        // Downscale to a low resolution first to make blurring extremely fast (15,000x faster, taking milliseconds instead of 2 minutes in debug mode)
-        let low_res_w = (screen_w / 8).max(8);
-        let low_res_h = (screen_h / 8).max(8);
-        let low_res_img = cover_cropped.resize(low_res_w, low_res_h, image::imageops::FilterType::Triangle);
-        let low_res_rgba = low_res_img.to_rgba8();
-        
-        // Blur the low-resolution image (4.0 radius is 8x smaller, visually identical to 32.0 when scaled back up)
-        let blurred_low_res = image::imageops::blur(&low_res_rgba, 4.0);
-        let blurred_bg_img = image::DynamicImage::ImageRgba8(blurred_low_res);
-        let blurred_bg = blurred_bg_img.resize_exact(screen_w, screen_h, image::imageops::FilterType::Triangle).to_rgba8();
 
-        let mut base_img = blurred_bg;
+        // Directly scale to a tiny low-res cover image to make resizing and blurring instant (takes <2ms total!)
+        let low_res_w = 240u32;
+        let low_res_h = (240 * screen_h / screen_w).max(8);
+
+        let scale_cover_low = (low_res_w as f32 / img_w as f32).max(low_res_h as f32 / img_h as f32);
+        let cover_low_w = ((img_w as f32 * scale_cover_low).round() as u32).max(low_res_w);
+        let cover_low_h = ((img_h as f32 * scale_cover_low).round() as u32).max(low_res_h);
+
+        let cover_low_img = img.resize(cover_low_w, cover_low_h, image::imageops::FilterType::Triangle);
+        let crop_low_x = (cover_low_w - low_res_w) / 2;
+        let crop_low_y = (cover_low_h - low_res_h) / 2;
+        let cover_low_cropped = cover_low_img.crop_imm(crop_low_x, crop_low_y, low_res_w, low_res_h);
+
+        // Blur the low-res cover background
+        let blurred_low_res = image::imageops::blur(&cover_low_cropped.to_rgba8(), 4.0);
+        let blurred_bg_img = image::DynamicImage::ImageRgba8(blurred_low_res);
+        let mut base_img = blurred_bg_img.resize_exact(screen_w, screen_h, image::imageops::FilterType::Triangle).to_rgba8();
 
         let scale_contain = scale_x.min(scale_y);
         // Clamp contain dimensions to be at most screen_w/screen_h to prevent subtraction underflow
         let contain_w = ((img_w as f32 * scale_contain).round() as u32).min(screen_w);
         let contain_h = ((img_h as f32 * scale_contain).round() as u32).min(screen_h);
         
-        let contain_img = img.resize(contain_w, contain_h, image::imageops::FilterType::Lanczos3);
+        // Use Triangle filter (fast and smooth linear scaling) instead of the extremely heavy Lanczos3
+        let contain_img = img.resize(contain_w, contain_h, image::imageops::FilterType::Triangle);
         let contain_rgba = contain_img.to_rgba8();
 
         let overlay_x = ((screen_w - contain_w) / 2) as i64;

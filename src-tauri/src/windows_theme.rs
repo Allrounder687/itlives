@@ -21,7 +21,7 @@ type DwmSetColorizationParameters = unsafe extern "system" fn(*mut DWMCOLORIZATI
 /// `hex_color` should be a standard 6-character hex string like "FF0000" or "#FF0000"
 #[tauri::command]
 pub fn sync_windows_accent_color(hex_color: String) -> Result<(), String> {
-    let mut clean_hex = hex_color.replace("#", "");
+    let clean_hex = hex_color.replace("#", "");
     if clean_hex.len() != 6 {
         return Err("Invalid hex color format. Expected 6 characters.".into());
     }

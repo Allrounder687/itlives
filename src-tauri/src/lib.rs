@@ -40,6 +40,24 @@ fn restore_wallpaper_if_enabled(app: tauri::AppHandle, store: &AppStateStore) {
                 );
             }
         }
+
+        // Also restore desktop effects if they exist in current_effects.json
+        let data_dir = app.path().app_local_data_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+        let config_path = data_dir.join("current_effects.json");
+        if config_path.exists() {
+            if let Ok(layers_json) = std::fs::read_to_string(&config_path) {
+                log::info!("[Startup] Found current_effects.json. Restoring desktop effects overlay...");
+                let app_clone = app.clone();
+                tauri::async_runtime::spawn(async move {
+                    tokio::time::sleep(std::time::Duration::from_millis(600)).await;
+                    if let Err(e) = crate::commands::wallpaper_control::apply_desktop_effects(app_clone, layers_json) {
+                        log::error!("[Startup] Failed to restore desktop effects overlay: {}", e);
+                    } else {
+                        log::info!("[Startup] Desktop effects overlay restored successfully!");
+                    }
+                });
+            }
+        }
     }
 }
 
@@ -252,6 +270,7 @@ pub fn run() {
             commands::settings::get_monitors,
             commands::package::export_itl_package,
             commands::package::import_itl_package,
+            commands::package::scan_wallpaper_engine_directory,
             windows_theme::sync_windows_accent_color,
         ])
         .run(tauri::generate_context!())

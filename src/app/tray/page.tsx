@@ -3,6 +3,19 @@
 import { useWallpaper } from "@/hooks/useWallpaper";
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
+import { convertFileSrc } from "@tauri-apps/api/core";
+
+const getThumbSrc = (url?: string) => {
+  if (!url) return "";
+  if (!url.startsWith("http") && !url.startsWith("data:")) {
+    try {
+      return convertFileSrc(url);
+    } catch (e) {
+      return url;
+    }
+  }
+  return url;
+};
 
 function TrayMenu() {
   const wallpaper = useWallpaper();
@@ -88,7 +101,7 @@ function TrayMenu() {
             boxShadow: "0 4px 15px rgba(0,0,0,0.3)"
           }}>
             <img 
-              src={wallpaper.currentVideo.thumbnail_url || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=400&q=80"} 
+              src={getThumbSrc(wallpaper.currentVideo.thumbnail_url) || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=400&q=80"} 
               style={{ width: "100%", height: "100%", objectFit: "cover", opacity: 0.6 }} 
             />
             <div style={{
@@ -172,7 +185,7 @@ function TrayMenu() {
                   e.currentTarget.style.borderColor = "transparent";
                 }}
               >
-                <img src={item.video.thumbnail_url} style={{ width: "36px", height: "36px", borderRadius: "4px", objectFit: "cover" }} />
+                <img src={getThumbSrc(item.video.thumbnail_url)} style={{ width: "36px", height: "36px", borderRadius: "4px", objectFit: "cover" }} />
                 <span style={{ fontSize: "12px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1 }}>
                   {item.video.id.replace(/-/g, " ")}
                 </span>

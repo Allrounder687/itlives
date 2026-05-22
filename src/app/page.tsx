@@ -207,6 +207,102 @@ function Home() {
 
   return (
     <div className="shell">
+      {wallpaper.isLoading && (
+        <div style={{
+          position: "fixed",
+          bottom: "24px",
+          right: "24px",
+          background: "rgba(10, 15, 10, 0.85)",
+          backdropFilter: "blur(12px)",
+          border: "1px solid rgba(154, 230, 0, 0.2)",
+          borderRadius: "12px",
+          padding: "16px 24px",
+          zIndex: 99999,
+          display: "flex",
+          flexDirection: "row",
+          alignItems: "center",
+          gap: "16px",
+          color: "#fff",
+          boxShadow: "0 8px 32px rgba(0, 0, 0, 0.5)",
+          animation: "fadeIn 0.3s ease, slideUp 0.3s ease"
+        }}>
+          {/* Hacker HUD Loader Animation (Miniaturized) */}
+          <div style={{ position: "relative", width: "40px", height: "40px" }}>
+            <div style={{
+              position: "absolute",
+              inset: 0,
+              border: "1px solid rgba(154, 230, 0, 0.1)",
+              borderRadius: "50%"
+            }} />
+            <div style={{
+              position: "absolute",
+              inset: "4px",
+              border: "1px dashed rgba(154, 230, 0, 0.2)",
+              borderRadius: "50%",
+              animation: "spin-reverse 15s linear infinite"
+            }} />
+            <div style={{
+              position: "absolute",
+              inset: "-2px",
+              border: "2px solid transparent",
+              borderTopColor: "var(--accent)",
+              borderBottomColor: "var(--accent)",
+              borderRadius: "50%",
+              animation: "spin 2s cubic-bezier(0.5, 0, 0.5, 1) infinite"
+            }} />
+            <div style={{
+              position: "absolute",
+              inset: "0",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: "12px",
+              animation: "pulse 2s infinite"
+            }}>
+              ⏳
+            </div>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+            <h3 style={{
+              margin: 0,
+              fontSize: "12px",
+              fontWeight: 700,
+              letterSpacing: "1px",
+              color: "var(--accent)",
+              textTransform: "uppercase",
+              textShadow: "0 0 10px rgba(154, 230, 0, 0.5)"
+            }}>
+              Synchronizing Engine
+            </h3>
+            <p style={{ margin: 0, fontSize: "10px", opacity: 0.6, letterSpacing: "0.5px" }}>
+              Allocating background graphics...
+            </p>
+          </div>
+          
+          <style dangerouslySetInnerHTML={{ __html: `
+            @keyframes spin {
+              0% { transform: rotate(0deg); }
+              100% { transform: rotate(360deg); }
+            }
+            @keyframes spin-reverse {
+              0% { transform: rotate(360deg); }
+              100% { transform: rotate(0deg); }
+            }
+            @keyframes pulse {
+              0%, 100% { transform: scale(0.9); opacity: 0.6; }
+              50% { transform: scale(1.1); opacity: 1; }
+            }
+            @keyframes fadeIn {
+              from { opacity: 0; }
+              to { opacity: 1; }
+            }
+            @keyframes slideUp {
+              from { transform: translateY(20px); }
+              to { transform: translateY(0); }
+            }
+          ` }} />
+        </div>
+      )}
       <TitleBar minimizeToTray={wallpaper.minimizeToTray} />
       <div className="shell__backdrop" />
 
@@ -355,7 +451,7 @@ function Home() {
                   onSetSpeed={wallpaper.setPlaybackSpeed}
                   onSetBlur={wallpaper.setBlurStrength}
                   isHidden={wallpaper.hiddenVideos.includes(wallpaper.currentVideo.id)}
-                  onToggleHide={wallpaper.hasAdultPin ? () => wallpaper.toggleHideVideo(wallpaper.currentVideo!.id) : undefined}
+                  onToggleHide={() => wallpaper.toggleHideVideo(wallpaper.currentVideo!.id)}
                 />
               ) : !wallpaper.isLoading ? (
                 <div className="preview-empty">
@@ -403,7 +499,7 @@ function Home() {
           onClose={() => wallpaper.dismissPreview()}
           isLoading={wallpaper.isLoading}
           isHidden={wallpaper.hiddenVideos.includes(wallpaper.currentVideo.id)}
-          onToggleHide={wallpaper.hasAdultPin ? () => wallpaper.toggleHideVideo(wallpaper.currentVideo!.id) : undefined}
+          onToggleHide={() => wallpaper.toggleHideVideo(wallpaper.currentVideo!.id)}
         />
       )}
 

@@ -5,6 +5,8 @@ import { useEffect, useRef, useState } from "react";
 import { VideoResult } from "@/hooks/useWallpaper";
 import { isStaticWallpaper } from "@/utils/wallpaperTypes";
 import { convertFileSrc } from "@tauri-apps/api/core";
+import { EffectLayer } from "./CanvasEffectRenderer";
+import { WebGLEffectRenderer } from "./WebGLEffectRenderer";
 
 interface VideoPreviewProps {
   video: VideoResult;
@@ -47,8 +49,36 @@ export function VideoPreview({
   const [totalDuration, setTotalDuration] = useState(video.duration || 0);
   const [activeThumb, setActiveThumb] = useState<"start" | "end">("start");
   const [localPaused, setLocalPaused] = useState(false);
+  const [effects, setEffects] = useState<EffectLayer[]>([]);
+
+  useEffect(() => {
+    let isMounted = true;
+    setEffects([]);
+
+    const fetchProfileEffects = async () => {
+      if (!video.id) return;
+      try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        const configJson = await invoke<string>("load_profile", { name: video.id });
+        if (!isMounted) return;
+        const config = JSON.parse(configJson);
+        if (config.layers) {
+          setEffects(config.layers);
+        }
+      } catch (err) {
+        console.log("No profile effects loaded for:", video.id);
+      }
+    };
+
+    void fetchProfileEffects();
+    return () => {
+      isMounted = false;
+    };
+  }, [video.id]);
 
   const isStaticImage = isStaticWallpaper(video);
+
+  const isHtml = video.local_path?.toLowerCase().endsWith(".html") || video.video_url?.toLowerCase().endsWith(".html");
 
   const isLocalFile = video.local_path && !video.local_path.startsWith("http");
   const videoSrc = isLocalFile
@@ -128,6 +158,12 @@ export function VideoPreview({
             alt={video.id}
             style={{ filter: previewFilter, objectFit: "contain", width: "100%", height: "100%" }}
           />
+        ) : isHtml ? (
+          <iframe 
+            src={videoSrc} 
+            className="preview-video"
+            style={{ filter: previewFilter, border: "none", width: "100%", height: "100%", position: "absolute", inset: 0 }}
+          />
         ) : (
           <video
             ref={videoRef}
@@ -150,6 +186,17 @@ export function VideoPreview({
             }}
             style={{ filter: previewFilter }}
           />
+        )}
+
+        {/* Render interactive ITL effects as a transparent overlay over the native video file */}
+        {effects.length > 0 && (
+          <div style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 10 }}>
+            <WebGLEffectRenderer
+              videoSrc={videoSrc}
+              effects={effects}
+              isOverlay={true}
+            />
+          </div>
         )}
         <div className="preview-overlay">
           <span className="preview-chip">{isStaticImage ? "STATIC IMAGE" : "LIVE WALLPAPER"}</span>

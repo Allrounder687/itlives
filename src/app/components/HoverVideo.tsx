@@ -21,8 +21,18 @@ export function HoverVideo({ video, className, onClick }: HoverVideoProps) {
     : video.video_url;
 
   const isStaticImage = isStaticWallpaper(video);
+  const isHtml = video.local_path?.toLowerCase().endsWith(".html") || video.video_url?.toLowerCase().endsWith(".html");
+  const isStaticRender = isStaticImage || isHtml;
 
-  const shouldRenderVideo = isHovered || (!video.thumbnail_url && video.local_path);
+  const effectiveThumbUrl = video.thumbnail_url && !video.thumbnail_url.startsWith("http")
+    ? convertFileSrc(video.thumbnail_url)
+    : video.thumbnail_url;
+
+  const thumbSrc = isStaticImage && (!video.thumbnail_url || imgError) 
+    ? src 
+    : effectiveThumbUrl;
+
+  const shouldRenderVideo = isHovered && !isStaticRender;
 
   const handleMouseEnter = () => {
     setIsHovered(true);
@@ -33,31 +43,28 @@ export function HoverVideo({ video, className, onClick }: HoverVideoProps) {
   };
 
   const handleLoadedData = async () => {
-    if (!video.thumbnail_url && videoRef.current && video.local_path) {
-      const vid = videoRef.current;
-      // Seek slightly to avoid capturing black frame at absolute start
-      if (vid.currentTime === 0 && vid.duration > 0.5) {
-        vid.currentTime = 0.5;
-        return;
-      }
-      const canvas = document.createElement("canvas");
-      canvas.width = vid.videoWidth || 320;
-      canvas.height = vid.videoHeight || 180;
-      const ctx = canvas.getContext("2d");
-      if (ctx) {
-        ctx.drawImage(vid, 0, 0, canvas.width, canvas.height);
-        const base64 = canvas.toDataURL("image/jpeg", 0.82);
-        try {
-          const { invoke } = await import("@tauri-apps/api/core");
-          await invoke("save_thumbnail", { localPath: video.local_path, base64Data: base64 });
-        } catch (e) {
-          console.error("save_thumbnail trigger failed", e);
+    if (videoRef.current && (!video.thumbnail_url || imgError)) {
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = videoRef.current.videoWidth;
+        canvas.height = videoRef.current.videoHeight;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+          const dataUrl = canvas.toDataURL("image/jpeg", 0.7);
+          video.thumbnail_url = dataUrl;
+          setImgError(false);
+          import("@tauri-apps/api/core").then(({ invoke }) => {
+            invoke("import_local_video", { video }).catch(console.error);
+          });
         }
+      } catch (e) {
+        console.error("Frame capture failed:", e);
       }
     }
   };
 
-  const hasValidThumb = !!video.thumbnail_url && !imgError;
+  const hasValidThumb = !!effectiveThumbUrl && !imgError;
 
   return (
     <div 
@@ -68,9 +75,9 @@ export function HoverVideo({ video, className, onClick }: HoverVideoProps) {
       style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden", cursor: onClick ? "pointer" : "default" }}
       title={onClick ? "Click to open full preview" : ""}
     >
-      {video.thumbnail_url && !imgError && (
+      {(effectiveThumbUrl || isStaticImage) && !imgError && (
         <img 
-          src={video.thumbnail_url} 
+          src={thumbSrc} 
           alt={video.id}
           onError={() => setImgError(true)}
           style={{ 
@@ -79,14 +86,14 @@ export function HoverVideo({ video, className, onClick }: HoverVideoProps) {
             width: "100%", 
             height: "100%", 
             objectFit: "cover",
-            opacity: (!isStaticImage && isHovered && src) ? 0 : 1,
-            transform: (isStaticImage && isHovered) ? "scale(1.08)" : "scale(1)",
+            opacity: (!isStaticRender && isHovered && src) ? 0 : 1,
+            transform: (isStaticRender && isHovered) ? "scale(1.08)" : "scale(1)",
             transition: "opacity 0.3s ease, transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)"
           }} 
         />
       )}
 
-      {!hasValidThumb && (
+      {!hasValidThumb && !isStaticImage && (
         <div style={{
           position: "absolute",
           inset: 0,
@@ -105,7 +112,7 @@ export function HoverVideo({ video, className, onClick }: HoverVideoProps) {
         </div>
       )}
 
-      {src && shouldRenderVideo && !isStaticImage && (
+      {src && shouldRenderVideo && !isStaticRender && (
         <video 
           ref={videoRef}
           src={src}

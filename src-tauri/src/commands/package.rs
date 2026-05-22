@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use serde_json::Value;
 
 #[tauri::command]
@@ -111,13 +111,18 @@ pub fn import_itl_package(state: tauri::State<'_, crate::wallpaper::state::AppSt
         
         let config_str = fs::read_to_string(&config_path).map_err(|e| e.to_string())?;
         let mut config: Value = serde_json::from_str(&config_str).map_err(|e| e.to_string())?;
-        
         let relative_video_src = config["videoSrc"].as_str().ok_or("No videoSrc found in config")?.to_string();
-        let source_video_path = temp_dir.join(&relative_video_src);
+        let video_filename = std::path::Path::new(&relative_video_src)
+            .file_name()
+            .ok_or_else(|| "Invalid video filename".to_string())?
+            .to_string_lossy()
+            .to_string();
+        
+        let source_video_path = temp_dir.join(&video_filename);
         
         if !source_video_path.exists() {
             let _ = fs::remove_dir_all(&temp_dir);
-            return Err(format!("Invalid .itl package: video file {} missing", relative_video_src));
+            return Err(format!("Invalid .itl package: video file {} missing", video_filename));
         }
         
         // Create wallpapers/imported dir
@@ -126,7 +131,7 @@ pub fn import_itl_package(state: tauri::State<'_, crate::wallpaper::state::AppSt
         fs::create_dir_all(&imported_dir).map_err(|e| e.to_string())?;
         
         // Copy video to imported
-        let new_video_name = format!("imported_{}_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis(), relative_video_src);
+        let new_video_name = format!("imported_{}_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis(), video_filename);
         let final_video_path = imported_dir.join(&new_video_name);
         fs::copy(&source_video_path, &final_video_path).map_err(|e| e.to_string())?;
         
@@ -168,4 +173,72 @@ pub fn import_itl_package(state: tauri::State<'_, crate::wallpaper::state::AppSt
     {
         Err("Import is only supported on Windows".to_string())
     }
+}
+
+#[tauri::command]
+pub fn scan_wallpaper_engine_directory(
+    state: tauri::State<'_, crate::wallpaper::state::AppStateStore>,
+    path: String,
+) -> Result<usize, String> {
+    let base_path = PathBuf::from(&path);
+    if !base_path.exists() || !base_path.is_dir() {
+        return Err("Directory does not exist or is not a directory".to_string());
+    }
+
+    let mut imported_count = 0;
+
+    let entries = fs::read_dir(&base_path).map_err(|e| e.to_string())?;
+    for entry in entries.filter_map(Result::ok) {
+        let item_path = entry.path();
+        if item_path.is_dir() {
+            let project_json_path = item_path.join("project.json");
+            if project_json_path.exists() {
+                if let Ok(content) = fs::read_to_string(&project_json_path) {
+                    if let Ok(config) = serde_json::from_str::<Value>(&content) {
+                        let file_relative = config["file"].as_str().unwrap_or("");
+                        let title = config["title"].as_str().unwrap_or("Workshop Video").to_string();
+                        let preview_relative = config["preview"].as_str().unwrap_or("");
+                        
+                        if !file_relative.is_empty() {
+                            let media_path = item_path.join(file_relative);
+                            let media_ext = media_path.extension().and_then(|s| s.to_str()).unwrap_or("").to_lowercase();
+                            let is_supported = matches!(media_ext.as_str(), "mp4" | "webm" | "mov" | "avi" | "jpg" | "jpeg" | "png" | "webp" | "html" | "htm");
+                            
+                            if is_supported && media_path.exists() {
+                                let thumbnail_url = if !preview_relative.is_empty() {
+                                    let t_path = item_path.join(preview_relative);
+                                    if t_path.exists() {
+                                        t_path.to_string_lossy().to_string()
+                                    } else {
+                                        String::new()
+                                    }
+                                } else {
+                                    String::new()
+                                };
+                                
+                                let video = crate::wallpaper::providers::VideoResult {
+                                    id: format!("we_{}", entry.file_name().to_string_lossy()),
+                                    video_url: media_path.to_string_lossy().to_string(),
+                                    thumbnail_url,
+                                    local_path: media_path.to_string_lossy().to_string(),
+                                    duration: 0.0,
+                                    width: 1920,
+                                    height: 1080,
+                                    source: "local".to_string(),
+                                    start_time: None,
+                                    end_time: None,
+                                    tags: Some(vec!["wallpaper-engine".to_string(), title.clone()]),
+                                };
+                                
+                                let _ = crate::wallpaper::state::import_local_video(&state, video);
+                                imported_count += 1;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(imported_count)
 }

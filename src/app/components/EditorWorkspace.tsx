@@ -132,6 +132,7 @@ export function EditorWorkspace({ currentVideo, onApplyWallpaper, onUploadMedia 
   const [savedProfiles, setSavedProfiles] = useState<string[]>([]);
   const [newProfileName, setNewProfileName] = useState("");
   const [isImporting, setIsImporting] = useState(false);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(false);
 
   const openProfileModal = async (mode: "save" | "load") => {
     setProfileModalMode(mode);
@@ -171,6 +172,7 @@ export function EditorWorkspace({ currentVideo, onApplyWallpaper, onUploadMedia 
   };
 
   const executeLoadProfile = async (name: string) => {
+    setIsLoadingProfile(true);
     try {
       const { invoke } = await import("@tauri-apps/api/core");
       const configJson = await invoke<string>("load_profile", { name });
@@ -196,6 +198,23 @@ export function EditorWorkspace({ currentVideo, onApplyWallpaper, onUploadMedia 
       setIsProfileModalOpen(false);
     } catch (err) {
       console.error("Failed to load profile:", err);
+      alert("Failed to load profile: " + err);
+    } finally {
+      setIsLoadingProfile(false);
+    }
+  };
+
+  const executeDeleteProfile = async (name: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm(`Are you sure you want to delete profile "${name}"?`)) return;
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("delete_profile", { name });
+      const list = await invoke<string[]>("list_profiles");
+      setSavedProfiles(list || []);
+    } catch (err) {
+      console.error("Failed to delete profile:", err);
+      alert("Failed to delete profile: " + err);
     }
   };
 
@@ -1186,34 +1205,120 @@ export function EditorWorkspace({ currentVideo, onApplyWallpaper, onUploadMedia 
                 </div>
               </div>
             ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: "12px", maxHeight: "300px", overflowY: "auto" }}>
-                {savedProfiles.length === 0 ? (
-                  <div style={{ padding: "40px 0", textAlign: "center", opacity: 0.5, fontSize: "14px" }}>
-                    No saved profiles yet.
+              <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                {isLoadingProfile ? (
+                  <div style={{
+                    display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                    padding: "40px 0", gap: "16px", color: "var(--accent)"
+                  }}>
+                    <div style={{
+                      width: "40px", height: "40px",
+                      border: "3px solid rgba(154, 230, 0, 0.1)",
+                      borderTopColor: "var(--accent)",
+                      borderRadius: "50%",
+                      animation: "spin 1.2s cubic-bezier(0.5, 0, 0.5, 1) infinite"
+                    }} />
+                    <span style={{ fontSize: "14px", opacity: 0.8, letterSpacing: "1px", color: "rgba(255,255,255,0.7)" }}>Loading Profile...</span>
                   </div>
                 ) : (
-                  savedProfiles.map(p => (
-                    <div key={p} style={{
-                      display: "flex", alignItems: "center", justifyContent: "space-between",
-                      padding: "16px", background: "rgba(255,255,255,0.05)", borderRadius: "12px",
-                      cursor: "pointer", transition: "background 0.2s"
-                    }} onClick={() => executeLoadProfile(p)}>
-                      <div style={{ fontWeight: 500 }}>{p}</div>
-                      <div style={{ opacity: 0.5 }}>→</div>
+                  <>
+                    <div style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(2, 1fr)",
+                      gap: "12px",
+                      maxHeight: "300px",
+                      overflowY: "auto",
+                      paddingRight: "4px"
+                    }}>
+                      {savedProfiles.length === 0 ? (
+                        <div style={{ gridColumn: "span 2", padding: "40px 0", textAlign: "center", opacity: 0.5, fontSize: "14px", color: "rgba(255,255,255,0.5)" }}>
+                          No saved profiles yet.
+                        </div>
+                      ) : (
+                        savedProfiles.map(p => (
+                          <div 
+                            key={p} 
+                            style={{
+                              position: "relative",
+                              display: "flex",
+                              flexDirection: "column",
+                              justifyContent: "space-between",
+                              padding: "16px",
+                              background: "rgba(255,255,255,0.03)",
+                              border: "1px solid rgba(255,255,255,0.06)",
+                              borderRadius: "16px",
+                              cursor: "pointer",
+                              transition: "all 0.2s ease",
+                              height: "110px"
+                            }} 
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.background = "rgba(154, 230, 0, 0.05)";
+                              e.currentTarget.style.borderColor = "rgba(154, 230, 0, 0.25)";
+                              e.currentTarget.style.transform = "translateY(-2px)";
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.background = "rgba(255,255,255,0.03)";
+                              e.currentTarget.style.borderColor = "rgba(255,255,255,0.06)";
+                              e.currentTarget.style.transform = "translateY(0)";
+                            }}
+                            onClick={() => executeLoadProfile(p)}
+                          >
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", width: "100%" }}>
+                              <span style={{ fontSize: "24px" }}>📄</span>
+                              <button 
+                                onClick={(e) => executeDeleteProfile(p, e)}
+                                style={{
+                                  background: "transparent",
+                                  border: "none",
+                                  color: "rgba(255,255,255,0.4)",
+                                  cursor: "pointer",
+                                  fontSize: "14px",
+                                  padding: "4px 8px",
+                                  borderRadius: "6px",
+                                  transition: "all 0.2s"
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.color = "#ff4444";
+                                  e.currentTarget.style.background = "rgba(255,68,68,0.1)";
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.color = "rgba(255,255,255,0.4)";
+                                  e.currentTarget.style.background = "transparent";
+                                }}
+                                title="Delete Profile"
+                              >
+                                🗑️
+                              </button>
+                            </div>
+                            <div style={{
+                              fontWeight: 600,
+                              fontSize: "13px",
+                              whiteSpace: "nowrap",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              width: "100%",
+                              color: "#fff",
+                              marginTop: "8px"
+                            }}>
+                              {p}
+                            </div>
+                          </div>
+                        ))
+                      )}
                     </div>
-                  ))
+                    
+                    <div style={{ borderTop: "1px solid rgba(255,255,255,0.1)", marginTop: "8px", paddingTop: "16px" }}>
+                      <button 
+                        className="action-btn action-btn--secondary" 
+                        style={{ width: "100%", padding: "12px", borderRadius: "12px", background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.2)" }}
+                        onClick={handleImportItl}
+                        disabled={isImporting}
+                      >
+                        {isImporting ? "⏳ Importing Package..." : "📥 Import .itl Package"}
+                      </button>
+                    </div>
+                  </>
                 )}
-                
-                <div style={{ borderTop: "1px solid rgba(255,255,255,0.1)", marginTop: "8px", paddingTop: "16px" }}>
-                  <button 
-                    className="action-btn action-btn--secondary" 
-                    style={{ width: "100%", padding: "12px", borderRadius: "12px", background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.2)" }}
-                    onClick={handleImportItl}
-                    disabled={isImporting}
-                  >
-                    {isImporting ? "⏳ Importing Package..." : "📥 Import .itl Package"}
-                  </button>
-                </div>
               </div>
             )}
           </div>

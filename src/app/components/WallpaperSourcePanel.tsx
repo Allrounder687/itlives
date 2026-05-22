@@ -35,6 +35,37 @@ export function WallpaperSourcePanel({ wallpaper }: WallpaperSourcePanelProps) {
   const [showKey, setShowKey] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [newPinterestUrl, setNewPinterestUrl] = useState("");
+  
+  const [isScanning, setIsScanning] = useState(false);
+  const [scanResult, setScanResult] = useState<string | null>(null);
+
+  const handleScanWorkshop = async () => {
+    try {
+      const { open } = await import("@tauri-apps/plugin-dialog");
+      const dirPath = await open({
+        directory: true,
+        multiple: false,
+        title: "Select Wallpaper Engine Workshop Folder (431960)"
+      });
+      if (!dirPath) return;
+
+      setIsScanning(true);
+      setScanResult(null);
+
+      const { invoke } = await import("@tauri-apps/api/core");
+      const importedCount = await invoke<number>("scan_wallpaper_engine_directory", { path: dirPath });
+      
+      setScanResult(`Successfully imported ${importedCount} wallpapers!`);
+      // Force reload of the library tab if it is open
+      window.dispatchEvent(new CustomEvent('reload-app-state'));
+    } catch (e: any) {
+      console.error(e);
+      setScanResult(`Error: ${e}`);
+    } finally {
+      setIsScanning(false);
+      setTimeout(() => setScanResult(null), 5000);
+    }
+  };
 
   const handleAddPinterestUrl = async () => {
     const trimmed = newPinterestUrl.trim();
@@ -215,6 +246,42 @@ export function WallpaperSourcePanel({ wallpaper }: WallpaperSourcePanelProps) {
             ) : (
               <span style={{ fontSize: "11px", opacity: 0.5, fontStyle: "italic", textAlign: "center", padding: "8px" }}>
                 No custom Pinterest pages configured. Defaulting to general wallpaper queries.
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Steam Workshop Import section */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "10px", padding: "16px", background: "rgba(255, 255, 255, 0.01)", border: "1px solid rgba(255, 255, 255, 0.03)", borderRadius: "12px" }}>
+          <label className="field__label" style={{ fontWeight: 600, color: "var(--text-soft)" }}>
+            🎮 Wallpaper Engine Workshop
+          </label>
+          <span className="field__hint" style={{ fontSize: "11px", opacity: 0.6, marginBottom: "4px" }}>
+            Scan your Steam Workshop directory (e.g., steamapps/workshop/content/431960) to automatically import your Wallpaper Engine library into OpenClaw.
+          </span>
+          <div style={{ display: "flex", gap: "8px" }}>
+            <button
+              type="button"
+              className="action-btn action-btn--primary"
+              onClick={handleScanWorkshop}
+              disabled={isScanning}
+              style={{ padding: "8px 16px", borderRadius: "6px", cursor: isScanning ? "wait" : "pointer", background: "rgba(154, 230, 0, 0.2)", color: "var(--accent)", border: "1px solid rgba(154, 230, 0, 0.3)", display: "flex", alignItems: "center", gap: "8px", fontWeight: "bold" }}
+            >
+              {isScanning ? (
+                <>
+                  <span style={{ animation: "spin 1s linear infinite" }}>⏳</span>
+                  Scanning Directory...
+                </>
+              ) : (
+                <>
+                  <span>📂</span>
+                  Select Workshop Directory
+                </>
+              )}
+            </button>
+            {scanResult && (
+              <span style={{ fontSize: "12px", color: scanResult.includes("Error") ? "#ff6b6b" : "var(--accent)", alignSelf: "center", fontWeight: "bold" }}>
+                {scanResult}
               </span>
             )}
           </div>

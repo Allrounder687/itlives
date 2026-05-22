@@ -1,4 +1,4 @@
-use tauri::{State, Manager};
+use tauri::State;
 use crate::wallpaper::providers::{self, VideoResult};
 use crate::wallpaper::state::{AppStateStore, WallpaperState};
 use crate::wallpaper;
