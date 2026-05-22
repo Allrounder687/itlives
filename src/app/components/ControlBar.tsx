@@ -15,16 +15,34 @@ interface ControlBarProps {
   onStop: () => void;
   pinterestUrls?: string[];
   onSetPinterestUrls?: (urls: string[]) => Promise<void>;
+  colorFilter?: string;
+  onColorFilterChange?: (color: string) => void;
+  category?: string;
 }
 
 const CATEGORIES = [
-  "All", "Fantasy", "Aesthetic", "Anime", "Cyberpunk", "Minimalist", "Games", "Vaporwave", 
+  "All", "Women", "Men", "Black BG Minimalist", "Sci-Fi Cyberpunk",
+  "Fantasy", "Aesthetic", "Anime", "Cyberpunk", "Minimalist", "Games", "Vaporwave", 
   "Lo-Fi", "Pixel Art", "Sci-Fi", "Superhero", "Nature", "Space", "Abstract", 
   "Synthwave", "Cityscape", "Car", "Landscape", "Neon", "Dark", "Futuristic",
   "Tv", "Holiday", "Animal", "Horror", "Technology", "Football", 
   "Japan", "Vintage", "3D Renders", "Illustration", "Architecture",
   "Steampunk", "Retro", "Cosmic", "Forest", "Ocean", "Glitch Art", 
   "Dark Academia", "Cottagecore", "Magical", "Vector", "Pastel"
+];
+
+const COLORS = [
+  { name: "None", value: "", hex: "transparent" },
+  { name: "Red", value: "red", hex: "#ff3b30" },
+  { name: "Blue", value: "blue", hex: "#007aff" },
+  { name: "Green", value: "green", hex: "#34c759" },
+  { name: "Yellow", value: "yellow", hex: "#ffcc00" },
+  { name: "Purple", value: "purple", hex: "#af52de" },
+  { name: "Pink", value: "pink", hex: "#ff2d55" },
+  { name: "Black", value: "black", hex: "#000000" },
+  { name: "White", value: "white", hex: "#ffffff" },
+  { name: "Orange", value: "orange", hex: "#ff9500" },
+  { name: "Cyan", value: "cyan", hex: "#32ade6" }
 ];
 
 export function ControlBar({
@@ -40,6 +58,9 @@ export function ControlBar({
   onStop,
   pinterestUrls = [],
   onSetPinterestUrls,
+  colorFilter = "",
+  onColorFilterChange,
+  category = "all",
 }: ControlBarProps) {
   const [showRedGifs, setShowRedGifs] = useState(false);
   const [showPinterestSources, setShowPinterestSources] = useState(true);
@@ -386,19 +407,48 @@ export function ControlBar({
       </div>
 
       {source !== "direct" && (
-        <div className="categories-scroll" style={{ display: "flex", gap: "8px", overflowX: "auto", paddingBottom: "8px", scrollbarWidth: "none" }}>
-          {CATEGORIES.map((cat) => (
-            <button
-              key={cat}
-              type="button"
-              className={`pill ${query.toLowerCase() === cat.toLowerCase() ? "" : "pill--muted"}`}
-              style={{ padding: "6px 14px", cursor: "pointer", border: "none", whiteSpace: "nowrap", minWidth: "fit-content" }}
-              onClick={() => onCategoryChange && onCategoryChange(cat.toLowerCase())}
-            >
-              {cat}
-            </button>
-          ))}
-        </div>
+        <>
+          <div className="categories-scroll" style={{ display: "flex", flexWrap: "wrap", gap: "8px", paddingBottom: "8px" }}>
+            {CATEGORIES.map((cat) => (
+              <button
+                key={cat}
+                type="button"
+                className={`pill ${(category || "all").toLowerCase() === cat.toLowerCase() ? "" : "pill--muted"}`}
+                style={{ padding: "6px 14px", cursor: "pointer", border: "none", whiteSpace: "nowrap", minWidth: "fit-content" }}
+                onClick={() => onCategoryChange && onCategoryChange(cat.toLowerCase())}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+          
+          <div className="color-picker-row" style={{ display: "flex", flexWrap: "wrap", gap: "10px", paddingBottom: "12px", alignItems: "center" }}>
+            <span style={{ fontSize: "11px", color: "var(--text-soft)", textTransform: "uppercase", letterSpacing: "0.05em", marginRight: "4px" }}>Filter Color:</span>
+            {COLORS.map((c) => (
+              <button
+                key={c.value}
+                type="button"
+                title={c.name}
+                onClick={() => onColorFilterChange && onColorFilterChange(c.value)}
+                style={{
+                  width: "20px",
+                  height: "20px",
+                  borderRadius: "50%",
+                  background: c.hex,
+                  border: colorFilter === c.value ? "2px solid var(--accent)" : "1px solid rgba(255,255,255,0.1)",
+                  cursor: "pointer",
+                  position: "relative",
+                  boxShadow: colorFilter === c.value ? "0 0 8px var(--accent)" : "none",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center"
+                }}
+              >
+                {c.value === "" && <div style={{ width: "100%", height: "1px", background: "red", transform: "rotate(45deg)", position: "absolute" }} />}
+              </button>
+            ))}
+          </div>
+        </>
       )}
 
       <div className="action-row action-row--hud" style={{ marginTop: "4px" }}>

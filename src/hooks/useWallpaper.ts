@@ -195,7 +195,14 @@ export function useWallpaper() {
     setSource: (source: string) => setState(s => ({ ...s, source, page: 1 })),
     setQuery: (query: string) => setState(s => ({ ...s, query, page: 1 })),
     setPage: (page: number) => setState(s => ({ ...s, page })),
-    setCategory: (category: string) => setState(s => ({ ...s, category, query: category, page: 1 })),
+    setColorFilter: (colorFilter: string) => setState(s => {
+      const q = s.category === "all" ? colorFilter : `${s.category} ${colorFilter}`;
+      return { ...s, colorFilter, query: q.trim(), page: 1 };
+    }),
+    setCategory: (category: string) => setState(s => {
+      const q = category === "all" ? s.colorFilter : `${category} ${s.colorFilter}`;
+      return { ...s, category, query: q.trim(), page: 1 };
+    }),
     selectVideo: (video: VideoResult) => setState(s => ({ ...s, currentVideo: video, previewDismissed: false })),
     dismissPreview: () => setState(s => ({ ...s, previewDismissed: true })),
     lockAdult: () => setState(s => ({ ...s, isAdultUnlocked: false })),

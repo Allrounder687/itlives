@@ -61,15 +61,14 @@
 
 
 .stack > .panel,
-
 .hero--hud {
-  padding: 12px 20px;
+  padding: 8px 16px;
   display: flex;
   justify-content: space-between;
   align-items: center;
   background: linear-gradient(135deg, var(--bg-strong) 0%, var(--bg-elevated) 100%);
-  border-left: 4px solid var(--accent);
-  min-height: 80px;
+  border-left: 3px solid var(--accent);
+  min-height: 48px;
 }
 
 

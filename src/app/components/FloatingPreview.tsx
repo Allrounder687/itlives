@@ -42,8 +42,11 @@ export function FloatingPreview(props: FloatingPreviewProps) {
   }
 
   return (
-    <div className={`floating-preview-overlay ${isFullscreen ? "fullscreen-mode" : "mini-mode"}`}>
-      <div className="floating-preview-container panel">
+    <div 
+      className={`floating-preview-overlay ${isFullscreen ? "fullscreen-mode" : "mini-mode"}`}
+      onClick={props.onClose}
+    >
+      <div className="floating-preview-container panel" onClick={(e) => e.stopPropagation()}>
         <div className="floating-header">
           <strong>{props.video.id} Preview</strong>
           <div className="floating-actions">

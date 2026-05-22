@@ -42,7 +42,7 @@ img {
 .brand-mark {
   width: 52px;
   height: 52px;
-  border-radius: 15px;
+  border-radius: var(--radius);
   display: grid;
   place-items: center;
   font-family: var(--font-display);
@@ -67,7 +67,7 @@ img {
 
 .brand-mark--clickable:hover {
   transform: scale(1.04);
-  box-shadow: 0 12px 32px rgba(134, 214, 0, 0.45);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
 
@@ -151,7 +151,7 @@ img {
 
 .metric-card {
   padding: 13px 14px;
-  border-radius: 16px;
+  border-radius: var(--radius);
 }
 
 
@@ -204,7 +204,7 @@ img {
 
 .pill {
   padding: 5px 10px;
-  border-radius: 999px;
+  border-radius: var(--radius);
   background: var(--accent-soft);
   color: var(--accent);
   font-size: 11px;
@@ -246,7 +246,7 @@ img {
 .status-orb {
   width: 12px;
   height: 12px;
-  border-radius: 999px;
+  border-radius: 6px;
   background: #49614d;
 }
 
@@ -292,7 +292,7 @@ img {
 .control-shell {
   margin-top: 12px;
   padding: 14px;
-  border-radius: 18px;
+  border-radius: var(--radius);
   display: grid;
   gap: 14px;
 }
@@ -320,7 +320,7 @@ img {
   background: rgba(255, 255, 255, 0.03);
   color: var(--text-soft);
   padding: 10px 12px;
-  border-radius: 14px;
+  border-radius: var(--radius);
   cursor: pointer;
   transition: 140ms ease;
 }
@@ -397,7 +397,7 @@ img {
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(4, 9, 6, 0.6);
   color: var(--text);
-  border-radius: 13px;
+  border-radius: 6px;
   padding: 12px 14px;
   outline: none;
   transition: border-color 140ms ease, background 140ms ease;
@@ -422,7 +422,7 @@ img {
 
 .action-btn {
   min-height: 42px;
-  border-radius: 13px;
+  border-radius: 6px;
   padding: 0 14px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   cursor: pointer;
@@ -431,7 +431,7 @@ img {
 
 
 .action-btn:hover {
-  transform: translateY(-1px);
+  filter: brightness(1.1);
 }
 
 
@@ -458,7 +458,7 @@ img {
 
 .callout {
   margin-top: 12px;
-  border-radius: 16px;
+  border-radius: var(--radius);
   padding: 12px 14px;
 }
 
@@ -480,7 +480,7 @@ img {
 
 
 .skeleton {
-  border-radius: 22px;
+  border-radius: var(--radius);
   background: linear-gradient(
     90deg,
     rgba(255, 255, 255, 0.03) 0%,
@@ -510,7 +510,7 @@ img {
 
 .option-card {
   padding: 13px;
-  border-radius: 16px;
+  border-radius: var(--radius);
 }
 
 
@@ -522,7 +522,7 @@ img {
 .queue-placeholder {
   margin-top: 10px;
   padding: 8px;
-  border-radius: 16px;
+  border-radius: var(--radius);
 }
 
 
@@ -588,7 +588,7 @@ img {
   justify-content: space-between;
   gap: 12px;
   padding: 12px 14px;
-  border-radius: 16px;
+  border-radius: var(--radius);
   background: rgba(255, 255, 255, 0.025);
   border: 1px solid rgba(255, 255, 255, 0.05);
 }
@@ -604,7 +604,7 @@ img {
   display: grid;
   gap: 4px;
   padding: 12px 14px;
-  border-radius: 16px;
+  border-radius: var(--radius);
   border: 1px solid rgba(154, 230, 0, 0.1);
   background: rgba(154, 230, 0, 0.05);
 }
@@ -642,7 +642,7 @@ img {
   justify-content: space-between;
   gap: 12px;
   padding: 12px 14px;
-  border-radius: 16px;
+  border-radius: var(--radius);
   border: 1px solid rgba(255, 255, 255, 0.05);
   background: rgba(255, 255, 255, 0.025);
   transition: border-color 0.2s, background 0.2s;
@@ -728,7 +728,7 @@ img {
 .icon-btn {
   width: 34px;
   height: 34px;
-  border-radius: 8px;
+  border-radius: 6px;
   display: grid;
   place-items: center;
   background: rgba(255, 255, 255, 0.04);
@@ -801,7 +801,13 @@ img {
   padding-bottom: 2rem;
 }
 
-.search-card { background: var(--panel-surface); border-radius: 0.5rem; overflow: hidden; cursor: pointer; border: 1px solid rgba(255,255,255,0.04); transition: transform 0.2s, border-color 0.2s; }
+.search-grid--s { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 0.75rem; }
+.search-grid--m { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+.search-grid--l { grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
+.search-grid--xl { grid-template-columns: repeat(auto-fill, minmax(440px, 1fr)); }
+.search-grid--xxl { grid-template-columns: repeat(auto-fill, minmax(600px, 1fr)); }
+
+.search-card { background: var(--panel-surface); border-radius: var(--radius); overflow: hidden; cursor: pointer; border: 1px solid rgba(255,255,255,0.04); transition: transform 0.2s, border-color 0.2s; }
 
 .search-card:hover { transform: translateY(-2px); border-color: var(--accent); }
 
@@ -999,7 +1005,7 @@ img {
   display: flex;
   gap: 20px;
   padding: 16px;
-  border-radius: 16px;
+  border-radius: var(--radius);
   background: rgba(255, 255, 255, 0.025);
   border: 1px solid rgba(255, 255, 255, 0.06);
 }
@@ -1009,7 +1015,7 @@ img {
   width: 100%;
   aspect-ratio: 16 / 9;
   max-height: 420px;
-  border-radius: 16px;
+  border-radius: var(--radius);
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
@@ -1027,7 +1033,7 @@ img {
   display: flex;
   gap: 24px;
   padding: 12px 16px;
-  border-radius: 12px;
+  border-radius: var(--radius);
   background: rgba(255, 255, 255, 0.03);
   font-size: 13px;
   color: var(--text-soft);
@@ -1061,7 +1067,7 @@ img {
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 16px;
+  border-radius: var(--radius);
   padding: 8px 12px;
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
   opacity: 0.04;
@@ -1102,7 +1108,7 @@ img {
   width: 240px;
   height: 135px;
   object-fit: cover;
-  border-radius: 12px;
+  border-radius: var(--radius);
   flex-shrink: 0;
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
@@ -1133,7 +1139,7 @@ img {
 
 .yt-range-section {
   padding: 20px;
-  border-radius: 16px;
+  border-radius: var(--radius);
   background:
     radial-gradient(circle at bottom left, rgba(154, 230, 0, 0.06), transparent 50%),
     rgba(0, 0, 0, 0.3);
@@ -1261,7 +1267,7 @@ img {
 .callout--success {
   background: rgba(154, 230, 0, 0.08);
   border: 1px solid rgba(154, 230, 0, 0.18);
-  border-radius: 16px;
+  border-radius: var(--radius);
   padding: 12px 14px;
 }
 
@@ -1331,6 +1337,7 @@ img {
 .library-grid-view--l { grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
 
 .library-grid-view--xl { grid-template-columns: repeat(auto-fill, minmax(440px, 1fr)); }
+.library-grid-view--xxl { grid-template-columns: repeat(auto-fill, minmax(600px, 1fr)); }
 
 
 .library-filter-bar {

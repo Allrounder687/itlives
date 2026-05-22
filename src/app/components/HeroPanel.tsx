@@ -34,14 +34,14 @@ export function HeroPanel({ wallpaper, activeTab }: HeroPanelProps) {
     || "OpenClaw LWP";
 
   return (
-    <section className="hero panel hero--hud" style={{ padding: "12px 20px", marginBottom: "8px" }}>
-      <div className="hero__status" style={{ display: "flex", alignItems: "center", gap: "14px" }}>
-        <div className={`engine-orb ${wallpaper.isPlaying ? "engine-orb--active" : ""}`} style={{ flexShrink: 0 }}>
+    <section className="hero panel hero--hud" style={{ marginBottom: "8px" }}>
+      <div className="hero__status" style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+        <div className={`engine-orb ${wallpaper.isPlaying ? "engine-orb--active" : ""}`} style={{ flexShrink: 0, transform: "scale(0.8)" }}>
           <div className="engine-pulse" />
         </div>
         <div className="hero__meta">
-          <p className="eyebrow" style={{ margin: 0 }}>{wallpaper.isPlaying ? "Engine Active" : "Engine Standby"}</p>
-          <h2 style={{ margin: 0, fontSize: "18px", lineHeight: 1.3 }}>{dynamicTitle}</h2>
+          <p className="eyebrow" style={{ margin: 0, fontSize: "9px" }}>{wallpaper.isPlaying ? "Engine Active" : "Engine Standby"}</p>
+          <h2 style={{ margin: 0, fontSize: "14px", lineHeight: 1.2, fontWeight: 600 }}>{dynamicTitle}</h2>
         </div>
       </div>
 

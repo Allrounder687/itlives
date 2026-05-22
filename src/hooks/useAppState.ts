@@ -40,6 +40,7 @@ export function useAppState() {
     searchResults: [],
     page: 1,
     category: "all",
+    colorFilter: "",
     autostartEnabled: false,
     hasMore: true,
     duplicateNotice: null,

@@ -2,29 +2,29 @@
 
 :root,
 [data-theme="master-system"] {
-  --bg: #07110a;
-  --bg-elevated: rgba(11, 24, 15, 0.78);
-  --bg-strong: rgba(18, 35, 22, 0.94);
-  --panel-edge: rgba(153, 255, 88, 0.12);
-  --panel-stroke: rgba(255, 255, 255, 0.06);
-  --text: #edf7ea;
-  --text-soft: #99aa9c;
-  --text-dim: #6f8172;
-  --accent: #9ae600;
-  --accent-deep: #5ea800;
-  --accent-soft: rgba(154, 230, 0, 0.14);
-  --nav-accent: rgba(255, 255, 255, 0.92);
-  --nav-accent-bg: rgba(255, 255, 255, 0.10);
-  --nav-accent-border: rgba(255, 255, 255, 0.18);
-  --nav-accent-glow: rgba(255, 255, 255, 0.06);
-  --danger: #ff5b67;
-  --shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
-  --radius: 22px;
-  --font-display: "Sora", sans-serif;
-  --font-body: "IBM Plex Sans", sans-serif;
-  --glow: 0 0 15px rgba(154, 230, 0, 0.3);
-  --primary-gradient: linear-gradient(135deg, #bbff5d 0%, #86d600 45%, #5ea800 100%);
-  --panel-bg: linear-gradient(180deg, rgba(17, 31, 20, 0.88), rgba(8, 15, 10, 0.92));
+  --bg: #0d1117;
+  --bg-elevated: rgba(22, 27, 34, 0.78);
+  --bg-strong: rgba(33, 38, 45, 0.94);
+  --panel-edge: rgba(47, 129, 247, 0.12);
+  --panel-stroke: rgba(255, 255, 255, 0.08);
+  --text: #e6edf3;
+  --text-soft: #848d97;
+  --text-dim: #5c646c;
+  --accent: #2f81f7;
+  --accent-deep: #1f6feb;
+  --accent-soft: rgba(47, 129, 247, 0.12);
+  --nav-accent: rgba(255, 255, 255, 0.95);
+  --nav-accent-bg: rgba(255, 255, 255, 0.08);
+  --nav-accent-border: rgba(255, 255, 255, 0.15);
+  --nav-accent-glow: rgba(0, 0, 0, 0.2);
+  --danger: #f85149;
+  --shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  --radius: 8px;
+  --font-display: "Inter", sans-serif;
+  --font-body: "Inter", sans-serif;
+  --glow: 0 4px 12px rgba(47, 129, 247, 0.15);
+  --primary-gradient: linear-gradient(180deg, #3fb950 0%, #238636 100%);
+  --panel-bg: linear-gradient(180deg, rgba(22, 27, 34, 0.88), rgba(13, 17, 23, 0.92));
 }
 
 [data-theme="cyberpunk"] {

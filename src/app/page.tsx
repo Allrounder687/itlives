@@ -208,7 +208,7 @@ function Home() {
         <main className="workspace">
           <DependencyChecker />
 
-          <HeroPanel wallpaper={wallpaper} activeTab={activeTab} />
+          {wallpaper.currentVideo && <HeroPanel wallpaper={wallpaper} activeTab={activeTab} />}
 
           {activeTab === "discover" && (
             <section className="panel panel--main">
@@ -220,6 +220,9 @@ function Home() {
                 onStop={wallpaper.stopWallpaper}
                 pinterestUrls={wallpaper.pinterestUrls}
                 onSetPinterestUrls={wallpaper.setPinterestUrls}
+                category={wallpaper.category}
+                colorFilter={wallpaper.colorFilter}
+                onColorFilterChange={wallpaper.setColorFilter}
               />
               <SearchResults
                 results={wallpaper.searchResults} onSelect={wallpaper.selectVideo}

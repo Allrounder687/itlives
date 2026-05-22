@@ -78,6 +78,7 @@ export interface WallpaperState {
   searchResults: VideoResult[];
   page: number;
   category: string;
+  colorFilter: string;
   autostartEnabled: boolean;
   hasMore?: boolean;
   duplicateNotice?: string | null;

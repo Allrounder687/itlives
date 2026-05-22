@@ -24,6 +24,7 @@ export function SearchResults({
   duplicateNotice 
 }: SearchResultsProps) {
   const [typeFilter, setTypeFilter] = useState<"all" | "live" | "static">("all");
+  const [gridSize, setGridSize] = useState<"S" | "M" | "L" | "XL" | "XXL">("M");
   const observerTarget = useRef<HTMLDivElement>(null);
 
   // IntersectionObserver to auto-trigger the next page request 250px before reaching bottom
@@ -87,27 +88,43 @@ export function SearchResults({
       )}
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem", flexWrap: "wrap", gap: "10px" }}>
+        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
+          <div className="library-filter-bar" style={{ marginBottom: 0 }}>
+            {(["all", "live", "static"] as const).map((t) => (
+              <button
+                key={t}
+                type="button"
+                className={`library-filter-btn ${typeFilter === t ? "library-filter-btn--active" : ""}`}
+                onClick={() => setTypeFilter(t)}
+              >
+                {t === "all" ? "All" : t === "live" ? "Live" : "Static"}
+              </button>
+            ))}
+          </div>
+          <span className="eyebrow" style={{ color: "var(--text-soft)", fontSize: "10px" }}>
+            Showing {filteredResults.length} of {results.length} search results
+          </span>
+        </div>
+
         <div className="library-filter-bar" style={{ marginBottom: 0 }}>
-          {(["all", "live", "static"] as const).map((t) => (
+          {(["S", "M", "L", "XL", "XXL"] as const).map((size) => (
             <button
-              key={t}
+              key={size}
               type="button"
-              className={`library-filter-btn ${typeFilter === t ? "library-filter-btn--active" : ""}`}
-              onClick={() => setTypeFilter(t)}
+              className={`library-filter-btn ${gridSize === size ? "library-filter-btn--active" : ""}`}
+              onClick={() => setGridSize(size)}
+              style={{ padding: "6px 12px" }}
             >
-              {t === "all" ? "All" : t === "live" ? "Live" : "Static"}
+              {size}
             </button>
           ))}
         </div>
-        <span className="eyebrow" style={{ color: "var(--text-soft)", fontSize: "10px" }}>
-          Showing {filteredResults.length} of {results.length} search results
-        </span>
       </div>
 
       {filteredResults.length === 0 ? (
         <p className="library-empty" style={{ margin: "2rem 0" }}>No wallpapers match the selected filter.</p>
       ) : (
-        <div className="search-grid">
+        <div className={`search-grid search-grid--${gridSize.toLowerCase()}`}>
           {filteredResults.map((item) => (
             <article 
               key={`${item.source}:${item.id}`} 

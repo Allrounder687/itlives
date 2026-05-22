@@ -9,9 +9,6 @@
 .shell__backdrop {
   position: absolute;
   inset: 0;
-  background:
-    radial-gradient(circle at 18% 22%, rgba(154, 230, 0, 0.08), transparent 0 26%),
-    radial-gradient(circle at 82% 18%, rgba(255, 255, 255, 0.05), transparent 0 18%);
   pointer-events: none;
 }
 
@@ -34,14 +31,11 @@
 
 
 .workspace {
-  display: grid;
-  grid-template-rows: auto;
+  display: flex;
+  flex-direction: column;
   gap: 14px;
   overflow-y: auto;
   padding-right: 4px;
-  background-image: 
-    radial-gradient(circle at 1px 1px, rgba(154, 230, 0, 0.04) 1px, transparent 0);
-  background-size: 32px 32px;
 }
 
 
