@@ -1,6 +1,7 @@
 mod wallpaper;
 pub mod commands;
 pub mod integrations;
+mod windows_theme;
 
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder},
@@ -176,6 +177,8 @@ pub fn run() {
                 restore_wallpaper_if_enabled(app_handle_restore, &restore_store);
             });
 
+            crate::wallpaper::media::init_media_polling(app.handle().clone());
+
             build_tray(app)?;
             Ok(())
         })
@@ -188,6 +191,10 @@ pub fn run() {
             commands::profiles::delete_profile,
             crate::wallpaper::audio::start_audio_capture,
             crate::wallpaper::audio::stop_audio_capture,
+            crate::wallpaper::media::media_play_pause,
+            crate::wallpaper::media::media_next,
+            crate::wallpaper::media::media_prev,
+            crate::wallpaper::media::media_seek,
             commands::wallpaper_control::apply_wallpaper,
             commands::wallpaper_control::stop_wallpaper,
             commands::wallpaper_control::get_wallpaper_status,
@@ -238,6 +245,7 @@ pub fn run() {
             commands::batch::start_wallhaven_selection_download,
             commands::video::fetch_video_tags,
             commands::settings::get_monitors,
+            windows_theme::sync_windows_accent_color,
         ])
         .run(tauri::generate_context!())
 

@@ -364,7 +364,11 @@ function Home() {
           )}
 
           {activeTab === "editor" && (
-            <EditorWorkspace currentVideo={wallpaper.currentVideo} onApplyWallpaper={async (v) => { await wallpaper.applyWallpaper(v); }} />
+            <EditorWorkspace 
+              currentVideo={wallpaper.currentVideo} 
+              onApplyWallpaper={async (v) => { await wallpaper.applyWallpaper(v); }} 
+              onUploadMedia={wallpaper.browseLocalVideo}
+            />
           )}
 
           {activeTab === "parallax" && (

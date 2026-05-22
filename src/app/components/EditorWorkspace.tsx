@@ -11,6 +11,7 @@ interface EditorWorkspaceProps {
   currentVideo: VideoResult | null;
   onApplyPreset?: (preset: any) => void;
   onApplyWallpaper?: (video: VideoResult) => Promise<void>;
+  onUploadMedia?: () => Promise<void>;
 }
 
 const EFFECT_TEMPLATES: Record<string, Omit<EffectLayer, "id">> = {
@@ -19,16 +20,20 @@ const EFFECT_TEMPLATES: Record<string, Omit<EffectLayer, "id">> = {
   fireflies: { type: "fireflies", name: "Fireflies", enabled: true, params: { count: 80, speed: 0.5, size: 5.0, color: "#aaff44" } },
   stars: { type: "stars", name: "Starfield", enabled: true, params: { count: 400, speed: 0.1, size: 3.0, twinkle: 0.8 } },
   fog: { type: "fog", name: "Fog / Mist", enabled: true, params: { count: 60, speed: 0.3, size: 40.0, opacity: 0.4 } },
+  "water-caustics": { type: "water-caustics", name: "Water Reflection", enabled: true, params: { speed: 1.0, scale: 3.0, intensity: 1.0, color: "#00ffff", yOffset: -400, width: 2000, height: 800 } },
+  "blowing-leaves": { type: "blowing-leaves", name: "Blowing Leaves", enabled: true, params: { count: 80, speed: 1.0, wind: 0.5, size: 15.0, color: "#4caf50" } },
   vignette: { type: "vignette", name: "Vignette Frame", enabled: true, params: { intensity: 0.6, offset: 0.1 } },
   bloom: { type: "bloom", name: "Bloom Glow", enabled: true, params: { intensity: 1.0, threshold: 0.5, smoothing: 0.9 } },
   glitch: { type: "glitch", name: "Cyber Glitch", enabled: true, params: { strength: 0.1 } },
   "audio-visualizer": { type: "audio-visualizer", name: "Audio Visualizer", enabled: true, params: {} },
   parallax: { type: "parallax", name: "Parallax Depth", enabled: true, params: { intensity: 1.0 } },
-  "cursor-trail": { type: "cursor-trail", name: "Sparkle Trail", enabled: true, params: { color: "#9ae600" } },
+  "cursor-trail": { type: "cursor-trail", name: "Sparkle Trail", enabled: true, params: { color: "auto" } },
+  "ribbon-trail": { type: "ribbon-trail", name: "Fluid Ribbon", enabled: true, params: { color: "auto", width: 5.0, length: 50 } },
   "click-ripple": { type: "click-ripple", name: "Click Ripple", enabled: true, params: { color: "#ffffff" } },
   "color-grade": { type: "color-grade", name: "Color Tint", enabled: true, params: { color: "rgba(255, 100, 50, 0.15)", intensity: 0.3, blendMode: "overlay" } },
   "blur-region": { type: "blur-region", name: "Blur Region", enabled: true, params: { x: 10, y: 10, w: 30, h: 20, blur: 15 } },
   clock: { type: "clock", name: "Clock Widget", enabled: true, params: { format: "24h", style: "minimal", color: "#ffffff", opacity: 0.8, x: 50, y: 50 } },
+  "music-player": { type: "music-player", name: "Music Player", enabled: true, params: { x: 50, y: 80, scale: 1.0, theme: "glass", opacity: 0.9 } },
 };
 
 const EFFECT_DROPDOWN: { group: string, items: { key: string, icon: string, label: string }[] }[] = [
@@ -48,12 +53,14 @@ const EFFECT_DROPDOWN: { group: string, items: { key: string, icon: string, labe
     { key: "audio-visualizer", icon: "🎵", label: "Audio Visualizer" },
     { key: "parallax", icon: "🔮", label: "Parallax Depth" },
     { key: "cursor-trail", icon: "🌟", label: "Sparkle Trail" },
+    { key: "ribbon-trail", icon: "🖌️", label: "Fluid Ribbon" },
     { key: "click-ripple", icon: "💥", label: "Click Ripple" },
   ]},
   { group: "🎨 Overlays & Widgets", items: [
     { key: "color-grade", icon: "🎨", label: "Color Tint" },
     { key: "blur-region", icon: "🔲", label: "Blur Region" },
     { key: "clock", icon: "🕐", label: "Clock Widget" },
+    { key: "music-player", icon: "🎧", label: "Music Player" },
   ]},
 ];
 
@@ -93,7 +100,7 @@ const TIME_PRESETS: { key: string, name: string, layers: Omit<EffectLayer, "id">
   ]},
 ];
 
-export function EditorWorkspace({ currentVideo, onApplyWallpaper }: EditorWorkspaceProps) {
+export function EditorWorkspace({ currentVideo, onApplyWallpaper, onUploadMedia }: EditorWorkspaceProps) {
   const [layers, setLayers] = useState<EffectLayer[]>([
     { id: "vignette-1", type: "vignette", name: "Vignette Frame", enabled: true, params: { intensity: 0.5 } }
   ]);
@@ -115,7 +122,7 @@ export function EditorWorkspace({ currentVideo, onApplyWallpaper }: EditorWorksp
   };
 
   const updateParam = (id: string, key: string, value: any) => {
-    setLayers(layers.map(l => l.id === id ? { ...l, params: { ...l.params, [key]: value } } : l));
+    setLayers(prev => prev.map(l => l.id === id ? { ...l, params: { ...l.params, [key]: value } } : l));
   };
 
   const handleSaveProfile = async () => {
@@ -297,6 +304,17 @@ export function EditorWorkspace({ currentVideo, onApplyWallpaper }: EditorWorksp
             Clear Effects
           </button>
           
+          {onUploadMedia && (
+            <button 
+              type="button" 
+              className="action-btn action-btn--ghost"
+              style={{ padding: "8px 12px", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "8px" }}
+              onClick={onUploadMedia}
+            >
+              Upload Media
+            </button>
+          )}
+          
           <button 
             type="button" 
             className="action-btn action-btn--primary"
@@ -336,6 +354,8 @@ export function EditorWorkspace({ currentVideo, onApplyWallpaper }: EditorWorksp
         <WebGLEffectRenderer 
           videoSrc={currentVideo ? (currentVideo.local_path || currentVideo.video_url) : ""} 
           effects={layers} 
+          selectedLayerId={selectedLayerId}
+          onUpdateParam={updateParam}
         />
 
       </div>
@@ -414,6 +434,61 @@ export function EditorWorkspace({ currentVideo, onApplyWallpaper }: EditorWorksp
                     value={selectedLayer.params.size || 6} 
                     onChange={(e) => updateParam(selectedLayer.id, "size", parseFloat(e.target.value))} 
                   />
+                </div>
+                <div className="property-group">
+                  <label>Color</label>
+                  <input 
+                    type="color" 
+                    value={selectedLayer.params.color || (selectedLayer.type === "snow" ? "#ffffff" : "#aaccff")} 
+                    onChange={(e) => updateParam(selectedLayer.id, "color", e.target.value)} 
+                    style={{ width: "100%", height: "36px", border: "none", borderRadius: "8px", cursor: "pointer" }}
+                  />
+                </div>
+              </>
+            )}
+
+            {selectedLayer.type === "water-caustics" && (
+              <>
+                <div className="property-group">
+                  <label>Speed ({selectedLayer.params.speed || 1.0})</label>
+                  <input type="range" min="0.1" max="5" step="0.1" className="property-control" value={selectedLayer.params.speed || 1.0} onChange={(e) => updateParam(selectedLayer.id, "speed", parseFloat(e.target.value))} />
+                </div>
+                <div className="property-group">
+                  <label>Scale ({selectedLayer.params.scale || 3.0})</label>
+                  <input type="range" min="0.5" max="10" step="0.5" className="property-control" value={selectedLayer.params.scale || 3.0} onChange={(e) => updateParam(selectedLayer.id, "scale", parseFloat(e.target.value))} />
+                </div>
+                <div className="property-group">
+                  <label>Intensity ({selectedLayer.params.intensity || 1.0})</label>
+                  <input type="range" min="0.1" max="5" step="0.1" className="property-control" value={selectedLayer.params.intensity || 1.0} onChange={(e) => updateParam(selectedLayer.id, "intensity", parseFloat(e.target.value))} />
+                </div>
+                <div className="property-group">
+                  <label>Color</label>
+                  <input type="color" value={selectedLayer.params.color || "#00ffff"} onChange={(e) => updateParam(selectedLayer.id, "color", e.target.value)} style={{ width: "100%", height: "36px", border: "none", borderRadius: "8px", cursor: "pointer" }} />
+                </div>
+              </>
+            )}
+
+            {selectedLayer.type === "blowing-leaves" && (
+              <>
+                <div className="property-group">
+                  <label>Count ({selectedLayer.params.count || 80})</label>
+                  <input type="range" min="10" max="500" step="10" className="property-control" value={selectedLayer.params.count || 80} onChange={(e) => updateParam(selectedLayer.id, "count", parseInt(e.target.value))} />
+                </div>
+                <div className="property-group">
+                  <label>Wind ({selectedLayer.params.wind || 0.5})</label>
+                  <input type="range" min="0" max="2" step="0.1" className="property-control" value={selectedLayer.params.wind || 0.5} onChange={(e) => updateParam(selectedLayer.id, "wind", parseFloat(e.target.value))} />
+                </div>
+                <div className="property-group">
+                  <label>Speed ({selectedLayer.params.speed || 1.0})</label>
+                  <input type="range" min="0.1" max="3" step="0.1" className="property-control" value={selectedLayer.params.speed || 1.0} onChange={(e) => updateParam(selectedLayer.id, "speed", parseFloat(e.target.value))} />
+                </div>
+                <div className="property-group">
+                  <label>Size ({selectedLayer.params.size || 15.0})</label>
+                  <input type="range" min="5" max="50" step="1" className="property-control" value={selectedLayer.params.size || 15.0} onChange={(e) => updateParam(selectedLayer.id, "size", parseFloat(e.target.value))} />
+                </div>
+                <div className="property-group">
+                  <label>Color</label>
+                  <input type="color" value={selectedLayer.params.color || "#4caf50"} onChange={(e) => updateParam(selectedLayer.id, "color", e.target.value)} style={{ width: "100%", height: "36px", border: "none", borderRadius: "8px", cursor: "pointer" }} />
                 </div>
               </>
             )}
@@ -525,16 +600,62 @@ export function EditorWorkspace({ currentVideo, onApplyWallpaper }: EditorWorksp
               </>
             )}
 
-            {(selectedLayer.type === "cursor-trail" || selectedLayer.type === "click-ripple") && (
-              <div className="property-group">
-                <label>Color</label>
-                <input 
-                  type="color" 
-                  value={selectedLayer.params.color || (selectedLayer.type === "cursor-trail" ? "#9ae600" : "#ffffff")}
-                  onChange={(e) => updateParam(selectedLayer.id, "color", e.target.value)}
-                  style={{ width: "100%", height: "36px", border: "none", borderRadius: "8px", cursor: "pointer" }}
-                />
-              </div>
+            {(selectedLayer.type === "cursor-trail" || selectedLayer.type === "click-ripple" || selectedLayer.type === "ribbon-trail") && (
+              <>
+                <div className="property-group">
+                  <label>Color</label>
+                  <input 
+                    type="color" 
+                    value={selectedLayer.params.color || (selectedLayer.type === "cursor-trail" ? "#9ae600" : "#ffffff")}
+                    onChange={(e) => updateParam(selectedLayer.id, "color", e.target.value)}
+                    style={{ width: "100%", height: "36px", border: "none", borderRadius: "8px", cursor: "pointer" }}
+                  />
+                </div>
+                {(selectedLayer.type === "cursor-trail" || selectedLayer.type === "click-ripple") && (
+                  <div className="property-group">
+                    <label>Size ({selectedLayer.params.size || 8})</label>
+                    <input 
+                      type="range" min="2" max="50" step="1" 
+                      className="property-control"
+                      value={selectedLayer.params.size || 8} 
+                      onChange={(e) => updateParam(selectedLayer.id, "size", parseInt(e.target.value))} 
+                    />
+                  </div>
+                )}
+                {selectedLayer.type === "ribbon-trail" && (
+                  <>
+                    <div className="property-group">
+                      <label>Width ({selectedLayer.params.width || 5.0})</label>
+                      <input 
+                        type="range" min="1" max="20" step="0.5" 
+                        className="property-control"
+                        value={selectedLayer.params.width || 5.0} 
+                        onChange={(e) => updateParam(selectedLayer.id, "width", parseFloat(e.target.value))} 
+                      />
+                    </div>
+                    <div className="property-group">
+                      <label>Length ({selectedLayer.params.length || 50})</label>
+                      <input 
+                        type="range" min="10" max="200" step="10" 
+                        className="property-control"
+                        value={selectedLayer.params.length || 50} 
+                        onChange={(e) => updateParam(selectedLayer.id, "length", parseInt(e.target.value))} 
+                      />
+                    </div>
+                  </>
+                )}
+                {(selectedLayer.type === "cursor-trail" || selectedLayer.type === "click-ripple") && (
+                  <div className="property-group">
+                    <label>Shape</label>
+                  <select className="input" value={selectedLayer.params.shape || "circle"} onChange={(e) => updateParam(selectedLayer.id, "shape", e.target.value)}>
+                    <option value="circle">Circle</option>
+                    <option value="spark">Spark (Star)</option>
+                    <option value="square">Square</option>
+                    <option value="ring">Ring</option>
+                  </select>
+                </div>
+                )}
+              </>
             )}
 
             {selectedLayer.type === "blur-region" && (
@@ -601,6 +722,10 @@ export function EditorWorkspace({ currentVideo, onApplyWallpaper }: EditorWorksp
                   <label>Twinkle ({selectedLayer.params.twinkle})</label>
                   <input type="range" min="0" max="1" step="0.05" className="property-control" value={selectedLayer.params.twinkle} onChange={(e) => updateParam(selectedLayer.id, "twinkle", parseFloat(e.target.value))} />
                 </div>
+                <div className="property-group">
+                  <label>Color</label>
+                  <input type="color" value={selectedLayer.params.color || "#ffffff"} onChange={(e) => updateParam(selectedLayer.id, "color", e.target.value)} style={{ width: "100%", height: "36px", border: "none", borderRadius: "8px", cursor: "pointer" }} />
+                </div>
               </>
             )}
 
@@ -622,6 +747,10 @@ export function EditorWorkspace({ currentVideo, onApplyWallpaper }: EditorWorksp
                   <label>Opacity ({selectedLayer.params.opacity})</label>
                   <input type="range" min="0.05" max="0.8" step="0.05" className="property-control" value={selectedLayer.params.opacity} onChange={(e) => updateParam(selectedLayer.id, "opacity", parseFloat(e.target.value))} />
                 </div>
+                <div className="property-group">
+                  <label>Color</label>
+                  <input type="color" value={selectedLayer.params.color || "#d9e0eb"} onChange={(e) => updateParam(selectedLayer.id, "color", e.target.value)} style={{ width: "100%", height: "36px", border: "none", borderRadius: "8px", cursor: "pointer" }} />
+                </div>
               </>
             )}
 
@@ -641,11 +770,30 @@ export function EditorWorkspace({ currentVideo, onApplyWallpaper }: EditorWorksp
                     <option value="bold">Bold</option>
                     <option value="neon">Neon Glow</option>
                     <option value="retro">Retro LCD</option>
+                    <option value="analog">Analog Face</option>
+                    <option value="digital-clean">Digital Clean</option>
+                    <option value="futuristic-day">Futuristic Day</option>
                   </select>
                 </div>
+                <div className="property-group" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <input type="checkbox" checked={selectedLayer.params.color === "auto"} onChange={(e) => updateParam(selectedLayer.id, "color", e.target.checked ? "auto" : "#ffffff")} />
+                  <label style={{ margin: 0 }}>Auto Match Wallpaper Color</label>
+                </div>
+                {selectedLayer.params.color !== "auto" && (
+                  <div className="property-group">
+                    <label>Color</label>
+                    <input type="color" value={selectedLayer.params.color || "#ffffff"} onChange={(e) => updateParam(selectedLayer.id, "color", e.target.value)} style={{ width: "100%", height: "36px", border: "none", borderRadius: "8px", cursor: "pointer" }} />
+                  </div>
+                )}
+                {selectedLayer.params.style === "analog" && (
+                  <div className="property-group">
+                    <label>Secondary Color (Seconds)</label>
+                    <input type="color" value={selectedLayer.params.secondaryColor || "#ff3366"} onChange={(e) => updateParam(selectedLayer.id, "secondaryColor", e.target.value)} style={{ width: "100%", height: "36px", border: "none", borderRadius: "8px", cursor: "pointer" }} />
+                  </div>
+                )}
                 <div className="property-group">
-                  <label>Color</label>
-                  <input type="color" value={selectedLayer.params.color || "#ffffff"} onChange={(e) => updateParam(selectedLayer.id, "color", e.target.value)} style={{ width: "100%", height: "36px", border: "none", borderRadius: "8px", cursor: "pointer" }} />
+                  <label>Size ({selectedLayer.params.size || 160}px)</label>
+                  <input type="range" min="50" max="800" step="10" className="property-control" value={selectedLayer.params.size || 160} onChange={(e) => updateParam(selectedLayer.id, "size", parseInt(e.target.value))} />
                 </div>
                 <div className="property-group">
                   <label>Opacity ({selectedLayer.params.opacity || 0.8})</label>
@@ -659,6 +807,93 @@ export function EditorWorkspace({ currentVideo, onApplyWallpaper }: EditorWorksp
                   <label>Position Y ({selectedLayer.params.y || 50}%)</label>
                   <input type="range" min="0" max="100" className="property-control" value={selectedLayer.params.y || 50} onChange={(e) => updateParam(selectedLayer.id, "y", parseInt(e.target.value))} />
                 </div>
+              </>
+            )}
+
+            {selectedLayer.type === "vignette" && (
+              <>
+                <div className="property-group">
+                  <label>Offset ({selectedLayer.params.offset || 0.1})</label>
+                  <input type="range" min="0" max="1" step="0.05" className="property-control" value={selectedLayer.params.offset || 0.1} onChange={(e) => updateParam(selectedLayer.id, "offset", parseFloat(e.target.value))} />
+                </div>
+                <div className="property-group">
+                  <label>Darkness ({selectedLayer.params.intensity || 0.6})</label>
+                  <input type="range" min="0" max="2" step="0.1" className="property-control" value={selectedLayer.params.intensity || 0.6} onChange={(e) => updateParam(selectedLayer.id, "intensity", parseFloat(e.target.value))} />
+                </div>
+              </>
+            )}
+
+            {selectedLayer.type === "audio-visualizer" && (
+              <>
+                <div className="property-group">
+                  <label>Style</label>
+                  <select className="input" value={selectedLayer.params.style || "circle"} onChange={(e) => updateParam(selectedLayer.id, "style", e.target.value)}>
+                    <option value="circle">Circle</option>
+                    <option value="horizontal">Horizontal Bars</option>
+                    <option value="mirror">Mirrored Bars</option>
+                  </select>
+                </div>
+                <div className="property-group">
+                  <label>Color</label>
+                  <input type="color" value={selectedLayer.params.color || "#ffffff"} onChange={(e) => updateParam(selectedLayer.id, "color", e.target.value)} style={{ width: "100%", height: "36px", border: "none", borderRadius: "8px", cursor: "pointer" }} />
+                </div>
+                <div className="property-group">
+                  <label>Scale ({selectedLayer.params.scale || 1.0})</label>
+                  <input type="range" min="0.1" max="5" step="0.1" className="property-control" value={selectedLayer.params.scale || 1.0} onChange={(e) => updateParam(selectedLayer.id, "scale", parseFloat(e.target.value))} />
+                </div>
+                <div className="property-group">
+                  <label>Radius ({selectedLayer.params.radius || 250})</label>
+                  <input type="range" min="50" max="800" step="10" className="property-control" value={selectedLayer.params.radius || 250} onChange={(e) => updateParam(selectedLayer.id, "radius", parseFloat(e.target.value))} />
+                </div>
+                <div className="property-group">
+                  <label>Opacity ({selectedLayer.params.opacity || 0.8})</label>
+                  <input type="range" min="0.1" max="1" step="0.05" className="property-control" value={selectedLayer.params.opacity || 0.8} onChange={(e) => updateParam(selectedLayer.id, "opacity", parseFloat(e.target.value))} />
+                </div>
+                <div className="property-group">
+                  <label>Position X ({selectedLayer.params.x || 50}%)</label>
+                  <input type="range" min="0" max="100" className="property-control" value={selectedLayer.params.x || 50} onChange={(e) => updateParam(selectedLayer.id, "x", parseInt(e.target.value))} />
+                </div>
+                <div className="property-group">
+                  <label>Position Y ({selectedLayer.params.y || 50}%)</label>
+                  <input type="range" min="0" max="100" className="property-control" value={selectedLayer.params.y || 50} onChange={(e) => updateParam(selectedLayer.id, "y", parseInt(e.target.value))} />
+                </div>
+              </>
+            )}
+            {selectedLayer.type === "ribbon-trail" && (
+              <>
+                <div className="property-group" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <input type="checkbox" checked={selectedLayer.params.color === "auto"} onChange={(e) => updateParam(selectedLayer.id, "color", e.target.checked ? "auto" : "#ffffff")} />
+                  <label style={{ margin: 0 }}>Auto Match Wallpaper Color</label>
+                </div>
+                {selectedLayer.params.color !== "auto" && (
+                  <div className="property-group">
+                    <label>Color</label>
+                    <input type="color" value={selectedLayer.params.color || "#ffffff"} onChange={(e) => updateParam(selectedLayer.id, "color", e.target.value)} style={{ width: "100%", height: "36px", border: "none", borderRadius: "8px", cursor: "pointer" }} />
+                  </div>
+                )}
+                <div className="property-group">
+                  <label>Width ({selectedLayer.params.width || 5.0})</label>
+                  <input type="range" min="1" max="20" step="1" className="property-control" value={selectedLayer.params.width || 5.0} onChange={(e) => updateParam(selectedLayer.id, "width", parseFloat(e.target.value))} />
+                </div>
+                <div className="property-group">
+                  <label>Length ({selectedLayer.params.length || 50})</label>
+                  <input type="range" min="10" max="200" step="10" className="property-control" value={selectedLayer.params.length || 50} onChange={(e) => updateParam(selectedLayer.id, "length", parseInt(e.target.value))} />
+                </div>
+              </>
+            )}
+
+            {selectedLayer.type === "cursor-trail" && (
+              <>
+                <div className="property-group" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <input type="checkbox" checked={selectedLayer.params.color === "auto"} onChange={(e) => updateParam(selectedLayer.id, "color", e.target.checked ? "auto" : "#ffffff")} />
+                  <label style={{ margin: 0 }}>Auto Match Wallpaper Color</label>
+                </div>
+                {selectedLayer.params.color !== "auto" && (
+                  <div className="property-group">
+                    <label>Color</label>
+                    <input type="color" value={selectedLayer.params.color || "#ffffff"} onChange={(e) => updateParam(selectedLayer.id, "color", e.target.value)} style={{ width: "100%", height: "36px", border: "none", borderRadius: "8px", cursor: "pointer" }} />
+                  </div>
+                )}
               </>
             )}
           </div>

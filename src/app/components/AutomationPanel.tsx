@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent } from "react";
+import { ChangeEvent, useState, useEffect } from "react";
 
 interface AutomationPanelProps {
   wallpaper: any; // Type accurately if you have a state hook structure, for now 'any' works well for direct mapping.
@@ -37,6 +37,21 @@ export function AutomationPanel({ wallpaper }: AutomationPanelProps) {
     }
   };
 
+  const [syncAccent, setSyncAccent] = useState(true);
+
+  useEffect(() => {
+    const saved = localStorage.getItem("syncWindowsAccent");
+    if (saved !== null) {
+      setSyncAccent(saved === "true");
+    }
+  }, []);
+
+  const onSyncAccentChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const isChecked = event.target.checked;
+    setSyncAccent(isChecked);
+    localStorage.setItem("syncWindowsAccent", String(isChecked));
+  };
+
   return (
     <div className="panel automation-card">
       <div className="section-head">
@@ -44,6 +59,14 @@ export function AutomationPanel({ wallpaper }: AutomationPanelProps) {
         <h2>Playback Scheduler</h2>
       </div>
       <div className="automation-grid">
+        <label className="toggle-row">
+          <span>Sync Windows Accent Color (Taskbar/Windows) with Wallpaper</span>
+          <input
+            type="checkbox"
+            checked={syncAccent}
+            onChange={onSyncAccentChange}
+          />
+        </label>
         <label className="toggle-row">
           <span>Pause live wallpaper playback</span>
           <input
