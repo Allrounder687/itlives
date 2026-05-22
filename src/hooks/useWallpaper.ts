@@ -22,7 +22,8 @@ export function useWallpaper() {
     setBlurStrength,
     setPaused,
     setWallpaperScale,
-    setWallpaperFilter
+    setWallpaperFilter,
+    fetchVideoTags
   } = useWallpaperActions(state, setState);
   const { addToQueue, removeFromQueue } = useQueueManager(state, setState);
   const { toggleFavorite, removeRecentVideo, removeImportedVideo } = useLibraryActions(state, setState);
@@ -163,6 +164,7 @@ export function useWallpaper() {
     ...state,
     applyWallpaper,
     fetchVideosList,
+    fetchVideoTags,
     fetchVideo,
     stopWallpaper,
     setPlaybackSpeed,

@@ -123,6 +123,7 @@ impl VideoProvider for WallpaperWavesProvider {
                     source: "wallpaperwaves".to_string(),
                     start_time: None,
                     end_time: None,
+            tags: None,
                 });
             }
         }

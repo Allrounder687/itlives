@@ -30,6 +30,16 @@ export function useWallpaperActions(state: WallpaperState, setState: React.Dispa
     }
   }, [state.wallpaperScalePercent, setState]);
 
+  const fetchVideoTags = useCallback(async (source: string, id: string): Promise<string[]> => {
+    try {
+      const { invoke } = await getCoreApi();
+      return await invoke<string[]>("fetch_video_tags", { source, id });
+    } catch (error) {
+      console.error("Failed to fetch tags:", error);
+      return [];
+    }
+  }, []);
+
   const fetchVideosList = useCallback(async () => {
     if (state.source === "direct") return [];
     setState((s) => ({ ...s, isLoading: true, error: null, duplicateNotice: null }));
@@ -177,6 +187,7 @@ export function useWallpaperActions(state: WallpaperState, setState: React.Dispa
     setBlurStrength,
     setPaused,
     setWallpaperScale,
-    setWallpaperFilter
+    setWallpaperFilter,
+    fetchVideoTags
   };
 }

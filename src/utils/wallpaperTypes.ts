@@ -7,6 +7,7 @@ export interface VideoResult {
   width: number;
   height: number;
   source: string;
+  tags?: string[];
 }
 
 export interface LibraryItem {

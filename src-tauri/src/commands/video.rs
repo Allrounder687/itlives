@@ -1,6 +1,30 @@
-use tauri::{State, Window, Emitter};
+use tauri::{AppHandle, Manager, State, Window, Emitter};
 use crate::wallpaper::providers::{self, SearchConfig, VideoResult};
 use crate::wallpaper::state::AppStateStore;
+
+fn hex_to_color_name(hex: &str) -> Option<&'static str> {
+    match hex {
+        "cc3333" => Some("red"),
+        "ea4c88" => Some("pink"),
+        "993399" => Some("purple"),
+        "0066cc" => Some("blue"),
+        "0099cc" => Some("light blue"),
+        "66cccc" => Some("teal"),
+        "669900" => Some("green"),
+        "77cc33" => Some("lime"),
+        "ffff00" => Some("yellow"),
+        "ffcc33" => Some("gold"),
+        "ff9900" => Some("orange"),
+        "ff6600" => Some("dark orange"),
+        "663300" => Some("brown"),
+        "000000" => Some("black"),
+        "424153" => Some("dark gray"),
+        "999999" => Some("gray"),
+        "cccccc" => Some("light gray"),
+        "ffffff" => Some("white"),
+        _ => None,
+    }
+}
 
 fn clean_search_query(q: &str) -> String {
     let trimmed = q.trim();
@@ -119,7 +143,19 @@ pub async fn fetch_videos_list(
         // Concurrent fetching for better performance
         let mut tasks = Vec::new();
         for p_name in providers_list {
-            let config_clone = config.clone();
+            let mut config_clone = config.clone();
+            if p_name != "wallhaven" {
+                if let Some(ref hex) = config.colors {
+                    if let Some(name) = hex_to_color_name(hex) {
+                        if config_clone.query.is_empty() || config_clone.query == "all" || config_clone.query == "wallpaper" {
+                            config_clone.query = name.to_string();
+                        } else {
+                            config_clone.query = format!("{} {}", config_clone.query, name);
+                        }
+                    }
+                }
+            }
+
             tasks.push(tokio::spawn(async move {
                 if let Ok(p) = providers::get_provider(p_name) {
                     p.fetch_videos_list(&config_clone).await.unwrap_or_default()
@@ -135,6 +171,9 @@ pub async fn fetch_videos_list(
             }
         }
         
+        // Apply post-fetch filters to the unified results
+        providers::apply_post_fetch_filters(&mut all_results, &config);
+
         // Sort by ID or shuffle? Shuffling makes it feel more "unified"
         use rand::seq::SliceRandom;
         let mut rng = rand::thread_rng();
@@ -144,7 +183,7 @@ pub async fn fetch_videos_list(
     }
 
     let provider = providers::get_provider(&source)?;
-    let config = SearchConfig {
+    let mut config = SearchConfig {
         query: cleaned_query,
         order,
         count: 40,
@@ -154,7 +193,32 @@ pub async fn fetch_videos_list(
         ratios,
         colors,
     };
-    provider.fetch_videos_list(&config).await
+
+    if source != "wallhaven" {
+        if let Some(ref hex) = config.colors {
+            if let Some(name) = hex_to_color_name(hex) {
+                if config.query.is_empty() || config.query == "all" || config.query == "wallpaper" {
+                    config.query = name.to_string();
+                } else {
+                    config.query = format!("{} {}", config.query, name);
+                }
+            }
+        }
+    }
+
+    let mut results = provider.fetch_videos_list(&config).await?;
+    
+    // Apply post-fetch filters for all providers
+    providers::apply_post_fetch_filters(&mut results, &config);
+
+    Ok(results)
+}
+
+/// Fetches tags for a specific video ID using the provider's implementation.
+#[tauri::command]
+pub async fn fetch_video_tags(source: String, id: String) -> Result<Vec<String>, String> {
+    let provider = crate::wallpaper::providers::get_provider(&source)?;
+    provider.fetch_tags(&id).await
 }
 
 /// Fetches YouTube video metadata (title, duration, thumbnail) without downloading.
@@ -177,6 +241,7 @@ pub async fn fetch_youtube_meta(url: String) -> Result<VideoResult, String> {
         source: "youtube".to_string(),
         start_time: None,
         end_time: None,
+        tags: None,
     })
 }
 
@@ -217,6 +282,7 @@ pub async fn download_youtube_clip(
         source: "youtube".to_string(),
         start_time: Some(start_time),
         end_time: Some(end_time),
+        tags: None,
     };
 
     // Auto-save to Imports so it appears in the Library permanently

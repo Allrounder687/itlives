@@ -245,6 +245,7 @@ impl VideoProvider for PinterestProvider {
                                                 source: "pinterest".to_string(),
                                                 start_time: None,
                                                 end_time: None,
+            tags: None,
                                             });
                                         }
                                     }
@@ -281,6 +282,7 @@ impl VideoProvider for PinterestProvider {
                     source: "pinterest".to_string(),
                     start_time: None,
                     end_time: None,
+            tags: None,
                 });
             }
         }

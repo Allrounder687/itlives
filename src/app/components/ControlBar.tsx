@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { BatchDownloadModal } from "./BatchDownloadModal";
-import { WallhavenFilters } from "./WallhavenFilters";
+import { AdvancedFilters } from "./AdvancedFilters";
 
 interface ControlBarProps {
   source: string;
@@ -631,14 +631,15 @@ export function ControlBar({
             </div>
           )}
           
-          {source === "wallhaven" && !category.startsWith("http") && (
-            <WallhavenFilters 
+          {!category.startsWith("http") && source !== "direct" && source !== "youtube" && (
+            <AdvancedFilters 
               resolutionFilter={resolutions || null}
               ratioFilter={ratios || null}
               colorFilter={colors || null}
               onResolutionChange={onResolutionsChange || (() => {})}
               onRatioChange={onRatiosChange || (() => {})}
               onColorChange={onColorsChange || (() => {})}
+              showColorFilter={true}
             />
           )}
         </>

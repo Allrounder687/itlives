@@ -27,6 +27,7 @@ pub struct VideoResult {
     pub source: String,
     pub start_time: Option<f64>,
     pub end_time: Option<f64>,
+    pub tags: Option<Vec<String>>,
 }
 
 /// Configuration for a provider search request.
@@ -72,6 +73,11 @@ pub trait VideoProvider: Send + Sync {
 
     /// Downloads the given video to cache and returns local path string.
     async fn download_video(&self, video: &VideoResult) -> Result<String, String>;
+
+    /// Fetches tags for a specific video ID. Default returns empty.
+    async fn fetch_tags(&self, _id: &str) -> Result<Vec<String>, String> {
+        Ok(Vec::new())
+    }
 }
 
 /// Downloads a video from URL to the cache dir. Shared utility for all providers.
@@ -183,3 +189,47 @@ pub fn list_providers() -> Vec<String> {
     ]
 }
 
+pub fn apply_post_fetch_filters(results: &mut Vec<VideoResult>, config: &SearchConfig) {
+    results.retain(|item| {
+        // Apply Resolution filter
+        if let Some(ref res) = config.resolutions {
+            let res = res.trim();
+            if res.starts_with(">=") {
+                let parts: Vec<&str> = res[2..].split('x').collect();
+                if parts.len() == 2 {
+                    if let (Ok(w), Ok(h)) = (parts[0].parse::<u32>(), parts[1].parse::<u32>()) {
+                        if item.width < w || item.height < h {
+                            return false;
+                        }
+                    }
+                }
+            } else {
+                let parts: Vec<&str> = res.split('x').collect();
+                if parts.len() == 2 {
+                    if let (Ok(w), Ok(h)) = (parts[0].parse::<u32>(), parts[1].parse::<u32>()) {
+                        if item.width != w || item.height != h {
+                            return false;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Apply Ratio filter
+        if let Some(ref ratio) = config.ratios {
+            let ratio = ratio.trim();
+            let parts: Vec<&str> = ratio.split('x').collect();
+            if parts.len() == 2 {
+                if let (Ok(rw), Ok(rh)) = (parts[0].parse::<f32>(), parts[1].parse::<f32>()) {
+                    let target_ratio = rw / rh;
+                    let item_ratio = item.width as f32 / item.height as f32;
+                    if (item_ratio - target_ratio).abs() > 0.05 {
+                        return false;
+                    }
+                }
+            }
+        }
+
+        true
+    });
+}

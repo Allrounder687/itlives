@@ -1,12 +1,13 @@
 import { useState, useRef, useEffect } from "react";
 
-interface WallhavenFiltersProps {
-  resolutionFilter: string | null;
-  ratioFilter: string | null;
-  colorFilter: string | null;
+interface AdvancedFiltersProps {
+  resolutionFilter?: string | null;
+  ratioFilter?: string | null;
+  colorFilter?: string | null;
   onResolutionChange: (res: string | null) => void;
   onRatioChange: (ratio: string | null) => void;
   onColorChange: (color: string | null) => void;
+  showColorFilter?: boolean;
 }
 
 const COLORS = [
@@ -73,14 +74,15 @@ const RESOLUTION_GROUPS = [
   }
 ];
 
-export function WallhavenFilters({
+export function AdvancedFilters({
   resolutionFilter,
   ratioFilter,
   colorFilter,
   onResolutionChange,
   onRatioChange,
-  onColorChange
-}: WallhavenFiltersProps) {
+  onColorChange,
+  showColorFilter = false,
+}: AdvancedFiltersProps) {
   const [activeDropdown, setActiveDropdown] = useState<"resolution" | "ratio" | "color" | null>(null);
   const [resolutionMode, setResolutionMode] = useState<"atleast" | "exactly">("exactly");
   const [customW, setCustomW] = useState("");
@@ -218,6 +220,7 @@ export function WallhavenFilters({
       </div>
 
       {/* COLOR BUTTON */}
+      {showColorFilter && (
       <div style={{ position: "relative" }}>
         <button 
           className={`action-btn ${activeDropdown === "color" || colorFilter ? "action-btn--primary" : "action-btn--ghost"}`}
@@ -260,6 +263,7 @@ export function WallhavenFilters({
           </div>
         )}
       </div>
+      )}
 
     </div>
   );

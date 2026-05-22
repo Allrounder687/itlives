@@ -546,6 +546,7 @@ mod tests {
             source: "direct".to_string(),
             start_time: None,
             end_time: None,
+            tags: None,
         }
     }
 

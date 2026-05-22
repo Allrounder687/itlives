@@ -110,6 +110,7 @@ impl VideoProvider for AlphaCodersProvider {
                 source: "alphacoders".to_string(),
                 start_time: None,
                 end_time: None,
+            tags: None,
             };
             
             items.push(result);

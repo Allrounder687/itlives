@@ -203,6 +203,7 @@ impl VideoProvider for MotionBgsProvider {
                 source: "motionbgs".to_string(),
                 start_time: None,
                 end_time: None,
+            tags: None,
             });
         }
 

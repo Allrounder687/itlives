@@ -590,6 +590,7 @@ impl VideoProvider for YouTubeProvider {
             source: "youtube".to_string(),
             start_time: None,
             end_time: None,
+            tags: None,
         })
     }
 

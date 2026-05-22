@@ -10,6 +10,21 @@ struct WallhavenResponse {
     data: Option<Vec<WallhavenItem>>,
 }
 
+#[derive(Deserialize)]
+struct WallhavenDetailResponse {
+    data: Option<WallhavenDetailData>,
+}
+
+#[derive(Deserialize)]
+struct WallhavenDetailData {
+    tags: Option<Vec<WallhavenTag>>,
+}
+
+#[derive(Deserialize)]
+struct WallhavenTag {
+    name: String,
+}
+
 #[derive(Deserialize, Clone)]
 struct WallhavenItem {
     id: String,
@@ -123,6 +138,7 @@ impl VideoProvider for WallhavenProvider {
                 source: "wallhaven".to_string(),
                 start_time: None,
                 end_time: None,
+            tags: None,
             });
         }
 
@@ -131,6 +147,36 @@ impl VideoProvider for WallhavenProvider {
 
     async fn download_video(&self, video: &VideoResult) -> Result<String, String> {
         let cache_dir = crate::wallpaper::desktop::get_cache_dir();
-        super::download_to_cache(&video.video_url, &video.id, "wallhaven", &cache_dir, None).await
+        super::download_to_cache(
+            &video.video_url,
+            &video.id,
+            "wallhaven",
+            &cache_dir,
+            Some(vec![("User-Agent".to_string(), "Mozilla/5.0".to_string())]),
+        ).await
+    }
+
+    async fn fetch_tags(&self, id: &str) -> Result<Vec<String>, String> {
+        let url = format!("https://wallhaven.cc/api/v1/w/{}", id);
+        let client = reqwest::Client::new();
+        let resp = client
+            .get(&url)
+            .header("User-Agent", "Mozilla/5.0")
+            .send()
+            .await
+            .map_err(|e| format!("WallHaven API failed: {}", e))?;
+
+        let data: WallhavenDetailResponse = resp
+            .json()
+            .await
+            .map_err(|e| format!("WallHaven parse failed: {}", e))?;
+
+        if let Some(detail) = data.data {
+            if let Some(tags) = detail.tags {
+                return Ok(tags.into_iter().map(|t| t.name).collect());
+            }
+        }
+        
+        Ok(Vec::new())
     }
 }

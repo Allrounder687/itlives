@@ -225,6 +225,7 @@ pub fn run() {
             commands::batch::cancel_batch_download,
             commands::batch::download_single_file,
             commands::batch::start_wallhaven_selection_download,
+            commands::video::fetch_video_tags,
         ])
         .run(tauri::generate_context!())
 

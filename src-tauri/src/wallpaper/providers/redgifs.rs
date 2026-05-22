@@ -119,6 +119,7 @@ impl VideoProvider for RedGifsProvider {
             source: "redgifs".to_string(),
             start_time: None,
             end_time: None,
+            tags: None,
         })
     }
 
@@ -166,6 +167,7 @@ impl VideoProvider for RedGifsProvider {
                     source: "redgifs".to_string(),
                     start_time: None,
                     end_time: None,
+            tags: None,
                 });
             }
         }
