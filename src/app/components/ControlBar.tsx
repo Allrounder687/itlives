@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { BatchDownloadModal } from "./BatchDownloadModal";
 import { AdvancedFilters } from "./AdvancedFilters";
+import DisplaySelector from "./DisplaySelector";
 
 interface ControlBarProps {
   source: string;
@@ -545,6 +546,8 @@ export function ControlBar({
           )}
         </div>
       )}
+
+      <DisplaySelector />
 
       <div className="control-grid-v2">
         <div className="field">

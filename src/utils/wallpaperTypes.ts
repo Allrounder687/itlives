@@ -15,6 +15,16 @@ export interface LibraryItem {
   saved_at: number;
 }
 
+export interface DisplayMonitor {
+  name: string;
+  width: number;
+  height: number;
+  x: number;
+  y: number;
+  scale_factor: number;
+  is_primary: boolean;
+}
+
 export interface PersistedState {
   current_video: VideoResult | null;
   is_playing: boolean;
@@ -60,6 +70,7 @@ export interface WallpaperState {
   favorites: LibraryItem[];
   imports: LibraryItem[];
   queue: LibraryItem[];
+  selectedMonitor: DisplayMonitor | null;
   queueCursor: number;
   rotationEnabled: boolean;
   rotationIntervalSeconds: number;

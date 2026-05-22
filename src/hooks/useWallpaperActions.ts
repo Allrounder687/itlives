@@ -15,6 +15,7 @@ export function useWallpaperActions(state: WallpaperState, setState: React.Dispa
         scalePercent: state.wallpaperScalePercent,
         startTime: startTime !== undefined ? startTime : null,
         endTime: endTime !== undefined ? endTime : null,
+        monitor: state.selectedMonitor?.name || null,
       });
       setState((s) => ({
         ...applyPersistedState(persisted, s),

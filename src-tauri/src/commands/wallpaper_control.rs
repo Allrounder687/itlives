@@ -12,11 +12,13 @@ use std::os::windows::process::CommandExt;
 
 #[tauri::command]
 pub async fn apply_wallpaper(
+    app: tauri::AppHandle,
     state: State<'_, AppStateStore>,
     mut video: VideoResult,
     scale_percent: u64,
     start_time: Option<f64>,
     end_time: Option<f64>,
+    monitor: Option<String>,
 ) -> Result<WallpaperState, String> {
     if video.local_path.is_empty() || video.local_path.starts_with("http") {
         log::info!("[Core] Download on apply triggered for source: {}", video.source);
@@ -47,6 +49,7 @@ pub async fn apply_wallpaper(
         .map_err(|e| format!("Static image processing task failed: {}", e))??;
     } else {
         wallpaper::desktop::set_video(
+            app.clone(),
             &video.local_path,
             scale_percent,
             current.volume_percent,
@@ -56,6 +59,7 @@ pub async fn apply_wallpaper(
             false, 
             start_time,
             end_time,
+            monitor.clone(),
         )?;
     }
     wallpaper::state::mark_active(&state, video)
@@ -110,6 +114,7 @@ pub fn set_wallpaper_volume(
 
 #[tauri::command]
 pub fn set_wallpaper_filter(
+    app: tauri::AppHandle,
     state: State<'_, AppStateStore>,
     video_filter: String,
 ) -> Result<WallpaperState, String> {
@@ -130,6 +135,7 @@ pub fn set_wallpaper_filter(
                 }
             } else {
                 if let Err(e) = wallpaper::desktop::set_video(
+                    app,
                     &video.local_path,
                     persisted.wallpaper_scale_percent,
                     persisted.volume_percent,
@@ -137,6 +143,7 @@ pub fn set_wallpaper_filter(
                     persisted.playback_speed,
                     persisted.blur_strength,
                     persisted.paused,
+                    None,
                     None,
                     None,
                 ) {
@@ -150,6 +157,7 @@ pub fn set_wallpaper_filter(
 
 #[tauri::command]
 pub fn set_wallpaper_scale(
+    app: tauri::AppHandle,
     state: State<'_, AppStateStore>,
     scale_percent: u64,
 ) -> Result<WallpaperState, String> {
@@ -170,6 +178,7 @@ pub fn set_wallpaper_scale(
                 }
             } else {
                 if let Err(e) = wallpaper::desktop::set_video(
+                    app,
                     &video.local_path,
                     persisted.wallpaper_scale_percent,
                     persisted.volume_percent,
@@ -177,6 +186,7 @@ pub fn set_wallpaper_scale(
                     persisted.playback_speed,
                     persisted.blur_strength,
                     persisted.paused,
+                    None,
                     None,
                     None,
                 ) {
@@ -204,6 +214,7 @@ pub fn set_wallpaper_speed(
 
 #[tauri::command]
 pub fn set_wallpaper_blur(
+    app: tauri::AppHandle,
     state: State<'_, AppStateStore>,
     blur: u32,
 ) -> Result<WallpaperState, String> {
@@ -224,6 +235,7 @@ pub fn set_wallpaper_blur(
                 }
             } else {
                 if let Err(e) = wallpaper::desktop::set_video(
+                    app,
                     &video.local_path,
                     persisted.wallpaper_scale_percent,
                     persisted.volume_percent,
@@ -232,7 +244,8 @@ pub fn set_wallpaper_blur(
                     persisted.blur_strength,
                     persisted.paused,
                     None,
-                    None
+                    None,
+                    None,
                 ) {
                     log::warn!("Failed to set video blur: {}", e);
                 }

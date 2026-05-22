@@ -8,9 +8,11 @@ use std::os::windows::process::CommandExt;
 use std::sync::Mutex;
 use lazy_static::lazy_static;
 
+use std::collections::HashMap;
+
 lazy_static! {
-    static ref CURRENT_VIDEO: Mutex<Option<String>> = Mutex::new(None);
-    static ref LAST_CONFIG: Mutex<Option<WallpaperConfig>> = Mutex::new(None);
+    static ref CURRENT_VIDEO: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
+    static ref LAST_CONFIG: Mutex<HashMap<String, WallpaperConfig>> = Mutex::new(HashMap::new());
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -140,10 +142,43 @@ pub mod win32 {
         }
         BOOL(1)
     }
+
+    static mut SEARCH_PID: u32 = 0;
+    static mut FOUND_HWND: HWND = HWND(0 as _);
+
+    pub fn find_hwnd_by_pid(pid: u32) -> Option<isize> {
+        unsafe {
+            SEARCH_PID = pid;
+            FOUND_HWND = HWND(0 as _);
+            let _ = EnumWindows(Some(enum_pid_cb), LPARAM(0));
+            if FOUND_HWND.0 != 0 as _ {
+                Some(FOUND_HWND.0 as isize)
+            } else {
+                None
+            }
+        }
+    }
+
+    unsafe extern "system" fn enum_pid_cb(hwnd: HWND, _lparam: LPARAM) -> BOOL {
+        let mut wnd_pid = 0;
+        windows::Win32::UI::WindowsAndMessaging::GetWindowThreadProcessId(hwnd, Some(&mut wnd_pid));
+        if wnd_pid == SEARCH_PID {
+            // Check if window is visible and has no owner (it's a main window)
+            use windows::Win32::UI::WindowsAndMessaging::{IsWindowVisible, GetWindow, GW_OWNER};
+            if IsWindowVisible(hwnd).as_bool() && GetWindow(hwnd, GW_OWNER).is_err() {
+                FOUND_HWND = hwnd;
+                return BOOL(0); // Stop enumeration
+            }
+            
+            // If it's mpv, it might be borderless/invisible initially during startup, so we might just grab the first one we see
+            FOUND_HWND = hwnd;
+        }
+        BOOL(1)
+    }
 }
 
-/// Sets a video file as a live desktop wallpaper using mpv.
 pub fn set_video(
+    app: tauri::AppHandle,
     path: &str,
     scale_percent: u64,
     volume_percent: u64,
@@ -153,7 +188,9 @@ pub fn set_video(
     paused: bool,
     start_time: Option<f64>,
     end_time: Option<f64>,
+    monitor_name: Option<String>,
 ) -> Result<String, String> {
+    use tauri::Manager;
     let resolved_path = path.to_string();
     let is_url = resolved_path.starts_with("http");
     let scale_percent = scale_percent.clamp(25, 200);
@@ -164,7 +201,6 @@ pub fn set_video(
         return Err(format!("Video file not found: {}", resolved_path));
     }
 
-    // --- Smart Skip Check ---
     let new_config = WallpaperConfig {
         path: path.to_string(),
         scale: scale_percent,
@@ -177,132 +213,204 @@ pub fn set_video(
         end_time,
     };
 
+    let monitors = app.available_monitors().unwrap_or_default();
+    let mut target_m = monitors.first().cloned();
+    if let Some(ref m_name) = monitor_name {
+        for m in &monitors {
+            if m.name().map(|n| n == m_name).unwrap_or(false) {
+                target_m = Some(m.clone());
+                break;
+            }
+        }
+    }
+    let m_key = target_m.as_ref().and_then(|m| m.name().cloned()).unwrap_or_else(|| "default".to_string());
+
     if let Ok(last) = LAST_CONFIG.lock() {
-        let last: &Option<WallpaperConfig> = &*last;
-        if let Some(config) = last.as_ref() {
+        if let Some(config) = last.get(&m_key) {
             if config == &new_config {
-                log::info!("Skip re-apply: Configuration is identical to active wallpaper.");
+                log::info!("Skip re-apply: Configuration identical for monitor {}", m_key);
                 return Ok("Skipped redundant re-apply".to_string());
             }
         }
     }
 
-    // Kill any existing mpv wallpaper process
-    stop_video().ok();
+    // Stop existing video on this specific monitor
+    stop_video_for_monitor(&m_key);
 
     #[cfg(windows)]
     {
-        let _mpv_path = find_mpv().ok_or("mpv not found. Install: winget install shinchiro.mpv")?;
-
+        let mpv_path = find_mpv().ok_or("mpv not found. Install: winget install shinchiro.mpv")?;
         let workerw = win32::get_desktop_workerw().unwrap_or(0);
-        log::info!("Spawning standalone PowerShell self-healing script fix wrapper layout... WorkerW: {}", workerw);
+        
+        let width = target_m.as_ref().map(|m| m.size().width).unwrap_or(1920);
+        let height = target_m.as_ref().map(|m| m.size().height).unwrap_or(1080);
+        let x = target_m.as_ref().map(|m| m.position().x).unwrap_or(0);
+        let y = target_m.as_ref().map(|m| m.position().y).unwrap_or(0);
 
-        let script_content = include_str!("../../../scripts/set_wallpaper_cli_v2.ps1");
-        let script_dir = app_data_dir().join("scripts");
-        let _ = std::fs::create_dir_all(&script_dir);
-        let script_path = script_dir.join("set_wallpaper_cli_v2.ps1");
-        let _ = std::fs::write(&script_path, script_content);
+        let target_width = ((width as f64 * scale_percent as f64 / 100.0) / 2.0).round() as u32 * 2;
+        let target_height = ((height as f64 * scale_percent as f64 / 100.0) / 2.0).round() as u32 * 2;
+        let target_width = target_width.max(2);
+        let target_height = target_height.max(2);
+
+        let filter_chain = get_filter_chain(target_width as u64, target_height as u64, video_filter, blur);
+        let mute = if volume_percent <= 0 { "yes" } else { "no" };
+        let pause_val = if paused { "yes" } else { "no" };
+
+        // Generate a deterministic pipe name based on monitor index or name length
+        let pipe_idx = m_key.len() % 10;
+        let ipc_server = format!(r"\\.\pipe\openclaw-mpv-{}", pipe_idx);
 
         let mut args = vec![
-            "-NoProfile".to_string(),
-            "-ExecutionPolicy".to_string(),
-            "Bypass".to_string(),
-            "-File".to_string(),
-            script_path.to_string_lossy().into_owned(),
-            "-VideoPath".to_string(),
-            path.to_string(),
-            "-ScalePercent".to_string(),
-            scale_percent.to_string(),
-            "-VolumePercent".to_string(),
-            volume_percent.to_string(),
-            "-VideoFilter".to_string(),
-            video_filter.to_string(),
-            "-StartPaused".to_string(),
-            if paused { "1".to_string() } else { "0".to_string() },
-            "-WindowHandle".to_string(),
-            workerw.to_string(),
-            "-MpvPath".to_string(),
-            _mpv_path.to_string(),
-            "-Speed".to_string(),
-            speed.to_string(),
-            "-BlurStrength".to_string(),
-            blur.to_string(),
+            format!("--input-ipc-server={}", ipc_server),
+            "--loop=inf".to_string(),
+            format!("--mute={}", mute),
+            format!("--volume={}", volume_percent),
+            format!("--speed={}", speed),
+            format!("--pause={}", pause_val),
+            "--no-osc".to_string(),
+            "--no-osd-bar".to_string(),
+            "--no-border".to_string(),
+            "--no-config".to_string(),
+            "--input-default-bindings=no".to_string(),
+            "--input-vo-keyboard=no".to_string(),
+            "--show-in-taskbar=no".to_string(),
+            "--keepaspect=no".to_string(),
+            "--force-window=yes".to_string(),
+            format!("--geometry={}x{}+{}+{}", width, height, x, y),
+            "--ontop=no".to_string(),
+            "--vo=gpu-next".to_string(),
+            "--gpu-api=d3d11".to_string(),
+            "--hwdec=d3d11va".to_string(),
+            "--gpu-context=d3d11".to_string(),
+            "--panscan=1.0".to_string(),
+            format!("--vf={}", filter_chain),
+            "--demuxer-max-bytes=32M".to_string(),
+            "--demuxer-max-back-bytes=16M".to_string(),
+            "--cache=no".to_string(),
+            "--vd-lavc-fast".to_string(),
+            "--vd-lavc-skiploopfilter=all".to_string(),
+            "--vd-lavc-threads=1".to_string(),
+            "--dither-depth=no".to_string(),
+            "--icc-profile-auto=no".to_string(),
+            "--terminal=no".to_string(),
         ];
 
+        if workerw == 0 {
+            args.push("--wid=0".to_string());
+        }
+
         if let Some(st) = start_time {
-            args.push("-StartTime".to_string());
-            args.push(st.to_string());
+            args.push(format!("--start={}", st));
         }
-
         if let Some(et) = end_time {
-            args.push("-EndTime".to_string());
-            args.push(et.to_string());
+            args.push(format!("--end={}", et));
         }
 
-        let mut cmd = Command::new("powershell");
+        args.push(resolved_path.clone());
+
+        let mut cmd = Command::new(mpv_path);
         cmd.args(&args);
         #[cfg(windows)]
-        cmd.creation_flags(0x08000000);
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
         
-        let _child = cmd.spawn()
-            .map_err(|e| format!("Failed to launch powershell self-healing wrapper: {}", e))?;
-    }
+        let child = cmd.spawn().map_err(|e| format!("Failed to spawn mpv: {}", e))?;
+        let pid = child.id();
+        
+        // Save PID for this monitor
+        save_mpv_pid(&m_key, pid);
 
-    if let Ok(mut current) = CURRENT_VIDEO.lock() {
-        let current: &mut Option<String> = &mut *current;
-        *current = Some(path.to_string());
-    }
-
-    if let Ok(mut last) = LAST_CONFIG.lock() {
-        let last: &mut Option<WallpaperConfig> = &mut *last;
-        *last = Some(new_config);
-    }
-
-    log::info!("Video wallpaper set to: {}", path);
-    Ok(format!("Wallpaper set: {} at {}%", path, scale_percent))
-}
-
-/// Stops all current video wallpapers.
-pub fn stop_video() -> Result<String, String> {
-    if let Ok(content) = std::fs::read_to_string(mpv_pid_file()) {
-        for pid_str in content.lines() {
-            if let Ok(pid) = pid_str.trim().parse::<u32>() {
-                let mut cmd = Command::new("taskkill");
-                cmd.args(&["/PID", &pid.to_string(), "/T", "/F"]);
-                #[cfg(windows)]
-                cmd.creation_flags(0x08000000);
-                let _ = cmd.output();
-            }
+        if workerw != 0 {
+            let m_key_thread = m_key.clone();
+            std::thread::spawn(move || {
+                for _ in 0..20 { // Try for up to 10 seconds (20 * 500ms)
+                    std::thread::sleep(std::time::Duration::from_millis(500));
+                    if let Some(hwnd) = win32::find_hwnd_by_pid(pid) {
+                        unsafe {
+                            let _ = windows::Win32::UI::WindowsAndMessaging::SetParent(
+                                windows::Win32::Foundation::HWND(hwnd as _),
+                                windows::Win32::Foundation::HWND(workerw as _)
+                            );
+                            // Also call SetWindowPos to push it behind icons and properly size it
+                            let _ = windows::Win32::UI::WindowsAndMessaging::SetWindowPos(
+                                windows::Win32::Foundation::HWND(hwnd as _),
+                                windows::Win32::Foundation::HWND(0 as _),
+                                x, y, width as i32, height as i32,
+                                windows::Win32::UI::WindowsAndMessaging::SWP_SHOWWINDOW
+                            );
+                        }
+                        log::info!("Successfully reparented mpv window for monitor {}", m_key_thread);
+                        break;
+                    }
+                }
+            });
         }
     }
-    let _ = std::fs::remove_file(mpv_pid_file());
+
     if let Ok(mut current) = CURRENT_VIDEO.lock() {
-        *current = None;
+        current.insert(m_key.clone(), path.to_string());
     }
+
     if let Ok(mut last) = LAST_CONFIG.lock() {
-        let last: &mut Option<WallpaperConfig> = &mut *last;
-        *last = None;
+        last.insert(m_key.clone(), new_config);
     }
+
+    log::info!("Video wallpaper set to: {} on monitor {}", path, m_key);
+    Ok(format!("Wallpaper set: {} on {}", path, m_key))
+}
+
+/// Stops the video wallpaper on a specific monitor (by its key).
+pub fn stop_video_for_monitor(m_key: &str) {
+    let pid_file = mpv_pid_file_for(m_key);
+    if let Ok(content) = std::fs::read_to_string(&pid_file) {
+        if let Ok(pid) = content.trim().parse::<u32>() {
+            let mut cmd = Command::new("taskkill");
+            cmd.args(&["/PID", &pid.to_string(), "/T", "/F"]);
+            #[cfg(windows)]
+            cmd.creation_flags(0x08000000);
+            let _ = cmd.output();
+        }
+    }
+    let _ = std::fs::remove_file(&pid_file);
+    if let Ok(mut m) = CURRENT_VIDEO.lock() { m.remove(m_key); }
+    if let Ok(mut m) = LAST_CONFIG.lock() { m.remove(m_key); }
+}
+
+/// Stops all current video wallpapers (all monitors).
+pub fn stop_video() -> Result<String, String> {
+    let pid_dir = app_data_dir().join("pids");
+    if let Ok(entries) = std::fs::read_dir(&pid_dir) {
+        for entry in entries.flatten() {
+            if let Ok(content) = std::fs::read_to_string(entry.path()) {
+                if let Ok(pid) = content.trim().parse::<u32>() {
+                    let mut cmd = Command::new("taskkill");
+                    cmd.args(&["/PID", &pid.to_string(), "/T", "/F"]);
+                    #[cfg(windows)]
+                    cmd.creation_flags(0x08000000);
+                    let _ = cmd.output();
+                }
+            }
+            let _ = std::fs::remove_file(entry.path());
+        }
+    }
+    if let Ok(mut m) = CURRENT_VIDEO.lock() { m.clear(); }
+    if let Ok(mut m) = LAST_CONFIG.lock() { m.clear(); }
     Ok("Wallpaper stopped".to_string())
 }
 
-/// Returns the currently playing video path.
+/// Returns the currently playing video path (any monitor).
 pub fn get_current() -> Option<String> {
     if let Ok(guard) = CURRENT_VIDEO.lock() {
-        return guard.clone();
+        return guard.values().next().cloned();
     }
     None
 }
 
 pub fn set_speed(speed: f64) -> Result<(), String> {
     let speed = speed.clamp(0.1, 4.0);
-    // Also update last config cache so we don't accidentally re-apply with old speed later
     if let Ok(mut last) = LAST_CONFIG.lock() {
-        let last: &mut Option<WallpaperConfig> = &mut *last;
-        if let Some(config) = last.as_mut() {
+        if last.is_empty() { return Ok(()); }
+        for config in last.values_mut() {
             config.speed = speed;
-        } else {
-            return Ok(());
         }
     }
     send_ipc_command(&format!(
@@ -312,7 +420,7 @@ pub fn set_speed(speed: f64) -> Result<(), String> {
 }
 
 pub fn set_paused(paused: bool) -> Result<(), String> {
-    if LAST_CONFIG.lock().map(|l| l.is_none()).unwrap_or(true) {
+    if LAST_CONFIG.lock().map(|l| l.is_empty()).unwrap_or(true) {
         return Ok(());
     }
     send_ipc_command(&format!(
@@ -322,7 +430,7 @@ pub fn set_paused(paused: bool) -> Result<(), String> {
 }
 
 pub fn set_volume(volume_percent: u64) -> Result<(), String> {
-    if LAST_CONFIG.lock().map(|l| l.is_none()).unwrap_or(true) {
+    if LAST_CONFIG.lock().map(|l| l.is_empty()).unwrap_or(true) {
         return Ok(());
     }
     let volume_percent = volume_percent.min(100);
@@ -583,21 +691,22 @@ pub fn set_static_image(path: &str) -> Result<String, String> {
     }
 
     if let Ok(mut current) = CURRENT_VIDEO.lock() {
-        *current = Some(path.to_string());
+        current.insert("static".to_string(), path.to_string());
     }
 
     log::info!("Static desktop background set to image: {}", final_image_path);
     Ok(format!("Static wallpaper set: {}", final_image_path))
 }
 
-fn mpv_pid_file() -> PathBuf {
-    app_data_dir().join("mpv.pid")
+fn mpv_pid_file_for(m_key: &str) -> PathBuf {
+    let safe_key: String = m_key.chars().map(|c| if c.is_alphanumeric() { c } else { '_' }).collect();
+    let pid_dir = app_data_dir().join("pids");
+    let _ = std::fs::create_dir_all(&pid_dir);
+    pid_dir.join(format!("{}.pid", safe_key))
 }
 
-fn read_mpv_pid() -> Option<u32> {
-    std::fs::read_to_string(mpv_pid_file())
-        .ok()
-        .and_then(|raw| raw.trim().parse::<u32>().ok())
+fn save_mpv_pid(m_key: &str, pid: u32) {
+    let _ = std::fs::write(mpv_pid_file_for(m_key), pid.to_string());
 }
 
 fn send_ipc_command(payload: &str) -> Result<(), String> {

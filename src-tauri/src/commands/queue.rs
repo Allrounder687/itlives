@@ -35,6 +35,7 @@ pub fn set_rotation(
 
 #[tauri::command]
 pub async fn advance_rotation(
+    app: tauri::AppHandle,
     state: State<'_, AppStateStore>,
     scale_percent: u64,
 ) -> Result<QueueAdvanceResult, String> {
@@ -50,6 +51,7 @@ pub async fn advance_rotation(
     }
 
     crate::wallpaper::desktop::set_video(
+        app,
         &advanced.video.local_path,
         scale_percent,
         current.volume_percent,
@@ -57,6 +59,7 @@ pub async fn advance_rotation(
         current.playback_speed,
         current.blur_strength,
         false, 
+        None,
         None,
         None,
     )?;

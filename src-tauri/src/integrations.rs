@@ -6,7 +6,7 @@ use crate::wallpaper;
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
 
-pub fn start(state: AppStateStore) {
+pub fn start(state: AppStateStore, app: tauri::AppHandle) {
     thread::spawn(move || {
         let listener = TcpListener::bind("127.0.0.1:3030");
         if let Err(e) = listener {
@@ -23,7 +23,7 @@ pub fn start(state: AppStateStore) {
                     if let Ok(bytes_read) = stream.read(&mut buffer) {
                         let request = String::from_utf8_lossy(&buffer[..bytes_read]);
                         if let Some(path) = parse_request_path(&request) {
-                            handle_request(&mut stream, &path, &state);
+                            handle_request(&mut stream, &path, &state, app.clone());
                         }
                     }
                 }
@@ -48,7 +48,7 @@ fn parse_request_path(request: &str) -> Option<String> {
     None
 }
 
-fn handle_request(stream: &mut std::net::TcpStream, path: &str, state: &AppStateStore) {
+fn handle_request(stream: &mut std::net::TcpStream, path: &str, state: &AppStateStore, app: tauri::AppHandle) {
     let (status_code, response_body) = match path {
         "/status" => {
             let snapshot = state.snapshot();
@@ -91,6 +91,7 @@ fn handle_request(stream: &mut std::net::TcpStream, path: &str, state: &AppState
 
             if let Some(video) = next_video {
                 let _ = wallpaper::desktop::set_video(
+                    app.clone(),
                     &video.local_path,
                     current.wallpaper_scale_percent,
                     current.volume_percent,
@@ -98,6 +99,7 @@ fn handle_request(stream: &mut std::net::TcpStream, path: &str, state: &AppState
                     current.playback_speed,
                     current.blur_strength,
                     false,
+                    None,
                     None,
                     None,
                 );
@@ -111,6 +113,7 @@ fn handle_request(stream: &mut std::net::TcpStream, path: &str, state: &AppState
             let current = state.snapshot();
             if let Some(video) = current.current_video.as_ref().or_else(|| current.recents.first().map(|i| &i.video)) {
                 let _ = wallpaper::desktop::set_video(
+                    app.clone(),
                     &video.local_path,
                     current.wallpaper_scale_percent,
                     current.volume_percent,
@@ -118,6 +121,7 @@ fn handle_request(stream: &mut std::net::TcpStream, path: &str, state: &AppState
                     current.playback_speed,
                     current.blur_strength,
                     false,
+                    None,
                     None,
                     None,
                 );

@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect } from "react";
 import { getCoreApi, getWindowApi, getDialogApi } from "@/utils/tauriApis";
-import { VideoResult, PersistedState, applyPersistedState, WallpaperState, LibraryItem } from "@/utils/wallpaperTypes";
+import { VideoResult, PersistedState, applyPersistedState, WallpaperState, LibraryItem, DisplayMonitor } from "@/utils/wallpaperTypes";
 
-export type { VideoResult, PersistedState, WallpaperState, LibraryItem };
+export type { VideoResult, PersistedState, WallpaperState, LibraryItem, DisplayMonitor };
 
 import { useAppState } from "./useAppState";
 import { useWallpaperActions } from "./useWallpaperActions";
@@ -111,6 +111,16 @@ export function useWallpaper() {
     } catch (e) { console.error("Toggle hide video failed", e); }
   }, [setState]);
 
+  const fetchMonitors = useCallback(async (): Promise<DisplayMonitor[]> => {
+    try {
+      const { invoke } = await getCoreApi();
+      return await invoke<DisplayMonitor[]>("get_monitors");
+    } catch (e) {
+      console.error("Failed to fetch monitors", e);
+      return [];
+    }
+  }, []);
+
   const setRestoreOnLaunch = useCallback(async (enabled: boolean) => {
     try {
       const { invoke } = await getCoreApi();
@@ -185,6 +195,7 @@ export function useWallpaper() {
     setAdultPin,
     verifyAdultPin,
     toggleHideVideo,
+    fetchMonitors,
     setRestoreOnLaunch,
     setAutoPauseEnabled,
     setWindowBehavior,
@@ -200,6 +211,7 @@ export function useWallpaper() {
     setResolutions: (resolutions: string | null) => setState(s => ({ ...s, resolutions, page: 1 })),
     setRatios: (ratios: string | null) => setState(s => ({ ...s, ratios, page: 1 })),
     setColors: (colors: string | null) => setState(s => ({ ...s, colors, page: 1 })),
+    setSelectedMonitor: (monitor: DisplayMonitor | null) => setState(s => ({ ...s, selectedMonitor: monitor })),
     setColorFilter: (colorFilter: string) => setState(s => {
       // Keep old colorFilter logic just in case it's used elsewhere, but we map to colors
       return { ...s, colorFilter, colors: colorFilter || null, page: 1 };

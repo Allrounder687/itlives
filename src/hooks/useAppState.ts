@@ -22,6 +22,7 @@ export function useAppState() {
     favorites: [],
     imports: [],
     queue: [],
+    selectedMonitor: null,
     queueCursor: 0,
     rotationEnabled: false,
     rotationIntervalSeconds: 300,

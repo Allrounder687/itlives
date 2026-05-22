@@ -9,7 +9,7 @@ use tauri::{
 };
 use wallpaper::state::AppStateStore;
 
-fn restore_wallpaper_if_enabled(store: &AppStateStore) {
+fn restore_wallpaper_if_enabled(app: tauri::AppHandle, store: &AppStateStore) {
     let state = wallpaper::state::get(store);
     if state.restore_on_launch && state.is_playing {
         if let Some(video) = state.current_video.as_ref() {
@@ -25,6 +25,7 @@ fn restore_wallpaper_if_enabled(store: &AppStateStore) {
                 let _ = wallpaper::desktop::set_static_image(&video.local_path);
             } else {
                 let _ = wallpaper::desktop::set_video(
+                    app.clone(),
                     &video.local_path,
                     state.wallpaper_scale_percent,
                     state.volume_percent,
@@ -32,6 +33,7 @@ fn restore_wallpaper_if_enabled(store: &AppStateStore) {
                     state.playback_speed,
                     state.blur_strength,
                     state.paused,
+                    None,
                     None,
                     None,
                 );
@@ -75,6 +77,7 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
                 let state = wallpaper::state::get(&store);
                 if let Some(video) = state.current_video.as_ref() {
                     let _ = wallpaper::desktop::set_video(
+                        app_handle.clone(),
                         &video.local_path,
                         state.wallpaper_scale_percent,
                         state.volume_percent,
@@ -83,7 +86,8 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
                         state.blur_strength,
                         state.paused,
                         None,
-                        None
+                        None,
+                        None,
                     );
                 }
             }
@@ -136,13 +140,12 @@ pub fn run() {
     let monitor_store = state_store.clone();
     let event_store = state_store.clone();
 
-    // Start local API server for Raycast & Rainmeter integrations
-    integrations::start(state_store.clone());
+    // integrations server is started inside .setup() once the AppHandle is available
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, Some(vec!["--minimized"])))
-        .manage(state_store)
+        .manage(state_store.clone())
         .on_window_event(move |window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 if window.label() == "main" {
@@ -165,10 +168,12 @@ pub fn run() {
 
             wallpaper::performance::start_monitor(monitor_store.clone());
 
-            // Moving wallpaper restoration to a background thread to prevent GUI hang on startup.
+            // Start local API server for Raycast & Rainmeter integrations (needs AppHandle)
+            integrations::start(state_store.clone(), app.handle().clone());
             // set_video contains Win32 calls and sleeps that block the main thread.
+            let app_handle_restore = app.handle().clone();
             tauri::async_runtime::spawn(async move {
-                restore_wallpaper_if_enabled(&restore_store);
+                restore_wallpaper_if_enabled(app_handle_restore, &restore_store);
             });
 
             build_tray(app)?;
@@ -226,6 +231,7 @@ pub fn run() {
             commands::batch::download_single_file,
             commands::batch::start_wallhaven_selection_download,
             commands::video::fetch_video_tags,
+            commands::settings::get_monitors,
         ])
         .run(tauri::generate_context!())
 

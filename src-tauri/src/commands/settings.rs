@@ -1,4 +1,4 @@
-use tauri::State;
+use tauri::{State, Manager};
 use crate::wallpaper::providers::{self, VideoResult};
 use crate::wallpaper::state::{AppStateStore, WallpaperState};
 use crate::wallpaper;
@@ -153,4 +153,47 @@ pub fn toggle_hide_video(
     video_id: String,
 ) -> Result<WallpaperState, String> {
     wallpaper::state::toggle_hide_video(&state, video_id)
+}
+
+#[derive(serde::Serialize)]
+pub struct DisplayMonitor {
+    pub name: String,
+    pub width: u32,
+    pub height: u32,
+    pub x: i32,
+    pub y: i32,
+    pub scale_factor: f64,
+    pub is_primary: bool,
+}
+
+#[tauri::command]
+pub fn get_monitors(app_handle: tauri::AppHandle) -> Result<Vec<DisplayMonitor>, String> {
+    let mut result = Vec::new();
+    
+    let monitors = app_handle.available_monitors().map_err(|e| e.to_string())?;
+    let primary = app_handle.primary_monitor().ok().flatten();
+    
+    for m in monitors {
+        let name = m.name().unwrap_or(&"Unknown Display".to_string()).to_string();
+        let size = m.size();
+        let pos = m.position();
+        let scale = m.scale_factor();
+        let is_primary = if let Some(ref p) = primary {
+            p.name() == m.name()
+        } else {
+            false
+        };
+        
+        result.push(DisplayMonitor {
+            name,
+            width: size.width,
+            height: size.height,
+            x: pos.x,
+            y: pos.y,
+            scale_factor: scale,
+            is_primary,
+        });
+    }
+    
+    Ok(result)
 }
