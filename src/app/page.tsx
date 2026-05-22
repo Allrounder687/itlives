@@ -32,6 +32,9 @@ function Home() {
   const [overlayConfig, setOverlayConfig] = useState<{ videoSrc?: string; layers?: any[] }>({});
   const [isErrorDismissed, setIsErrorDismissed] = useState(false);
   const [isErrorVisible, setIsErrorVisible] = useState(false);
+  
+  // Detached Editor Preview State
+  const [editorPreviewVideo, setEditorPreviewVideo] = useState<any | null>(null);
 
   // Reset error dismissal when a new error appears
   const prevErrorRef = useRef(wallpaper.error);
@@ -85,7 +88,7 @@ function Home() {
         listen("effects-updated", (e: any) => {
           try {
             const config = typeof e.payload === "string" ? JSON.parse(e.payload) : e.payload;
-            setOverlayConfig(config);
+            setOverlayConfig(config || {});
           } catch (err) {
             console.error("[Overlay] Failed to parse overlay config payload:", err);
           }
@@ -123,7 +126,7 @@ function Home() {
       colors: wallpaper.colors,
     };
 
-    if (
+    if(
       lastFetchedRef.current &&
       lastFetchedRef.current.source === currentFetchKey.source &&
       lastFetchedRef.current.query === currentFetchKey.query &&
@@ -196,7 +199,8 @@ function Home() {
             display: none !important; opacity: 0 !important; visibility: hidden !important; width: 0 !important; height: 0 !important;
           }
         ` }} />
-        <CanvasEffectRenderer videoSrc={overlayConfig.videoSrc || ""} effects={overlayConfig.layers || []} isOverlay={true} />
+        {/* Overlay ignores all pointer events at OS level and captures desktop directly */}
+        <CanvasEffectRenderer videoSrc={overlayConfig?.videoSrc || ""} effects={overlayConfig?.layers || []} isOverlay={true} />
       </main>
     );
   }
@@ -245,6 +249,10 @@ function Home() {
                 isLoading={wallpaper.isLoading}
                 hasMore={wallpaper.hasMore ?? true}
                 duplicateNotice={wallpaper.duplicateNotice}
+                onEditEffects={(video) => {
+                  setEditorPreviewVideo(video);
+                  setActiveTab("editor");
+                }}
               />
               {wallpaper.isLoading && wallpaper.page === 1 && <div className="skeleton skeleton-preview" />}
             </section>

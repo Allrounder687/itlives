@@ -4,7 +4,8 @@
   "description": "enables the default permissions",
   "windows": [
     "main",
-    "tray_menu"
+    "tray_menu",
+    "effects_overlay"
   ],
   "permissions": [
     "core:default",

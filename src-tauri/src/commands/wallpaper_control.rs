@@ -308,7 +308,7 @@ pub fn apply_desktop_effects(
         log::info!("[Overlay] Found effects_overlay window, making visible and setting ignore_cursor...");
         let _ = window.show();
         let _ = window.set_ignore_cursor_events(true);
-        let _ = window.emit("effects-updated", ());
+        let _ = window.emit("effects-updated", layers_json.clone());
 
         // Push behind desktop icons layer using win32 SetParent reparenting trick
         #[cfg(windows)]
@@ -317,50 +317,56 @@ pub fn apply_desktop_effects(
             log::info!("[Overlay] Lookup WorkerW handles found: {:?}", workerw_opt);
             if let Some(workerw) = workerw_opt {
                 if let Ok(hwnd) = window.hwnd() {
-                    let script = format!(
-                        "Add-Type -AssemblyName System.Windows.Forms -ErrorAction SilentlyContinue; \
-                         Add-Type -TypeDefinition @\"\nusing System;\nusing System.Runtime.InteropServices;\npublic class Win32 {{\n[DllImport(\"user32.dll\")]\npublic static extern IntPtr SetParent(IntPtr h, IntPtr p);\n[DllImport(\"user32.dll\")]\npublic static extern IntPtr GetWindowLongPtrW(IntPtr hWnd, int nIndex);\n[DllImport(\"user32.dll\")]\npublic static extern IntPtr SetWindowLongPtrW(IntPtr hWnd, int nIndex, IntPtr dwNewLong);\n[DllImport(\"user32.dll\")]\npublic static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);\n[DllImport(\"user32.dll\")]\npublic static extern IntPtr FindWindowEx(IntPtr h1, IntPtr h2, string c, string n);\n}}\n\"@ -ErrorAction SilentlyContinue; \
-                         $v = [System.Windows.Forms.SystemInformation]::VirtualScreen; \
-                         $shell = [Win32]::FindWindowEx([IntPtr]{}, [IntPtr]::Zero, \"SHELLDLL_DefView\", $null); \
-                         [Win32]::SetParent([IntPtr]{}, [IntPtr]{}); \
-                         $old = [Win32]::GetWindowLongPtrW([IntPtr]{}, -20); \
-                         $new_style = $old.ToInt64() -bor 0x00280020; \
-                         [Win32]::SetWindowLongPtrW([IntPtr]{}, -20, [IntPtr]$new_style); \
-                         if ($shell -ne [IntPtr]::Zero) {{ \
-                             [Win32]::SetWindowPos([IntPtr]{}, $shell, $v.X, $v.Y, $v.Width, $v.Height, 0x0040); \
-                         }} else {{ \
-                             [Win32]::SetWindowPos([IntPtr]{}, [IntPtr]::Zero, $v.X, $v.Y, $v.Width, $v.Height, 0x0040); \
-                         }}",
-                        workerw, hwnd.0 as isize, workerw, hwnd.0 as isize, hwnd.0 as isize, hwnd.0 as isize, hwnd.0 as isize
-                    );
+                    let shelldll: Vec<u16> = "SHELLDLL_DefView\0".encode_utf16().collect();
+                    let shell_hwnd = unsafe {
+                        windows::Win32::UI::WindowsAndMessaging::FindWindowExW(
+                            windows::Win32::Foundation::HWND(workerw as _),
+                            windows::Win32::Foundation::HWND(0 as _),
+                            windows::core::PCWSTR(shelldll.as_ptr()),
+                            windows::core::PCWSTR::null()
+                        ).unwrap_or(windows::Win32::Foundation::HWND(1 as _)) // HWND_BOTTOM fallback
+                    };
 
+                    unsafe {
+                        // Stitch the effects overlay into the Icon Container
+                        let _ = windows::Win32::UI::WindowsAndMessaging::SetParent(
+                            windows::Win32::Foundation::HWND(hwnd.0 as _),
+                            windows::Win32::Foundation::HWND(workerw as _)
+                        );
 
-                    
-                    let temp_dir = std::env::temp_dir();
-                    let script_path = temp_dir.join("attach_effects_overlay.ps1");
-                    if let Err(e) = std::fs::write(&script_path, &script) {
-                        log::error!("[Overlay] Failed to write powershell script: {}", e);
-                    } else {
-                        log::info!("[Overlay] Script written to {:?}", script_path);
+                        // Strip borders
+                        let old_style = windows::Win32::UI::WindowsAndMessaging::GetWindowLongW(
+                            windows::Win32::Foundation::HWND(hwnd.0 as _),
+                            windows::Win32::UI::WindowsAndMessaging::GWL_STYLE
+                        );
+                        let _ = windows::Win32::UI::WindowsAndMessaging::SetWindowLongW(
+                            windows::Win32::Foundation::HWND(hwnd.0 as _),
+                            windows::Win32::UI::WindowsAndMessaging::GWL_STYLE,
+                            old_style & !0x00280020 // Remove WS_POPUP, WS_CAPTION etc
+                        );
+
+                        // Push it exactly behind the icons (SHELLDLL_DefView)
+                        let target_z = if shell_hwnd != windows::Win32::Foundation::HWND(0 as _) && shell_hwnd != windows::Win32::Foundation::HWND(1 as _) {
+                            shell_hwnd
+                        } else {
+                            windows::Win32::Foundation::HWND(1 as _)
+                        };
+
+                        let v_x = windows::Win32::UI::WindowsAndMessaging::GetSystemMetrics(windows::Win32::UI::WindowsAndMessaging::SM_XVIRTUALSCREEN);
+                        let v_y = windows::Win32::UI::WindowsAndMessaging::GetSystemMetrics(windows::Win32::UI::WindowsAndMessaging::SM_YVIRTUALSCREEN);
+                        let v_w = windows::Win32::UI::WindowsAndMessaging::GetSystemMetrics(windows::Win32::UI::WindowsAndMessaging::SM_CXVIRTUALSCREEN);
+                        let v_h = windows::Win32::UI::WindowsAndMessaging::GetSystemMetrics(windows::Win32::UI::WindowsAndMessaging::SM_CYVIRTUALSCREEN);
+
+                        let _ = windows::Win32::UI::WindowsAndMessaging::SetWindowPos(
+                            windows::Win32::Foundation::HWND(hwnd.0 as _),
+                            target_z,
+                            v_x, v_y, v_w, v_h,
+                            windows::Win32::UI::WindowsAndMessaging::SWP_SHOWWINDOW
+                        );
                     }
-
-                    let mut cmd = std::process::Command::new("powershell");
-                    cmd.args(&[
-                        "-NoProfile",
-                        "-WindowStyle", "Hidden",
-                        "-ExecutionPolicy", "Bypass",
-                        "-File", script_path.to_str().unwrap()
-                    ]);
-                    #[cfg(windows)]
-                    cmd.creation_flags(0x08000000);
-
-                    match cmd.spawn() {
-                            Ok(p) => {
-                                log::info!("[Overlay] Powershell process spawned with PID: {:?}", p.id());
-                                start_mouse_tracking(app_handle.clone());
-                            },
-                            Err(e) => log::error!("[Overlay] Failed to spawn Powershell: {}", e)
-                        }
+                    
+                    log::info!("[Overlay] Native reparenting successful.");
+                    start_mouse_tracking(app_handle.clone());
                 }
             } else {
                 log::warn!("[Overlay] WorkerW not found, skipping reparenting layout overlays!");
@@ -382,15 +388,38 @@ pub fn start_mouse_tracking(app_handle: tauri::AppHandle) {
 
     std::thread::spawn(move || {
         use windows::Win32::UI::WindowsAndMessaging::{GetCursorPos, GetSystemMetrics, SM_XVIRTUALSCREEN, SM_YVIRTUALSCREEN};
+        use windows::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_LBUTTON};
         use windows::Win32::Foundation::POINT;
+
+        let mut was_down = false;
 
         loop {
             let mut pt = POINT::default();
             unsafe {
                 if GetCursorPos(&mut pt).is_ok() {
+                    #[derive(serde::Serialize, Clone)]
+                    struct CursorPayload {
+                        x: i32,
+                        y: i32,
+                    }
+                    
                     let vx = GetSystemMetrics(SM_XVIRTUALSCREEN);
                     let vy = GetSystemMetrics(SM_YVIRTUALSCREEN);
-                    let _ = app_handle.emit("cursor-moved", (pt.x - vx, pt.y - vy));
+                    let payload = CursorPayload {
+                        x: pt.x - vx,
+                        y: pt.y - vy,
+                    };
+                    
+                    let _ = app_handle.emit("cursor-moved", payload.clone());
+
+                    // Track left mouse button clicks
+                    let lbtn_state = GetAsyncKeyState(VK_LBUTTON.0 as i32);
+                    let is_down = (lbtn_state as u16 & 0x8000) != 0;
+                    
+                    if is_down && !was_down {
+                        let _ = app_handle.emit("cursor-click", payload);
+                    }
+                    was_down = is_down;
                 }
             }
             std::thread::sleep(std::time::Duration::from_millis(32)); // ~30fps for smoother balance between perf and response

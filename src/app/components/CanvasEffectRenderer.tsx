@@ -248,6 +248,11 @@ export function CanvasEffectRenderer({ videoSrc, effects, isOverlay = false }: C
               p.life -= 1;
               p.size *= 0.95;
           });
+          
+          // 4.5 Particle Cap
+          if (MouseTrailRef.current.length > 1500) {
+            MouseTrailRef.current = MouseTrailRef.current.slice(-1000);
+          }
       } else {
          if (MouseTrailRef.current.length > 0) MouseTrailRef.current = [];
       }
@@ -270,61 +275,127 @@ export function CanvasEffectRenderer({ videoSrc, effects, isOverlay = false }: C
   // Overlay IPC listeners
   useEffect(() => {
     if (!isOverlay) return;
-    
-    let unlistenCursor = () => {};
-    let unlistenUpdate = () => {};
+    let isMounted = true;
+    let unlistenFunctions: Array<() => void> = [];
 
-    // 1. Listen for cursor movements from Rust background hook
-    const tauriEvent = "@tauri-apps/api/event";
-    import(tauriEvent).then(({ listen }) => {
-      listen("cursor-moved", (e: any) => {
-        const rawEffects: any = effectsRef.current || [];
-        const currentEffects: EffectLayer[] = Array.isArray(rawEffects) ? rawEffects : (rawEffects.layers || []);
+    // FAKE CURSOR SIMULATOR FOR TESTING
+    const testInterval = setInterval(() => {
+      const trailEffect = cachedEffectsRef.current?.trailEffect;
+      if (trailEffect && canvasRef.current) {
+        const x = Math.random() * canvasRef.current.width;
+        const y = Math.random() * canvasRef.current.height;
+        for (let i = 0; i < 2; i++) {
+          MouseTrailRef.current.push({
+            x, y,
+            vx: (Math.random() - 0.5) * 2,
+            vy: (Math.random() - 0.5) * 2 - 0.5,
+            life: 30,
+            size: Math.random() * 4 + 2,
+            color: `rgba(255, 0, 0, 0.8)` // Red for debug
+          });
+        }
+      }
+    }, 100);
 
-        const trailEffect = currentEffects.find(ef => ef.type === "cursor-trail" && ef.enabled);
-        const rippleEffect = currentEffects.find(ef => ef.type === "click-ripple" && ef.enabled);
-        if (!trailEffect && !rippleEffect) return;
+    const setupListeners = async () => {
+      try {
+        const { listen } = await import("@tauri-apps/api/event");
+        if (!isMounted) return;
 
-        const [x_raw, y_raw] = e.payload;
-        const x = x_raw / (window.devicePixelRatio || 1);
-        const y = y_raw / (window.devicePixelRatio || 1);
+        // 1. Listen for cursor movements
+        const uCursor = await listen<{x: number, y: number}>("cursor-moved", (e) => {
+          const rawEffects: any = effectsRef.current || [];
+          const currentEffects: EffectLayer[] = Array.isArray(rawEffects) ? rawEffects : (rawEffects?.layers || []);
 
-        if (trailEffect) {
-          for (let i = 0; i < 2; i++) {
-            MouseTrailRef.current.push({
-              x, y,
-              vx: (Math.random() - 0.5) * 2,
-              vy: (Math.random() - 0.5) * 2 - 0.5,
-              life: 30,
-              size: Math.random() * 4 + 2,
-              color: `rgba(154, 230, 0, 0.8)`
-            });
+          const trailEffect = currentEffects.find(ef => ef.type === "cursor-trail" && ef.enabled);
+          const rippleEffect = currentEffects.find(ef => ef.type === "click-ripple" && ef.enabled);
+          if (!trailEffect && !rippleEffect) return;
+
+          let payload = e.payload as any;
+          if (typeof payload === "string") {
+            try { payload = JSON.parse(payload); } catch (e) {}
           }
-        }
-      }).then((unlisten: any) => { unlistenCursor = unlisten; });
+          if (!payload || typeof payload.x !== "number") return;
 
-      // 2. [CRITICAL FIX] Ensure we unwrap the direct JSON payload structure efficiently
-      listen("effects-updated", (e: any) => {
-        try {
-          const payload = typeof e.payload === "string" ? JSON.parse(e.payload) : e.payload;
-          const freshEffects = Array.isArray(payload) ? payload : (payload.layers || []);
-          setLiveEffects(freshEffects);
-        } catch (err: any) {
-          console.error("[Overlay] Failed to parse updated effects payload:", err);
-        }
-      }).then((unlisten: any) => { unlistenUpdate = unlisten; });
+          const { x: x_raw, y: y_raw } = payload;
+          const x = x_raw / (window.devicePixelRatio || 1);
+          const y = y_raw / (window.devicePixelRatio || 1);
 
-    }).catch(console.error);
+          if (trailEffect) {
+            for (let i = 0; i < 2; i++) {
+              MouseTrailRef.current.push({
+                x, y,
+                vx: (Math.random() - 0.5) * 2,
+                vy: (Math.random() - 0.5) * 2 - 0.5,
+                life: 30,
+                size: Math.random() * 4 + 2,
+                color: `rgba(154, 230, 0, 0.8)`
+              });
+            }
+          }
+        });
+        unlistenFunctions.push(uCursor);
 
-    return () => { 
-      unlistenCursor(); 
-      unlistenUpdate(); 
+        // 1.5 Listen for global clicks
+        const uClick = await listen<{x: number, y: number}>("cursor-click", (e) => {
+          const rawEffects: any = effectsRef.current || [];
+          const currentEffects: EffectLayer[] = Array.isArray(rawEffects) ? rawEffects : (rawEffects?.layers || []);
+
+          const rippleEffect = currentEffects.find(ef => ef.type === "click-ripple" && ef.enabled);
+          if (!rippleEffect) return;
+
+          let payload = e.payload as any;
+          if (typeof payload === "string") {
+            try { payload = JSON.parse(payload); } catch (e) {}
+          }
+          if (!payload || typeof payload.x !== "number") return;
+
+          const { x: x_raw, y: y_raw } = payload;
+          const x = x_raw / (window.devicePixelRatio || 1);
+          const y = y_raw / (window.devicePixelRatio || 1);
+
+          for (let i = 0; i < 20; i++) {
+              const angle = (Math.PI * 2 / 20) * i;
+              MouseTrailRef.current.push({
+                  x, y,
+                  vx: Math.cos(angle) * 3,
+                  vy: Math.sin(angle) * 3,
+                  life: 60,
+                  size: 6,
+                  color: `rgba(255, 255, 255, 0.9)`
+              });
+          }
+        });
+        unlistenFunctions.push(uClick);
+
+        // 2. Effects config sync
+        const uUpdate = await listen("effects-updated", (e: any) => {
+          try {
+            const payload = typeof e.payload === "string" ? JSON.parse(e.payload) : e.payload;
+            const freshEffects = Array.isArray(payload) ? payload : (payload?.layers || []);
+            setLiveEffects(freshEffects);
+          } catch (err: any) {
+            console.error("[Overlay] Failed to parse updated effects payload:", err);
+          }
+        });
+        unlistenFunctions.push(uUpdate);
+      } catch (err) {
+        console.error("Failed to setup IPC listeners", err);
+      }
+    };
+
+    setupListeners();
+
+    return () => {
+      clearInterval(testInterval);
+      isMounted = false;
+      unlistenFunctions.forEach(fn => fn());
     };
   }, [isOverlay]);
 
   const handlePointerMove = (e: React.PointerEvent) => {
     const rawEffects: any = effectsRef.current || [];
-    const currentEffects: EffectLayer[] = Array.isArray(rawEffects) ? rawEffects : (rawEffects.layers || []);
+    const currentEffects: EffectLayer[] = Array.isArray(rawEffects) ? rawEffects : (rawEffects?.layers || []);
     const trailEffect = currentEffects.find(eff => eff.type === "cursor-trail" && eff.enabled);
     
     if (!trailEffect || !canvasRef.current) return;
@@ -347,7 +418,7 @@ export function CanvasEffectRenderer({ videoSrc, effects, isOverlay = false }: C
 
   const handlePointerDown = (e: React.PointerEvent) => {
     const rawEffects: any = effectsRef.current || [];
-    const currentEffects: EffectLayer[] = Array.isArray(rawEffects) ? rawEffects : (rawEffects.layers || []);
+    const currentEffects: EffectLayer[] = Array.isArray(rawEffects) ? rawEffects : (rawEffects?.layers || []);
     const rippleEffect = currentEffects.find(eff => eff.type === "click-ripple" && eff.enabled);
     
     if (!rippleEffect || !canvasRef.current) return;
@@ -407,7 +478,7 @@ export function CanvasEffectRenderer({ videoSrc, effects, isOverlay = false }: C
 
       <canvas 
         ref={canvasRef} 
-        className="editor-canvas-overlay" 
+        className="effects-canvas" 
         style={{ 
           position: "absolute",
           inset: 0,

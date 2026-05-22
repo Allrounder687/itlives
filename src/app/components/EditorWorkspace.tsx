@@ -164,7 +164,28 @@ export function EditorWorkspace({ currentVideo, onApplyWallpaper }: EditorWorksp
 
       {/* Center: Canvas overlay Preview */}
       <div className="editor-preview" style={{ position: "relative" }}>
-        <div style={{ position: "absolute", top: "12px", right: "12px", zIndex: 20 }}>
+        <div style={{ position: "absolute", top: "12px", right: "12px", zIndex: 20, display: "flex", gap: "8px" }}>
+          <button 
+            type="button" 
+            className="action-btn action-btn--secondary"
+            style={{ padding: "10px 16px", borderRadius: "12px", fontWeight: "600", boxShadow: "0 4px 12px rgba(0,0,0,0.2)" }}
+            onClick={async () => {
+              if (typeof window !== "undefined") {
+                const emptyConfig = { videoSrc: "", layers: [] };
+                localStorage.setItem("desktop_effects", JSON.stringify(emptyConfig));
+                setLayers([]);
+                try {
+                  const { invoke } = await import("@tauri-apps/api/core");
+                  await invoke("apply_desktop_effects", { layersJson: JSON.stringify(emptyConfig) });
+                } catch (err) {
+                  console.error("[Editor] Invoke failed:", err);
+                }
+              }
+            }}
+          >
+            Clear Effects
+          </button>
+          
           <button 
             type="button" 
             className="action-btn action-btn--primary"
@@ -196,7 +217,6 @@ export function EditorWorkspace({ currentVideo, onApplyWallpaper }: EditorWorksp
                 console.warn("[Editor] Clicked but currentVideo is missing or window is undefined.", { currentVideo });
               }
             }}
-
           >
             Apply to Desktop
           </button>

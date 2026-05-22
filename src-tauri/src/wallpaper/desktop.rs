@@ -336,20 +336,41 @@ pub fn set_video(
                                 windows::Win32::Foundation::HWND(workerw as _)
                             );
                             
-                            // Emulate exactly what the old PowerShell script did!
                             let shelldll: Vec<u16> = "SHELLDLL_DefView\0".encode_utf16().collect();
                             let shell_hwnd = windows::Win32::UI::WindowsAndMessaging::FindWindowExW(
                                 windows::Win32::Foundation::HWND(workerw as _),
                                 windows::Win32::Foundation::HWND(0 as _),
                                 windows::core::PCWSTR(shelldll.as_ptr()),
                                 windows::core::PCWSTR::null()
-                            ).unwrap_or(windows::Win32::Foundation::HWND(1 as _)); // HWND_BOTTOM fallback
-                            
-                            let target_z = if shell_hwnd != windows::Win32::Foundation::HWND(0 as _) && shell_hwnd != windows::Win32::Foundation::HWND(1 as _) {
+                            ).unwrap_or(windows::Win32::Foundation::HWND(1 as _));
+
+                            let chrome_class: Vec<u16> = "Chrome_WidgetWin_1\0".encode_utf16().collect();
+                            let effects_hwnd = windows::Win32::UI::WindowsAndMessaging::FindWindowExW(
+                                windows::Win32::Foundation::HWND(workerw as _),
+                                windows::Win32::Foundation::HWND(0 as _),
+                                windows::core::PCWSTR(chrome_class.as_ptr()),
+                                windows::core::PCWSTR::null()
+                            ).unwrap_or(windows::Win32::Foundation::HWND(0 as _));
+
+                            // To maintain the sandwich: if effects overlay is active, place video strictly behind it.
+                            // Otherwise, place video strictly behind the desktop icons.
+                            let mut target_z = if shell_hwnd != windows::Win32::Foundation::HWND(0 as _) && shell_hwnd != windows::Win32::Foundation::HWND(1 as _) {
                                 shell_hwnd
                             } else {
-                                windows::Win32::Foundation::HWND(1 as _) // HWND_BOTTOM
+                                windows::Win32::Foundation::HWND(1 as _)
                             };
+
+                            if effects_hwnd != windows::Win32::Foundation::HWND(0 as _) && effects_hwnd != windows::Win32::Foundation::HWND(1 as _) {
+                                // If effects overlay is found, we use it as the insertion point so mpv slides underneath it
+                                target_z = effects_hwnd;
+                            }
+
+                            let _ = windows::Win32::UI::WindowsAndMessaging::SetWindowPos(
+                                windows::Win32::Foundation::HWND(hwnd as _),
+                                target_z,
+                                x, y, width as i32, height as i32,
+                                windows::Win32::UI::WindowsAndMessaging::SWP_SHOWWINDOW
+                            );
 
                             let _ = windows::Win32::UI::WindowsAndMessaging::SetWindowPos(
                                 windows::Win32::Foundation::HWND(hwnd as _),
@@ -481,12 +502,27 @@ pub fn set_web_wallpaper(
                 windows::core::PCWSTR(shelldll.as_ptr()),
                 windows::core::PCWSTR::null()
             ).unwrap_or(windows::Win32::Foundation::HWND(1 as _));
-            
-            let target_z = if shell_hwnd != windows::Win32::Foundation::HWND(0 as _) && shell_hwnd != windows::Win32::Foundation::HWND(1 as _) {
+
+            let mut target_z = if shell_hwnd != windows::Win32::Foundation::HWND(0 as _) && shell_hwnd != windows::Win32::Foundation::HWND(1 as _) {
                 shell_hwnd
             } else {
-                windows::Win32::Foundation::HWND(1 as _) // HWND_BOTTOM
+                windows::Win32::Foundation::HWND(1 as _)
             };
+
+            let chrome_class: Vec<u16> = "Chrome_WidgetWin_1\0".encode_utf16().collect();
+            let effects_hwnd = windows::Win32::UI::WindowsAndMessaging::FindWindowExW(
+                windows::Win32::Foundation::HWND(workerw as _),
+                windows::Win32::Foundation::HWND(0 as _),
+                windows::core::PCWSTR(chrome_class.as_ptr()),
+                windows::core::PCWSTR::null()
+            ).unwrap_or(windows::Win32::Foundation::HWND(0 as _));
+
+            // If we are injecting a webview (effects overlay itself uses webview),
+            // we should be careful not to place it behind itself. But this is mainly for web-wallpapers.
+            // If effects_hwnd exists and is NOT the webview we are currently injecting (hwnd), place behind it.
+            if effects_hwnd != windows::Win32::Foundation::HWND(0 as _) && effects_hwnd != windows::Win32::Foundation::HWND(1 as _) && effects_hwnd.0 != hwnd.0 {
+                target_z = effects_hwnd;
+            }
 
             let _ = windows::Win32::UI::WindowsAndMessaging::SetWindowPos(
                 windows::Win32::Foundation::HWND(hwnd.0 as _),
