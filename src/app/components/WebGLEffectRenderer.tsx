@@ -872,6 +872,7 @@ export function WebGLEffectRenderer({ videoSrc, effects, isOverlay = false, sele
   const ribbonTrail = currentEffects.find(e => e.type === "ribbon-trail" && e.enabled);
   const waterCaustics = currentEffects.find(e => e.type === "water-caustics" && e.enabled);
   const blowingLeaves = currentEffects.find(e => e.type === "blowing-leaves" && e.enabled);
+  const appLauncher = currentEffects.find(e => e.type === "app-launcher" && e.enabled);
 
   // Check if any WebGL effect is active — skip Canvas entirely if none
   const hasWebGLEffects = snow || rain || audioVis || trail || ripple || ribbonTrail || vignette || bloomEffect || glitchEffect || parallax || fireflies || stars || fog || waterCaustics || blowingLeaves;
@@ -885,7 +886,7 @@ export function WebGLEffectRenderer({ videoSrc, effects, isOverlay = false, sele
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (isOverlay || !selectedLayerId || !onUpdateParam) return;
     const layer = currentEffects.find(l => l.id === selectedLayerId);
-    if (!layer || (layer.type !== "clock" && layer.type !== "audio-visualizer" && layer.type !== "blur-region" && layer.type !== "music-player")) return;
+    if (!layer || (layer.type !== "clock" && layer.type !== "audio-visualizer" && layer.type !== "blur-region" && layer.type !== "music-player" && layer.type !== "app-launcher")) return;
     
     dragState.current = {
       isDragging: true,
@@ -967,6 +968,11 @@ export function WebGLEffectRenderer({ videoSrc, effects, isOverlay = false, sele
       {/* Music Player Widget */}
       {musicPlayer && (
         <MusicPlayerWidget params={musicPlayer.params} isOverlay={isOverlay} />
+      )}
+
+      {/* App Launcher Widget */}
+      {appLauncher && (
+        <AppLauncherWidget params={appLauncher.params} isOverlay={isOverlay} />
       )}
 
       {/* WebGL Canvas — only mounted when effects are active */}
@@ -1151,6 +1157,8 @@ function MusicPlayerWidget({ params, isOverlay }: { params: any; isOverlay?: boo
   const [media, setMedia] = useState({ title: "", artist: "", album: "", is_playing: false, thumbnail_base64: null as string | null });
   const [timeline, setTimeline] = useState({ position: 0, start_time: 0, end_time: 0 });
   const [isHovered, setIsHovered] = useState(false);
+  const [volume, setVolume] = useState<number>(1.0);
+  const [isVolumeHovered, setIsVolumeHovered] = useState(false);
   
   useEffect(() => {
     let unlistenFunctions: Array<() => void> = [];
@@ -1175,11 +1183,30 @@ function MusicPlayerWidget({ params, isOverlay }: { params: any; isOverlay?: boo
     };
     setupEvents();
 
+    const fetchVolume = async () => {
+      try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        const v = await invoke<number>("media_get_volume");
+        if (isMounted) setVolume(v);
+      } catch (e) {}
+    };
+    fetchVolume();
+    const volInterval = setInterval(fetchVolume, 2000);
+
     return () => {
       isMounted = false;
+      clearInterval(volInterval);
       unlistenFunctions.forEach(f => f());
     };
   }, []);
+
+  const handleVolumeChange = async (newVol: number) => {
+    setVolume(newVol);
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("media_set_volume", { level: newVol });
+    } catch (e) {}
+  };
 
   const handleAction = async (action: string, arg?: number) => {
     try {
@@ -1195,6 +1222,8 @@ function MusicPlayerWidget({ params, isOverlay }: { params: any; isOverlay?: boo
   const scale = params.scale ?? 1.0;
   const opacity = params.opacity ?? 0.9;
   const theme = params.theme || "glass";
+  const shape = params.shape || "standard";
+  const customColor = params.color && params.color !== "auto" ? params.color : undefined;
 
   // Don't render if no media title is playing and it's overlay (we don't want empty widgets on desktop)
   if (isOverlay && !media.title && !media.artist) return null;
@@ -1210,9 +1239,9 @@ function MusicPlayerWidget({ params, isOverlay }: { params: any; isOverlay?: boo
     pointerEvents: "auto", // Allow interaction in overlay mode
     display: "flex",
     alignItems: "center",
-    gap: "16px",
-    padding: "16px",
-    borderRadius: "16px",
+    gap: shape === "compact" ? "8px" : "16px",
+    padding: shape === "compact" ? "8px 16px" : "16px",
+    borderRadius: shape === "compact" ? "30px" : "16px",
     transition: "all 0.3s ease",
   };
 
@@ -1224,21 +1253,59 @@ function MusicPlayerWidget({ params, isOverlay }: { params: any; isOverlay?: boo
       boxShadow: "0 8px 32px rgba(0,0,0,0.3)",
       color: "#fff"
     },
-    dark: {
-      background: "#121212",
-      border: "1px solid #333",
-      boxShadow: "0 4px 20px rgba(0,0,0,0.5)",
-      color: "#fff"
+    "apple-music": {
+      background: "rgba(255, 255, 255, 0.1)",
+      backdropFilter: "blur(40px) saturate(150%)",
+      border: "1px solid rgba(255, 255, 255, 0.2)",
+      boxShadow: "0 10px 40px rgba(0,0,0,0.2)",
+      color: "#fff",
+      borderRadius: shape === "compact" ? "30px" : "24px",
     },
-    light: {
-      background: "#ffffff",
-      border: "1px solid #eee",
-      boxShadow: "0 4px 20px rgba(0,0,0,0.1)",
-      color: "#000"
+    "spotify-dark": {
+      background: "#121212",
+      border: "none",
+      boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
+      color: "#b3b3b3",
+    },
+    "winamp-retro": {
+      background: "#1f1f1f",
+      border: "2px solid #5a5a5a",
+      borderTopColor: "#b2b2b2",
+      borderLeftColor: "#b2b2b2",
+      boxShadow: "2px 2px 5px rgba(0,0,0,0.5)",
+      color: "#00ff00",
+      fontFamily: "'Courier New', monospace"
     }
   };
 
   const currentTheme = themeStyles[theme] || themeStyles.glass;
+  const accentColor = customColor || (theme === "winamp-retro" ? "#00ff00" : (theme === "spotify-dark" ? "#1ed760" : currentTheme.color));
+
+  const renderThumbnail = () => {
+    if (shape === "compact") return null;
+    
+    if (shape === "vinyl") {
+      return (
+        <div style={{ position: "relative", width: "80px", height: "80px", borderRadius: "50%", background: "#111", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 12px rgba(0,0,0,0.4)", animation: media.is_playing ? "spin 4s linear infinite" : "none" }}>
+          <style dangerouslySetInnerHTML={{__html: `@keyframes spin { 100% { transform: rotate(360deg); } }`}} />
+          <div style={{ position: "absolute", inset: "4px", borderRadius: "50%", border: "1px solid #333" }} />
+          <div style={{ position: "absolute", inset: "12px", borderRadius: "50%", border: "1px solid #222" }} />
+          {media.thumbnail_base64 ? (
+            <img src={media.thumbnail_base64} alt="album" style={{ width: "32px", height: "32px", borderRadius: "50%", objectFit: "cover", pointerEvents: "none" }} />
+          ) : (
+            <div style={{ width: "32px", height: "32px", borderRadius: "50%", background: "#444", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "12px" }}>🎵</div>
+          )}
+          <div style={{ position: "absolute", width: "8px", height: "8px", background: "#000", borderRadius: "50%" }} />
+        </div>
+      );
+    }
+
+    // Standard
+    if (media.thumbnail_base64) {
+      return <img src={media.thumbnail_base64} alt="album" style={{ width: "80px", height: "80px", borderRadius: "8px", objectFit: "cover", boxShadow: "0 4px 12px rgba(0,0,0,0.2)", pointerEvents: "none" }} />;
+    }
+    return <div style={{ width: "80px", height: "80px", borderRadius: "8px", background: "rgba(128,128,128,0.2)", display: "flex", alignItems: "center", justifyContent: "center" }}>🎵</div>;
+  };
 
   return (
     <div 
@@ -1247,30 +1314,29 @@ function MusicPlayerWidget({ params, isOverlay }: { params: any; isOverlay?: boo
       onMouseEnter={() => setIsHovered(true)} 
       onMouseLeave={() => setIsHovered(false)}
       onPointerDown={(e) => {
-        // Stop propagation so controls work and don't trigger drag on the buttons themselves
         if ((e.target as HTMLElement).tagName === "BUTTON" || (e.target as HTMLElement).getAttribute("data-seek")) {
           e.stopPropagation();
         }
       }}
     >
-      {media.thumbnail_base64 ? (
-        <img src={media.thumbnail_base64} alt="album" style={{ width: "80px", height: "80px", borderRadius: "8px", objectFit: "cover", boxShadow: "0 4px 12px rgba(0,0,0,0.2)", pointerEvents: "none" }} />
-      ) : (
-        <div style={{ width: "80px", height: "80px", borderRadius: "8px", background: "rgba(128,128,128,0.2)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          🎵
-        </div>
-      )}
+      {renderThumbnail()}
       
-      <div style={{ display: "flex", flexDirection: "column", minWidth: "200px" }}>
-        <div style={{ fontWeight: 600, fontSize: "16px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "250px" }}>
-          {media.title || "No track playing"}
-        </div>
-        <div style={{ fontWeight: 400, fontSize: "14px", opacity: 0.7, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "250px" }}>
-          {media.artist || "..."}
+      <div style={{ display: "flex", flexDirection: shape === "compact" ? "row" : "column", alignItems: shape === "compact" ? "center" : "flex-start", minWidth: shape === "compact" ? "auto" : "200px" }}>
+        
+        {/* Text Info */}
+        <div style={{ display: "flex", flexDirection: "column", marginRight: shape === "compact" ? "16px" : "0" }}>
+          <div style={{ fontWeight: 600, fontSize: shape === "compact" ? "14px" : "16px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "250px" }}>
+            {media.title || "No track playing"}
+          </div>
+          {shape !== "compact" && (
+            <div style={{ fontWeight: 400, fontSize: "14px", opacity: 0.7, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "250px" }}>
+              {media.artist || "..."}
+            </div>
+          )}
         </div>
         
         {/* Controls */}
-        <div style={{ display: "flex", alignItems: "center", gap: "12px", marginTop: "12px", pointerEvents: "auto" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px", marginTop: shape === "compact" ? "0" : "12px", pointerEvents: "auto" }}>
           <button onClick={() => handleAction("media_prev")} style={{ background: "transparent", border: "none", color: "inherit", cursor: "pointer", opacity: 0.8, fontSize: "18px", padding: "4px" }}>⏮</button>
           <button onClick={() => handleAction("media_play_pause")} style={{ background: "transparent", border: "none", color: "inherit", cursor: "pointer", fontSize: "24px", padding: "4px", minWidth: "30px" }}>
             {media.is_playing ? "⏸" : "▶"}
@@ -1278,29 +1344,231 @@ function MusicPlayerWidget({ params, isOverlay }: { params: any; isOverlay?: boo
           <button onClick={() => handleAction("media_next")} style={{ background: "transparent", border: "none", color: "inherit", cursor: "pointer", opacity: 0.8, fontSize: "18px", padding: "4px" }}>⏭</button>
           
           {/* Seekbar */}
-          <div 
-            data-seek="true"
-            style={{ flex: 1, height: "16px", display: "flex", alignItems: "center", marginLeft: "8px", cursor: "pointer", position: "relative" }}
-            onPointerDown={(e) => {
-              e.stopPropagation();
-              if (timeline.end_time > 0) {
-                const rect = e.currentTarget.getBoundingClientRect();
-                const pct = (e.clientX - rect.left) / rect.width;
-                handleAction("media_seek", pct * timeline.end_time);
-              }
-            }}
-          >
-            <div style={{ width: "100%", height: "4px", background: "rgba(128,128,128,0.3)", borderRadius: "2px", position: "relative", pointerEvents: "none" }}>
-              <div style={{ 
-                position: "absolute", left: 0, top: 0, bottom: 0, 
-                background: currentTheme.color, borderRadius: "2px",
-                width: `${timeline.end_time > 0 ? (timeline.position / timeline.end_time) * 100 : 0}%`,
-                transition: "width 0.5s linear"
-              }} />
+          {shape !== "compact" && (
+            <div 
+              data-seek="true"
+              style={{ flex: 1, minWidth: "80px", height: "16px", display: "flex", alignItems: "center", marginLeft: "8px", cursor: "pointer", position: "relative" }}
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                if (timeline.end_time > 0) {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const pct = (e.clientX - rect.left) / rect.width;
+                  handleAction("media_seek", pct * timeline.end_time);
+                }
+              }}
+            >
+              <div style={{ width: "100%", height: "4px", background: "rgba(128,128,128,0.3)", borderRadius: "2px", position: "relative", pointerEvents: "none" }}>
+                <div style={{ 
+                  position: "absolute", left: 0, top: 0, bottom: 0, 
+                  background: accentColor, borderRadius: "2px",
+                  width: `${timeline.end_time > 0 ? (timeline.position / timeline.end_time) * 100 : 0}%`,
+                  transition: "width 0.5s linear"
+                }} />
+              </div>
             </div>
+          )}
+
+          {/* Volume Control */}
+          <div 
+            style={{ position: "relative", display: "flex", alignItems: "center", cursor: "pointer" }}
+            onMouseEnter={() => setIsVolumeHovered(true)}
+            onMouseLeave={() => setIsVolumeHovered(false)}
+          >
+            <span style={{ fontSize: "16px", opacity: 0.8, padding: "4px" }}>
+              {volume > 0.5 ? "🔊" : volume > 0 ? "🔉" : "🔇"}
+            </span>
+            {isVolumeHovered && (
+              <div style={{
+                position: "absolute", bottom: "100%", left: "50%", transform: "translateX(-50%)",
+                background: theme === "apple-music" ? "rgba(255,255,255,0.8)" : "rgba(0,0,0,0.8)",
+                padding: "12px 8px", borderRadius: "12px",
+                display: "flex", flexDirection: "column", alignItems: "center",
+                boxShadow: "0 4px 12px rgba(0,0,0,0.3)"
+              }}>
+                <input 
+                  type="range" min="0" max="1" step="0.01" 
+                  value={volume}
+                  onPointerDown={e => e.stopPropagation()}
+                  onChange={e => handleVolumeChange(parseFloat(e.target.value))}
+                  style={{
+                    writingMode: "vertical-lr", direction: "rtl",
+                    appearance: "slider-vertical" as any, width: "8px", height: "80px",
+                    accentColor: accentColor as string
+                  }}
+                />
+              </div>
+            )}
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// App Launcher Widget
+// ─────────────────────────────────────────────────────────────
+function AppLauncherWidget({ params, isOverlay }: { params: any; isOverlay?: boolean }) {
+  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+
+  const apps = params.apps || [];
+  if (apps.length === 0 && isOverlay) return null; // Don't render empty launcher on desktop
+
+  const x = params.x ?? 50;
+  const y = params.y ?? 90;
+  const scale = params.scale ?? 1.0;
+  const layout = params.layout || "dock";
+
+  const handleLaunch = async (path: string) => {
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("launch_external_app", { path });
+    } catch(e) {
+      console.error("Failed to launch app", e);
+    }
+  };
+
+  const theme = params.theme || "glass";
+
+  const isDock = layout === "dock";
+
+  let themeStyles: React.CSSProperties = {
+    background: "rgba(20, 20, 20, 0.4)",
+    backdropFilter: "blur(20px)",
+    border: "1px solid rgba(255, 255, 255, 0.1)",
+    boxShadow: "0 8px 32px rgba(0,0,0,0.3)",
+    color: "#fff"
+  };
+
+  let iconThemeStyles: React.CSSProperties = {
+    background: "rgba(255,255,255,0.05)",
+    border: "1px solid rgba(255,255,255,0.05)",
+  };
+
+  if (theme === "frutiger-aero") {
+    themeStyles = {
+      background: "linear-gradient(180deg, rgba(255, 255, 255, 0.4) 0%, rgba(200, 220, 255, 0.2) 50%, rgba(150, 180, 255, 0.4) 100%)",
+      backdropFilter: "blur(12px)",
+      border: "1px solid rgba(255, 255, 255, 0.6)",
+      borderTop: "2px solid rgba(255, 255, 255, 0.9)",
+      boxShadow: "0 8px 32px rgba(0,0,0,0.2), inset 0 2px 10px rgba(255,255,255,0.5)",
+      color: "#000"
+    };
+    iconThemeStyles = {
+      background: "linear-gradient(180deg, rgba(255,255,255,0.8) 0%, rgba(220,230,255,0.6) 100%)",
+      border: "1px solid rgba(255,255,255,0.9)",
+      boxShadow: "0 4px 10px rgba(0,0,0,0.1), inset 0 -4px 10px rgba(0,0,0,0.1)",
+    };
+  } else if (theme === "neumorphism") {
+    themeStyles = {
+      background: "#e0e5ec",
+      border: "none",
+      boxShadow: "9px 9px 16px rgb(163,177,198,0.6), -9px -9px 16px rgba(255,255,255, 0.5)",
+      color: "#4d4d4d"
+    };
+    iconThemeStyles = {
+      background: "#e0e5ec",
+      border: "none",
+      boxShadow: "5px 5px 10px rgb(163,177,198,0.6), -5px -5px 10px rgba(255,255,255, 0.5)",
+    };
+  } else if (theme === "flat") {
+    themeStyles = {
+      background: "#222",
+      border: "none",
+      boxShadow: "none",
+      color: "#fff"
+    };
+    iconThemeStyles = {
+      background: "#333",
+      border: "none",
+      boxShadow: "none",
+    };
+  }
+
+  const containerStyle: React.CSSProperties = {
+    position: "absolute",
+    left: `${x}%`,
+    top: `${y}%`,
+    transform: `translate(-50%, -50%) scale(${scale})`,
+    zIndex: 50,
+    pointerEvents: "auto",
+    display: "flex",
+    flexDirection: "row",
+    flexWrap: isDock ? "nowrap" : "wrap",
+    gap: "12px",
+    padding: "12px",
+    borderRadius: isDock ? "24px" : "16px",
+    justifyContent: "center",
+    maxWidth: isDock ? "none" : "300px",
+    cursor: "grab", // Indicate draggability
+    ...themeStyles
+  };
+
+  if (apps.length === 0) {
+    return (
+      <div className="interactive-widget" style={containerStyle}>
+        <div style={{ opacity: 0.6, fontSize: "14px", padding: "0 10px" }}>Add apps in properties panel</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="interactive-widget" style={containerStyle}>
+      {apps.map((app: any, idx: number) => {
+        const isHovered = hoverIndex === idx;
+        const scaleHover = isDock && isHovered ? 1.2 : 1.0;
+        
+        return (
+          <div 
+            key={idx}
+            onMouseEnter={() => setHoverIndex(idx)}
+            onMouseLeave={() => setHoverIndex(null)}
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              handleLaunch(app.path);
+            }}
+            style={{
+              width: "48px",
+              height: "48px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              borderRadius: "12px",
+              fontSize: "28px",
+              cursor: "pointer",
+              transition: "all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1)",
+              transform: `scale(${scaleHover}) translateY(${isHovered && isDock ? "-8px" : "0"})`,
+              ...iconThemeStyles,
+              boxShadow: isHovered ? (theme === "neumorphism" ? "inset 5px 5px 10px rgb(163,177,198,0.6), inset -5px -5px 10px rgba(255,255,255, 0.5)" : "0 10px 20px rgba(0,0,0,0.3)") : iconThemeStyles.boxShadow,
+              position: "relative"
+            }}
+            title={app.name}
+          >
+            {app.iconBase64 ? (
+               <img src={`data:image/png;base64,${app.iconBase64}`} alt="icon" style={{ width: "32px", height: "32px", objectFit: "contain", pointerEvents: "none" }} />
+            ) : (
+               app.icon || "🚀"
+            )}
+            {isHovered && isDock && (
+              <div style={{
+                position: "absolute",
+                top: "-30px",
+                background: theme === "neumorphism" || theme === "frutiger-aero" ? "rgba(255,255,255,0.9)" : "rgba(0,0,0,0.8)",
+                color: theme === "neumorphism" || theme === "frutiger-aero" ? "#000" : "#fff",
+                fontSize: "12px",
+                padding: "4px 8px",
+                borderRadius: "6px",
+                whiteSpace: "nowrap",
+                pointerEvents: "none",
+                zIndex: 100,
+                boxShadow: "0 4px 12px rgba(0,0,0,0.15)"
+              }}>
+                {app.name}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

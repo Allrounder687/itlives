@@ -11,6 +11,7 @@ type WallpaperState = ReturnType<typeof useWallpaper>;
 interface HeroPanelProps {
   wallpaper: WallpaperState;
   activeTab?: TabState;
+  onEditEffects?: (video: any) => void;
 }
 
 const TAB_TITLES: Record<string, string> = {
@@ -25,7 +26,7 @@ const TAB_TITLES: Record<string, string> = {
   community: "Community Hub",
 };
 
-export function HeroPanel({ wallpaper, activeTab }: HeroPanelProps) {
+export function HeroPanel({ wallpaper, activeTab, onEditEffects }: HeroPanelProps) {
   const [tags, setTags] = React.useState<string[]>([]);
 
   React.useEffect(() => {
@@ -102,31 +103,43 @@ export function HeroPanel({ wallpaper, activeTab }: HeroPanelProps) {
             <button
               key={tag}
               onClick={() => {
+                if (tag === "itl-package") return; // Non-clickable badge
                 wallpaper.setQuery(tag);
                 wallpaper.fetchVideosList();
               }}
               style={{
-                background: "rgba(255,255,255,0.05)",
-                border: "1px solid rgba(255,255,255,0.1)",
+                background: tag === "itl-package" ? "rgba(100,200,255,0.15)" : "rgba(255,255,255,0.05)",
+                border: tag === "itl-package" ? "1px solid rgba(100,200,255,0.4)" : "1px solid rgba(255,255,255,0.1)",
                 borderRadius: "4px",
                 padding: "4px 8px",
                 fontSize: "11px",
-                color: "var(--text-soft)",
-                cursor: "pointer",
+                color: tag === "itl-package" ? "#88ccff" : "var(--text-soft)",
+                cursor: tag === "itl-package" ? "default" : "pointer",
                 transition: "all 0.2s ease"
               }}
               onMouseEnter={(e) => {
+                if (tag === "itl-package") return;
                 e.currentTarget.style.background = "var(--accent)";
                 e.currentTarget.style.color = "#000";
               }}
               onMouseLeave={(e) => {
+                if (tag === "itl-package") return;
                 e.currentTarget.style.background = "rgba(255,255,255,0.05)";
                 e.currentTarget.style.color = "var(--text-soft)";
               }}
             >
-              #{tag}
+              {tag === "itl-package" ? "📦 ITL Package" : `#${tag}`}
             </button>
           ))}
+          {tags.includes("itl-package") && onEditEffects && (
+            <button 
+              className="action-btn action-btn--secondary" 
+              style={{ padding: "4px 12px", fontSize: "11px", height: "auto", marginLeft: "auto" }}
+              onClick={() => onEditEffects(wallpaper.currentVideo)}
+            >
+              🖌 Edit Effects
+            </button>
+          )}
         </div>
       )}
     </section>

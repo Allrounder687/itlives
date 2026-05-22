@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { EffectLayer } from "./CanvasEffectRenderer";
 import { WebGLEffectRenderer } from "./WebGLEffectRenderer";
 import { VideoResult } from "@/hooks/useWallpaper";
@@ -33,7 +33,8 @@ const EFFECT_TEMPLATES: Record<string, Omit<EffectLayer, "id">> = {
   "color-grade": { type: "color-grade", name: "Color Tint", enabled: true, params: { color: "rgba(255, 100, 50, 0.15)", intensity: 0.3, blendMode: "overlay" } },
   "blur-region": { type: "blur-region", name: "Blur Region", enabled: true, params: { x: 10, y: 10, w: 30, h: 20, blur: 15 } },
   clock: { type: "clock", name: "Clock Widget", enabled: true, params: { format: "24h", style: "minimal", color: "#ffffff", opacity: 0.8, x: 50, y: 50 } },
-  "music-player": { type: "music-player", name: "Music Player", enabled: true, params: { x: 50, y: 80, scale: 1.0, theme: "glass", opacity: 0.9 } },
+  "music-player": { type: "music-player", name: "Music Player", enabled: true, params: { x: 50, y: 80, scale: 1.0, theme: "glass", opacity: 0.9, shape: "standard", color: "auto" } },
+  "app-launcher": { type: "app-launcher", name: "App Launcher", enabled: true, params: { x: 50, y: 90, scale: 1.0, apps: [], layout: "dock" } },
 };
 
 const EFFECT_DROPDOWN: { group: string, items: { key: string, icon: string, label: string }[] }[] = [
@@ -61,6 +62,7 @@ const EFFECT_DROPDOWN: { group: string, items: { key: string, icon: string, labe
     { key: "blur-region", icon: "🔲", label: "Blur Region" },
     { key: "clock", icon: "🕐", label: "Clock Widget" },
     { key: "music-player", icon: "🎧", label: "Music Player" },
+    { key: "app-launcher", icon: "🚀", label: "App Launcher" },
   ]},
 ];
 
@@ -125,41 +127,121 @@ export function EditorWorkspace({ currentVideo, onApplyWallpaper, onUploadMedia 
     setLayers(prev => prev.map(l => l.id === id ? { ...l, params: { ...l.params, [key]: value } } : l));
   };
 
-  const handleSaveProfile = async () => {
-    if (!currentVideo) return;
-    try {
-      const name = prompt("Enter a name for this profile:");
-      if (!name) return;
-      const { invoke } = await import("@tauri-apps/api/core");
-      const config = { videoSrc: currentVideo.local_path || currentVideo.video_url, layers };
-      await invoke("save_profile", { name, configJson: JSON.stringify(config) });
-      alert(`Profile '${name}' saved!`);
-    } catch (err) {
-      console.error("Failed to save profile:", err);
-      alert("Failed to save profile.");
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [profileModalMode, setProfileModalMode] = useState<"save" | "load">("load");
+  const [savedProfiles, setSavedProfiles] = useState<string[]>([]);
+  const [newProfileName, setNewProfileName] = useState("");
+  const [isImporting, setIsImporting] = useState(false);
+
+  const openProfileModal = async (mode: "save" | "load") => {
+    setProfileModalMode(mode);
+    setIsProfileModalOpen(true);
+    setNewProfileName("");
+    if (mode === "load") {
+      try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        const list = await invoke<string[]>("list_profiles");
+        setSavedProfiles(list || []);
+      } catch (err) {
+        console.error("Failed to list profiles", err);
+      }
     }
   };
 
-  const handleLoadProfile = async () => {
+  useEffect(() => {
+    const handleLoadProfileEvent = (e: any) => {
+      if (e.detail) {
+        executeLoadProfile(e.detail);
+      }
+    };
+    window.addEventListener("load-profile", handleLoadProfileEvent);
+    return () => window.removeEventListener("load-profile", handleLoadProfileEvent);
+  }, []);
+
+  const executeSaveProfile = async () => {
+    if (!currentVideo || !newProfileName.trim()) return;
     try {
       const { invoke } = await import("@tauri-apps/api/core");
-      const profiles = await invoke<string[]>("list_profiles");
-      if (!profiles || profiles.length === 0) {
-        alert("No saved profiles found.");
-        return;
-      }
-      const name = prompt(`Enter profile name to load:\n\n${profiles.map(p => `- ${p}`).join("\n")}`);
-      if (!name || !profiles.includes(name)) return;
-      
+      const config = { videoSrc: currentVideo.local_path || currentVideo.video_url, layers };
+      await invoke("save_profile", { name: newProfileName.trim(), configJson: JSON.stringify(config) });
+      setIsProfileModalOpen(false);
+    } catch (err) {
+      console.error("Failed to save profile:", err);
+    }
+  };
+
+  const executeLoadProfile = async (name: string) => {
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
       const configJson = await invoke<string>("load_profile", { name });
       const config = JSON.parse(configJson);
+      
+      if (config.videoSrc && onApplyWallpaper) {
+        await onApplyWallpaper({
+          id: name,
+          thumbnail_url: "",
+          video_url: config.videoSrc,
+          source: "local",
+          local_path: config.videoSrc,
+          duration: 0,
+          width: 1920,
+          height: 1080
+        });
+      }
+      
       if (config.layers) {
         setLayers(config.layers);
-        alert(`Profile '${name}' loaded!`);
       }
+      
+      setIsProfileModalOpen(false);
     } catch (err) {
       console.error("Failed to load profile:", err);
-      alert("Failed to load profile.");
+    }
+  };
+
+  const handleExportItl = async () => {
+    if (!currentVideo) return;
+    try {
+      const { save } = await import("@tauri-apps/plugin-dialog");
+      const destPath = await save({ filters: [{ name: "itLives Package", extensions: ["itl"] }] });
+      if (!destPath) return;
+
+      const { invoke } = await import("@tauri-apps/api/core");
+      const config = { videoSrc: currentVideo.local_path || currentVideo.video_url, thumbnailUrl: currentVideo.thumbnail_url, layers };
+      await invoke("export_itl_package", { configJson: JSON.stringify(config), destPath });
+      alert(`Package exported successfully to:\n${destPath}`);
+      setIsProfileModalOpen(false);
+    } catch (err) {
+      console.error("Failed to export .itl package:", err);
+      alert("Failed to export package.");
+    }
+  };
+
+  const handleImportItl = async () => {
+    try {
+      const { open } = await import("@tauri-apps/plugin-dialog");
+      const srcPath = await open({ multiple: false, directory: false, filters: [{ name: "itLives Package", extensions: ["itl"] }] });
+      if (!srcPath) return;
+
+      setIsImporting(true);
+
+      const { invoke } = await import("@tauri-apps/api/core");
+      const newProfileName = await invoke<string>("import_itl_package", { srcPath });
+      
+      // Reload profile list and automatically load it
+      const list = await invoke<string[]>("list_profiles");
+      setSavedProfiles(list || []);
+      
+      setIsImporting(false);
+      
+      alert(`Package imported successfully as profile: '${newProfileName}'`);
+      
+      // Auto-load the new profile
+      executeLoadProfile(newProfileName);
+    } catch (err) {
+      setIsImporting(false);
+      console.error("Failed to import .itl package:", err);
+      alert("Failed to import package.");
     }
   };
 
@@ -183,7 +265,7 @@ export function EditorWorkspace({ currentVideo, onApplyWallpaper, onUploadMedia 
           <h3>My Effects</h3>
           <div style={{ display: "flex", gap: "6px" }}>
             <button 
-              onClick={handleSaveProfile}
+              onClick={() => openProfileModal("save")}
               className="action-btn action-btn--secondary"
               style={{ padding: "4px 8px", fontSize: "11px", minHeight: "24px", borderRadius: "8px" }}
               title="Save Profile"
@@ -191,7 +273,7 @@ export function EditorWorkspace({ currentVideo, onApplyWallpaper, onUploadMedia 
               💾 Save
             </button>
             <button 
-              onClick={handleLoadProfile}
+              onClick={() => openProfileModal("load")}
               className="action-btn action-btn--secondary"
               style={{ padding: "4px 8px", fontSize: "11px", minHeight: "24px", borderRadius: "8px" }}
               title="Load Profile"
@@ -896,6 +978,155 @@ export function EditorWorkspace({ currentVideo, onApplyWallpaper, onUploadMedia 
                 )}
               </>
             )}
+
+            {selectedLayer.type === "music-player" && (
+              <>
+                <div className="property-group">
+                  <label>Shape</label>
+                  <select className="input" value={selectedLayer.params.shape || "standard"} onChange={(e) => updateParam(selectedLayer.id, "shape", e.target.value)}>
+                    <option value="standard">Standard</option>
+                    <option value="compact">Compact</option>
+                    <option value="vinyl">Vinyl Record</option>
+                  </select>
+                </div>
+                <div className="property-group">
+                  <label>Theme</label>
+                  <select className="input" value={selectedLayer.params.theme || "glass"} onChange={(e) => updateParam(selectedLayer.id, "theme", e.target.value)}>
+                    <option value="glass">Glass</option>
+                    <option value="apple-music">Apple Music (Blur)</option>
+                    <option value="spotify-dark">Spotify Dark</option>
+                    <option value="winamp-retro">Winamp Retro</option>
+                  </select>
+                </div>
+                <div className="property-group" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <input type="checkbox" checked={selectedLayer.params.color === "auto"} onChange={(e) => updateParam(selectedLayer.id, "color", e.target.checked ? "auto" : "#ffffff")} />
+                  <label style={{ margin: 0 }}>Auto Match Wallpaper Color</label>
+                </div>
+                {selectedLayer.params.color !== "auto" && (
+                  <div className="property-group">
+                    <label>Accent Color</label>
+                    <input type="color" value={selectedLayer.params.color || "#ffffff"} onChange={(e) => updateParam(selectedLayer.id, "color", e.target.value)} style={{ width: "100%", height: "36px", border: "none", borderRadius: "8px", cursor: "pointer" }} />
+                  </div>
+                )}
+                <div className="property-group">
+                  <label>Scale ({selectedLayer.params.scale || 1.0})</label>
+                  <input type="range" min="0.5" max="2.0" step="0.1" className="property-control" value={selectedLayer.params.scale || 1.0} onChange={(e) => updateParam(selectedLayer.id, "scale", parseFloat(e.target.value))} />
+                </div>
+                <div className="property-group">
+                  <label>Position X ({selectedLayer.params.x || 50}%)</label>
+                  <input type="range" min="0" max="100" className="property-control" value={selectedLayer.params.x || 50} onChange={(e) => updateParam(selectedLayer.id, "x", parseInt(e.target.value))} />
+                </div>
+                <div className="property-group">
+                  <label>Position Y ({selectedLayer.params.y || 80}%)</label>
+                  <input type="range" min="0" max="100" className="property-control" value={selectedLayer.params.y || 80} onChange={(e) => updateParam(selectedLayer.id, "y", parseInt(e.target.value))} />
+                </div>
+              </>
+            )}
+
+            {selectedLayer.type === "app-launcher" && (
+              <>
+                <div className="property-group">
+                  <label>Layout</label>
+                  <select className="input" value={selectedLayer.params.layout || "dock"} onChange={(e) => updateParam(selectedLayer.id, "layout", e.target.value)}>
+                    <option value="dock">Horizontal Dock</option>
+                    <option value="grid">App Grid</option>
+                  </select>
+                </div>
+                <div className="property-group">
+                  <label>Theme</label>
+                  <select className="input" value={selectedLayer.params.theme || "glass"} onChange={(e) => updateParam(selectedLayer.id, "theme", e.target.value)}>
+                    <option value="glass">Glassmorphism</option>
+                    <option value="frutiger-aero">Frutiger Aero (Vista)</option>
+                    <option value="neumorphism">Neumorphism</option>
+                    <option value="flat">Flat Minimal</option>
+                  </select>
+                </div>
+                <div className="property-group">
+                  <label>Apps</label>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    {(selectedLayer.params.apps || []).map((app: any, idx: number) => (
+                      <div key={idx} style={{ display: "flex", alignItems: "center", gap: "8px", background: "rgba(255,255,255,0.05)", padding: "8px", borderRadius: "8px" }}>
+                        {app.iconBase64 ? (
+                          <img src={`data:image/png;base64,${app.iconBase64}`} alt="icon" style={{ width: "32px", height: "32px", objectFit: "contain" }} />
+                        ) : (
+                          <span style={{ fontSize: "24px" }}>{app.icon || "🚀"}</span>
+                        )}
+                        <div style={{ flex: 1, overflow: "hidden" }}>
+                          <div style={{ fontSize: "12px", fontWeight: 600, whiteSpace: "nowrap", textOverflow: "ellipsis", overflow: "hidden" }}>{app.name}</div>
+                          <div style={{ fontSize: "10px", opacity: 0.6, whiteSpace: "nowrap", textOverflow: "ellipsis", overflow: "hidden" }}>{app.path}</div>
+                        </div>
+                        <button type="button" className="action-btn action-btn--secondary-ghost" style={{ padding: "4px" }} title="Change Icon" onClick={async () => {
+                          const { open } = await import("@tauri-apps/plugin-dialog");
+                          const imgPath = await open({ multiple: false, directory: false, filters: [{ name: "Image", extensions: ["png", "jpg", "jpeg"] }] });
+                          if (imgPath) {
+                            const { convertFileSrc } = await import("@tauri-apps/api/core");
+                            const src = convertFileSrc(imgPath as string);
+                            // Convert image to base64
+                            const img = new Image();
+                            img.crossOrigin = "Anonymous";
+                            img.onload = () => {
+                              const canvas = document.createElement("canvas");
+                              canvas.width = img.width; canvas.height = img.height;
+                              const ctx = canvas.getContext("2d");
+                              if (ctx) {
+                                ctx.drawImage(img, 0, 0);
+                                const b64 = canvas.toDataURL("image/png").split(",")[1];
+                                const newApps = [...selectedLayer.params.apps];
+                                newApps[idx] = { ...newApps[idx], iconBase64: b64 };
+                                updateParam(selectedLayer.id, "apps", newApps);
+                              }
+                            };
+                            img.src = src;
+                          }
+                        }}>🖼️</button>
+                        <button type="button" className="action-btn action-btn--danger-ghost" style={{ padding: "4px" }} onClick={() => {
+                          const newApps = [...selectedLayer.params.apps];
+                          newApps.splice(idx, 1);
+                          updateParam(selectedLayer.id, "apps", newApps);
+                        }}>✕</button>
+                      </div>
+                    ))}
+                    <button type="button" className="action-btn action-btn--secondary" onClick={async () => {
+                      const { open } = await import("@tauri-apps/plugin-dialog");
+                      const path = await open({ multiple: false, directory: false, filters: [{ name: "Executable", extensions: ["exe", "bat", "lnk"] }] });
+                      if (path) {
+                        // Extract filename for default name
+                        const defaultName = (path as string).split(/[/\\]/).pop()?.split(".")[0] || "App";
+                        const name = prompt("Enter a name for this app:", defaultName);
+                        if (!name) return;
+                        
+                        let iconBase64 = null;
+                        let iconEmoji = "🚀";
+                        try {
+                          const { invoke } = await import("@tauri-apps/api/core");
+                          iconBase64 = await invoke("extract_icon_base64", { path });
+                        } catch (e) {
+                          console.warn("Failed to extract icon natively, falling back to emoji", e);
+                          iconEmoji = prompt("Could not extract icon natively. Enter an emoji to use as the icon (e.g. 🎮, 🌐, 🎵):", "🚀") || "🚀";
+                        }
+                        
+                        const newApps = [...(selectedLayer.params.apps || []), { path, name, icon: iconEmoji, iconBase64 }];
+                        updateParam(selectedLayer.id, "apps", newApps);
+                      }
+                    }}>
+                      ＋ Add App
+                    </button>
+                  </div>
+                </div>
+                <div className="property-group">
+                  <label>Scale ({selectedLayer.params.scale || 1.0})</label>
+                  <input type="range" min="0.5" max="2.0" step="0.1" className="property-control" value={selectedLayer.params.scale || 1.0} onChange={(e) => updateParam(selectedLayer.id, "scale", parseFloat(e.target.value))} />
+                </div>
+                <div className="property-group">
+                  <label>Position X ({selectedLayer.params.x || 50}%)</label>
+                  <input type="range" min="0" max="100" className="property-control" value={selectedLayer.params.x || 50} onChange={(e) => updateParam(selectedLayer.id, "x", parseInt(e.target.value))} />
+                </div>
+                <div className="property-group">
+                  <label>Position Y ({selectedLayer.params.y || 90}%)</label>
+                  <input type="range" min="0" max="100" className="property-control" value={selectedLayer.params.y || 90} onChange={(e) => updateParam(selectedLayer.id, "y", parseInt(e.target.value))} />
+                </div>
+              </>
+            )}
           </div>
         ) : (
           <div className="editor-empty">
@@ -903,6 +1134,91 @@ export function EditorWorkspace({ currentVideo, onApplyWallpaper, onUploadMedia 
           </div>
         )}
       </div>
+
+      {/* Profile Manager Modal */}
+      {isProfileModalOpen && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 9999,
+          background: "rgba(0, 0, 0, 0.7)", backdropFilter: "blur(10px)",
+          display: "flex", alignItems: "center", justifyContent: "center"
+        }} onClick={() => setIsProfileModalOpen(false)}>
+          <div style={{
+            background: "rgba(30, 30, 30, 0.9)", border: "1px solid rgba(255,255,255,0.1)",
+            borderRadius: "24px", padding: "32px", width: "400px", maxWidth: "90%",
+            boxShadow: "0 20px 60px rgba(0,0,0,0.5)", display: "flex", flexDirection: "column", gap: "20px"
+          }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <h2 style={{ margin: 0, fontSize: "20px", fontWeight: 600 }}>
+                {profileModalMode === "save" ? "Save Current Profile" : "Load Saved Profile"}
+              </h2>
+              <button className="action-btn action-btn--danger-ghost" style={{ padding: "8px" }} onClick={() => setIsProfileModalOpen(false)}>✕</button>
+            </div>
+
+            {profileModalMode === "save" ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                <div>
+                  <label style={{ display: "block", marginBottom: "8px", fontSize: "12px", opacity: 0.7 }}>Profile Name</label>
+                  <input 
+                    className="input" 
+                    value={newProfileName} 
+                    onChange={e => setNewProfileName(e.target.value)}
+                    placeholder="E.g., Cyberpunk Rain, Relaxing Dawn"
+                    style={{ width: "100%", padding: "12px", borderRadius: "12px", fontSize: "14px" }}
+                    autoFocus
+                  />
+                </div>
+                <div style={{ display: "flex", gap: "12px", marginTop: "8px" }}>
+                  <button 
+                    className="action-btn action-btn--primary" 
+                    style={{ flex: 1, padding: "12px", borderRadius: "12px" }}
+                    onClick={executeSaveProfile}
+                    disabled={!newProfileName.trim()}
+                  >
+                    Save Profile
+                  </button>
+                  <button 
+                    className="action-btn action-btn--secondary" 
+                    style={{ flex: 1, padding: "12px", borderRadius: "12px", background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.2)" }}
+                    onClick={handleExportItl}
+                  >
+                    📦 Export as .itl
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: "12px", maxHeight: "300px", overflowY: "auto" }}>
+                {savedProfiles.length === 0 ? (
+                  <div style={{ padding: "40px 0", textAlign: "center", opacity: 0.5, fontSize: "14px" }}>
+                    No saved profiles yet.
+                  </div>
+                ) : (
+                  savedProfiles.map(p => (
+                    <div key={p} style={{
+                      display: "flex", alignItems: "center", justifyContent: "space-between",
+                      padding: "16px", background: "rgba(255,255,255,0.05)", borderRadius: "12px",
+                      cursor: "pointer", transition: "background 0.2s"
+                    }} onClick={() => executeLoadProfile(p)}>
+                      <div style={{ fontWeight: 500 }}>{p}</div>
+                      <div style={{ opacity: 0.5 }}>→</div>
+                    </div>
+                  ))
+                )}
+                
+                <div style={{ borderTop: "1px solid rgba(255,255,255,0.1)", marginTop: "8px", paddingTop: "16px" }}>
+                  <button 
+                    className="action-btn action-btn--secondary" 
+                    style={{ width: "100%", padding: "12px", borderRadius: "12px", background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.2)" }}
+                    onClick={handleImportItl}
+                    disabled={isImporting}
+                  >
+                    {isImporting ? "⏳ Importing Package..." : "📥 Import .itl Package"}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

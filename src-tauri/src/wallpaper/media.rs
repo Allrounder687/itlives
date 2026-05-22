@@ -70,6 +70,73 @@ pub fn get_current_media_info() -> Result<MediaInfo, String> {
     Ok(CURRENT_MEDIA.lock().unwrap().clone())
 }
 
+#[tauri::command]
+pub fn media_get_volume() -> Result<f32, String> {
+    #[cfg(windows)]
+    {
+        use windows::Win32::System::Com::{CoInitializeEx, CoUninitialize, COINIT_MULTITHREADED};
+        use windows::Win32::Media::Audio::Endpoints::IAudioEndpointVolume;
+        use windows::Win32::Media::Audio::{eRender, eConsole, IMMDeviceEnumerator, MMDeviceEnumerator};
+        use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_ALL};
+
+        unsafe {
+            let init_result = CoInitializeEx(None, COINIT_MULTITHREADED);
+            let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)
+                .map_err(|e| format!("CoCreateInstance failed: {}", e))?;
+            let device = enumerator.GetDefaultAudioEndpoint(eRender, eConsole)
+                .map_err(|e| format!("GetDefaultAudioEndpoint failed: {}", e))?;
+            let volume: IAudioEndpointVolume = device.Activate(CLSCTX_ALL, None)
+                .map_err(|e| format!("Activate failed: {}", e))?;
+            let level = volume.GetMasterVolumeLevelScalar()
+                .map_err(|e| format!("GetMasterVolumeLevelScalar failed: {}", e))?;
+            
+            if init_result.is_ok() {
+                CoUninitialize();
+            }
+            Ok(level)
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        Ok(1.0)
+    }
+}
+
+#[tauri::command]
+pub fn media_set_volume(level: f32) -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        use windows::Win32::System::Com::{CoInitializeEx, CoUninitialize, COINIT_MULTITHREADED};
+        use windows::Win32::Media::Audio::Endpoints::IAudioEndpointVolume;
+        use windows::Win32::Media::Audio::{eRender, eConsole, IMMDeviceEnumerator, MMDeviceEnumerator};
+        use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_ALL};
+
+        unsafe {
+            let init_result = CoInitializeEx(None, COINIT_MULTITHREADED);
+            let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)
+                .map_err(|e| format!("CoCreateInstance failed: {}", e))?;
+            let device = enumerator.GetDefaultAudioEndpoint(eRender, eConsole)
+                .map_err(|e| format!("GetDefaultAudioEndpoint failed: {}", e))?;
+            let volume: IAudioEndpointVolume = device.Activate(CLSCTX_ALL, None)
+                .map_err(|e| format!("Activate failed: {}", e))?;
+            
+            // Constrain level between 0.0 and 1.0
+            let safe_level = level.max(0.0).min(1.0);
+            volume.SetMasterVolumeLevelScalar(safe_level, std::ptr::null())
+                .map_err(|e| format!("SetMasterVolumeLevelScalar failed: {}", e))?;
+            
+            if init_result.is_ok() {
+                CoUninitialize();
+            }
+            Ok(())
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        Ok(())
+    }
+}
+
 pub fn init_media_polling(app_handle: AppHandle) {
     if MEDIA_POLLING.load(Ordering::SeqCst) {
         return;

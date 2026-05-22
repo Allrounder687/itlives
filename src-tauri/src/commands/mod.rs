@@ -4,3 +4,4 @@ pub mod queue;
 pub mod batch;
 pub mod settings;
 pub mod profiles;
+pub mod package;

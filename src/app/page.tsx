@@ -221,7 +221,14 @@ function Home() {
         <main className="workspace">
           <DependencyChecker />
 
-          {wallpaper.currentVideo && <HeroPanel wallpaper={wallpaper} activeTab={activeTab} />}
+          {wallpaper.currentVideo && <HeroPanel 
+            wallpaper={wallpaper} 
+            activeTab={activeTab} 
+            onEditEffects={(video) => {
+              setActiveTab("editor");
+              setTimeout(() => window.dispatchEvent(new CustomEvent('load-profile', {detail: video.id})), 100);
+            }} 
+          />}
 
           {activeTab === "discover" && (
             <section className="panel panel--main">

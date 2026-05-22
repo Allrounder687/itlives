@@ -197,3 +197,60 @@ pub fn get_monitors(app_handle: tauri::AppHandle) -> Result<Vec<DisplayMonitor>,
     
     Ok(result)
 }
+
+#[tauri::command]
+pub fn launch_external_app(path: String) -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        let mut cmd = std::process::Command::new(&path);
+        // CREATE_NO_WINDOW = 0x08000000
+        cmd.creation_flags(0x08000000);
+        let _ = cmd.spawn().map_err(|e| format!("Failed to spawn {}: {}", path, e))?;
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = std::process::Command::new(&path)
+            .spawn()
+            .map_err(|e| format!("Failed to spawn {}: {}", path, e))?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn extract_icon_base64(path: String) -> Result<String, String> {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        let script = format!(
+            "Add-Type -AssemblyName System.Drawing;\n\
+             $icon = [System.Drawing.Icon]::ExtractAssociatedIcon('{}');\n\
+             if ($null -eq $icon) {{ exit 1 }}\n\
+             $bitmap = $icon.ToBitmap();\n\
+             $stream = New-Object System.IO.MemoryStream;\n\
+             $bitmap.Save($stream, [System.Drawing.Imaging.ImageFormat]::Png);\n\
+             $bytes = $stream.ToArray();\n\
+             [Convert]::ToBase64String($bytes)",
+             path.replace("'", "''")
+        );
+        let mut cmd = std::process::Command::new("powershell");
+        cmd.args(&["-NoProfile", "-Command", &script]);
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+        
+        let output = cmd.output().map_err(|e| format!("Failed to run PowerShell: {}", e))?;
+        if output.status.success() {
+            let b64 = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if b64.is_empty() {
+                Err("Icon extraction returned empty result".into())
+            } else {
+                Ok(b64)
+            }
+        } else {
+            Err("Failed to extract icon (PowerShell returned error)".into())
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        Err("Icon extraction is only supported on Windows".into())
+    }
+}

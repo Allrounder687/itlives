@@ -196,6 +196,8 @@ pub fn run() {
             crate::wallpaper::media::media_prev,
             crate::wallpaper::media::media_seek,
             crate::wallpaper::media::get_current_media_info,
+            crate::wallpaper::media::media_get_volume,
+            crate::wallpaper::media::media_set_volume,
             commands::wallpaper_control::apply_wallpaper,
             commands::wallpaper_control::stop_wallpaper,
             commands::wallpaper_control::get_wallpaper_status,
@@ -233,6 +235,8 @@ pub fn run() {
             commands::settings::set_theme,
             commands::settings::check_dependencies,
             commands::settings::install_mpv,
+            commands::settings::launch_external_app,
+            commands::settings::extract_icon_base64,
             commands::settings::set_wallhaven_api_key,
             commands::settings::set_disabled_sources,
             commands::settings::set_pinterest_urls,
@@ -246,6 +250,8 @@ pub fn run() {
             commands::batch::start_wallhaven_selection_download,
             commands::video::fetch_video_tags,
             commands::settings::get_monitors,
+            commands::package::export_itl_package,
+            commands::package::import_itl_package,
             windows_theme::sync_windows_accent_color,
         ])
         .run(tauri::generate_context!())

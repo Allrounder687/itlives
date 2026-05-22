@@ -217,6 +217,9 @@ pub async fn fetch_videos_list(
 /// Fetches tags for a specific video ID using the provider's implementation.
 #[tauri::command]
 pub async fn fetch_video_tags(source: String, id: String) -> Result<Vec<String>, String> {
+    if source == "local" || source == "imported" {
+        return Ok(Vec::new());
+    }
     let provider = crate::wallpaper::providers::get_provider(&source)?;
     provider.fetch_tags(&id).await
 }
