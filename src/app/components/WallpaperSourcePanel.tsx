@@ -23,7 +23,8 @@ interface WallpaperSourceOption {
 
 const SOURCES: WallpaperSourceOption[] = [
   { id: "motionbgs", name: "MotionBGs Feed", desc: "Unified SFW video feed provider", emoji: "🎥" },
-  { id: "alphacoders", name: "AlphaCoders Feed", desc: "Unified SFW video feed provider", emoji: "🎬" },
+  { id: "alphacoders", name: "AlphaCoders Feed", desc: "Live video loops", emoji: "🎬" },
+  { id: "wallpaperwaves", name: "Wallpaper Waves Feed", desc: "Premium live loops and animated wallpapers", emoji: "🌊" },
   { id: "wallhaven", name: "WallHaven Feed", desc: "Premium static imagery provider", emoji: "🖼️" },
   { id: "pinterest", name: "Pinterest Feed", desc: "Aesthetic design and photography scrapers", emoji: "📌" },
   { id: "redgifs", name: "NSFW Engine", desc: "Mature content loops", emoji: "🔞" },

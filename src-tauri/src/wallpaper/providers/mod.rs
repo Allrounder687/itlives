@@ -9,6 +9,7 @@ pub mod redgifs;
 pub mod youtube;
 pub mod wallhaven;
 pub mod pinterest;
+pub mod wallpaperwaves;
 
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -154,8 +155,9 @@ pub fn get_provider(source: &str) -> Result<Box<dyn VideoProvider>, String> {
         "direct" | "url" => Ok(Box::new(direct_url::DirectUrlProvider)),
         "wallhaven" => Ok(Box::new(wallhaven::WallhavenProvider)),
         "pinterest" => Ok(Box::new(pinterest::PinterestProvider)),
+        "wallpaperwaves" => Ok(Box::new(wallpaperwaves::WallpaperWavesProvider)),
         _ => Err(format!(
-            "Unknown video source: '{}'. Available: redgifs, motionbgs, alphacoders, youtube, direct, wallhaven, pinterest",
+            "Unknown video source: '{}'. Available: redgifs, motionbgs, alphacoders, youtube, direct, wallhaven, pinterest, wallpaperwaves",
             source
         )),
     }
@@ -171,6 +173,7 @@ pub fn list_providers() -> Vec<String> {
         "direct".to_string(),
         "wallhaven".to_string(),
         "pinterest".to_string(),
+        "wallpaperwaves".to_string(),
     ]
 }
 

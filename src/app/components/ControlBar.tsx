@@ -31,6 +31,11 @@ const CATEGORIES = [
   "Dark Academia", "Cottagecore", "Magical", "Vector", "Pastel"
 ];
 
+const WALLPAPERWAVES_CATEGORIES = [
+  "All", "Anime", "Abstract", "Animal", "Cartoon", "Fantasy", "Games", "Landscape", 
+  "Memes", "Pixel Art", "Retro", "Sci-Fi", "TV Movies", "Vehicle"
+];
+
 const COLORS = [
   { name: "None", value: "", hex: "transparent" },
   { name: "Red", value: "red", hex: "#ff3b30" },
@@ -118,7 +123,13 @@ export function ControlBar({
     <div className="control-shell" style={{ marginTop: "4px", gap: "8px", padding: "10px 14px" }}>
       <div className="control-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
         <span className="eyebrow" style={{ color: "var(--accent)" }}>
-          {source === "direct" ? "Direct Media Entry" : source === "redgifs" ? "NSFW Engine" : source === "wallhaven" ? "WallHaven Static Feed" : source === "pinterest" ? "Pinterest Static Feed" : "Discover Unified Feed"}
+          {source === "direct" ? "Direct Media Entry" : 
+           source === "redgifs" ? "NSFW Engine" : 
+           source === "wallhaven" ? "WallHaven Static Feed" : 
+           source === "pinterest" ? "Pinterest Static Feed" : 
+           source === "wallpaperwaves" ? "Wallpaper Waves Live Feed" : 
+           source === "alphacoders" ? "AlphaCoders Live Feed" : 
+           "Discover Unified Feed"}
         </span>
         {showRedGifs && (
             <button
@@ -135,6 +146,7 @@ export function ControlBar({
       {source !== "direct" && (
         <div className="source-selector" style={{ 
           display: "flex", 
+          flexWrap: "wrap",
           gap: "6px", 
           background: "rgba(0, 0, 0, 0.25)", 
           padding: "4px", 
@@ -143,7 +155,9 @@ export function ControlBar({
           marginBottom: "12px"
         }}>
           {[
-            { id: "unified", label: "🎥 Unified Live", desc: "Live video loops" },
+            { id: "unified", label: "🎥 Unified Live", desc: "Combined live loops" },
+            { id: "alphacoders", label: "🎬 AlphaCoders", desc: "Live video loops" },
+            { id: "wallpaperwaves", label: "🌊 WP Waves", desc: "Premium loops" },
             { id: "wallhaven", label: "🖼️ WallHaven", desc: "Premium static images" },
             { id: "pinterest", label: "📌 Pinterest", desc: "Art & static designs" },
             ...(showRedGifs ? [{ id: "redgifs", label: "🔞 NSFW Loop", desc: "Adult content" }] : [])
@@ -153,7 +167,7 @@ export function ControlBar({
               type="button"
               className={`action-btn ${source === src.id ? "action-btn--filter-active" : "action-btn--ghost"}`}
               style={{ 
-                flex: 1, 
+                flex: "1 1 120px", 
                 fontSize: "12px", 
                 padding: "8px 12px", 
                 borderRadius: "6px", 
@@ -409,7 +423,7 @@ export function ControlBar({
       {source !== "direct" && (
         <>
           <div className="categories-scroll" style={{ display: "flex", flexWrap: "wrap", gap: "8px", paddingBottom: "8px" }}>
-            {CATEGORIES.map((cat) => (
+            {(source === "wallpaperwaves" ? WALLPAPERWAVES_CATEGORIES : CATEGORIES).map((cat) => (
               <button
                 key={cat}
                 type="button"

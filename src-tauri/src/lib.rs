@@ -134,6 +134,7 @@ pub fn run() {
     let state_store = AppStateStore::new();
     let restore_store = state_store.clone();
     let monitor_store = state_store.clone();
+    let event_store = state_store.clone();
 
     // Start local API server for Raycast & Rainmeter integrations
     integrations::start(state_store.clone());
@@ -142,6 +143,17 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, Some(vec!["--minimized"])))
         .manage(state_store)
+        .on_window_event(move |window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if window.label() == "main" {
+                    let state = wallpaper::state::get(&event_store);
+                    if state.close_to_tray {
+                        api.prevent_close();
+                        let _ = window.hide();
+                    }
+                }
+            }
+        })
         .setup(move |app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(
