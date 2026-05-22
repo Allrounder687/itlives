@@ -35,9 +35,13 @@ const EFFECT_TEMPLATES: Record<string, Omit<EffectLayer, "id">> = {
   clock: { type: "clock", name: "Clock Widget", enabled: true, params: { format: "24h", style: "minimal", color: "#ffffff", opacity: 0.8, x: 50, y: 50 } },
   "music-player": { type: "music-player", name: "Music Player", enabled: true, params: { x: 50, y: 80, scale: 1.0, theme: "glass", opacity: 0.9, shape: "standard", color: "auto" } },
   "app-launcher": { type: "app-launcher", name: "App Launcher", enabled: true, params: { x: 50, y: 90, scale: 1.0, apps: [], layout: "dock" } },
+  sprite: { type: "sprite", name: "Image Sprite", enabled: true, params: { image: "", x: 50, y: 50, width: 300, height: 300, rotation: 0, opacity: 1.0, sway: 0.0 } },
 };
 
 const EFFECT_DROPDOWN: { group: string, items: { key: string, icon: string, label: string }[] }[] = [
+  { group: "📦 Assets & Layers", items: [
+    { key: "sprite", icon: "🖼️", label: "Image Sprite" },
+  ]},
   { group: "⛅ Particles", items: [
     { key: "snow", icon: "❄️", label: "Snowfall" },
     { key: "rain", icon: "🌧️", label: "Raindrops" },
@@ -622,6 +626,125 @@ export function EditorWorkspace({ currentVideo, onApplyWallpaper, onUploadMedia 
                     value={selectedLayer.params.smoothing || 0.9} 
                     onChange={(e) => updateParam(selectedLayer.id, "smoothing", parseFloat(e.target.value))} 
                   />
+                </div>
+              </>
+            )}
+
+            {selectedLayer.type === "sprite" && (
+              <>
+                <div className="property-group" style={{ marginBottom: "16px" }}>
+                  <label>Image Asset</label>
+                  {selectedLayer.params.image ? (
+                    <div style={{ position: "relative", width: "100%", height: "120px", background: "#1a1a1a", borderRadius: "8px", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <img src={selectedLayer.params.image} style={{ width: "100%", height: "100%", objectFit: "contain" }} alt="Sprite Preview" />
+                      <button 
+                        onClick={() => updateParam(selectedLayer.id, "image", "")} 
+                        style={{ position: "absolute", top: 4, right: 4, background: "rgba(0,0,0,0.6)", color: "#fff", border: "none", borderRadius: "4px", padding: "4px 8px", cursor: "pointer", fontSize: "12px" }}
+                      >
+                        Change
+                      </button>
+                    </div>
+                  ) : (
+                    <label style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", width: "100%", height: "120px", border: "2px dashed #444", borderRadius: "8px", cursor: "pointer", background: "#222" }}>
+                      <span style={{ fontSize: "24px", marginBottom: "8px" }}>📁</span>
+                      <span style={{ fontSize: "12px", color: "#aaa" }}>Click to upload PNG/JPG</span>
+                      <input 
+                        type="file" 
+                        accept="image/png, image/jpeg, image/webp" 
+                        style={{ display: "none" }} 
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          const reader = new FileReader();
+                          reader.onload = (ev) => {
+                            if (ev.target?.result) {
+                              updateParam(selectedLayer.id, "image", ev.target.result);
+                            }
+                          };
+                          reader.readAsDataURL(file);
+                        }}
+                      />
+                    </label>
+                  )}
+                </div>
+                <div className="property-group">
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <label>X Position ({selectedLayer.params.x}%)</label>
+                    <button title="Reset" onClick={() => updateParam(selectedLayer.id, "x", 50)} style={{ background: "none", border: "none", color: "#888", cursor: "pointer", fontSize: "14px" }}>↺</button>
+                  </div>
+                  <input type="range" min="0" max="100" step="1" className="property-control" value={selectedLayer.params.x ?? 50} onChange={(e) => updateParam(selectedLayer.id, "x", parseInt(e.target.value))} />
+                </div>
+                <div className="property-group">
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <label>Y Position ({selectedLayer.params.y}%)</label>
+                    <button title="Reset" onClick={() => updateParam(selectedLayer.id, "y", 50)} style={{ background: "none", border: "none", color: "#888", cursor: "pointer", fontSize: "14px" }}>↺</button>
+                  </div>
+                  <input type="range" min="0" max="100" step="1" className="property-control" value={selectedLayer.params.y ?? 50} onChange={(e) => updateParam(selectedLayer.id, "y", parseInt(e.target.value))} />
+                </div>
+                <div className="property-group">
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <label>Size / Scale ({selectedLayer.params.width}px)</label>
+                    <button title="Reset" onClick={() => { updateParam(selectedLayer.id, "width", 300); updateParam(selectedLayer.id, "height", 300); }} style={{ background: "none", border: "none", color: "#888", cursor: "pointer", fontSize: "14px" }}>↺</button>
+                  </div>
+                  <input type="range" min="10" max="2000" step="10" className="property-control" value={selectedLayer.params.width ?? 300} onChange={(e) => {
+                    updateParam(selectedLayer.id, "width", parseInt(e.target.value));
+                    updateParam(selectedLayer.id, "height", parseInt(e.target.value));
+                  }} />
+                </div>
+                <div className="property-group">
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <label>Rotation ({selectedLayer.params.rotation}°)</label>
+                    <button title="Reset" onClick={() => updateParam(selectedLayer.id, "rotation", 0)} style={{ background: "none", border: "none", color: "#888", cursor: "pointer", fontSize: "14px" }}>↺</button>
+                  </div>
+                  <input type="range" min="-180" max="180" step="1" className="property-control" value={selectedLayer.params.rotation ?? 0} onChange={(e) => updateParam(selectedLayer.id, "rotation", parseInt(e.target.value))} />
+                </div>
+                <div className="property-group">
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <label>Opacity ({selectedLayer.params.opacity ?? 1})</label>
+                    <button title="Reset" onClick={() => updateParam(selectedLayer.id, "opacity", 1.0)} style={{ background: "none", border: "none", color: "#888", cursor: "pointer", fontSize: "14px" }}>↺</button>
+                  </div>
+                  <input type="range" min="0" max="1" step="0.05" className="property-control" value={selectedLayer.params.opacity ?? 1} onChange={(e) => updateParam(selectedLayer.id, "opacity", parseFloat(e.target.value))} />
+                </div>
+                <div className="property-group">
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <label>Wind Sway ({selectedLayer.params.sway ?? 0})</label>
+                    <button title="Reset" onClick={() => updateParam(selectedLayer.id, "sway", 0)} style={{ background: "none", border: "none", color: "#888", cursor: "pointer", fontSize: "14px" }}>↺</button>
+                  </div>
+                  <input type="range" min="0" max="5" step="0.1" className="property-control" value={selectedLayer.params.sway ?? 0} onChange={(e) => updateParam(selectedLayer.id, "sway", parseFloat(e.target.value))} />
+                </div>
+                <div className="property-group" style={{ marginBottom: "16px", marginTop: "16px" }}>
+                  <label>Sway Map (Optional Distortion Texture)</label>
+                  {selectedLayer.params.swayMap ? (
+                    <div style={{ position: "relative", width: "100%", height: "80px", background: "#1a1a1a", borderRadius: "8px", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <img src={selectedLayer.params.swayMap} style={{ width: "100%", height: "100%", objectFit: "contain" }} alt="Sway Map Preview" />
+                      <button 
+                        onClick={() => updateParam(selectedLayer.id, "swayMap", "")} 
+                        style={{ position: "absolute", top: 4, right: 4, background: "rgba(0,0,0,0.6)", color: "#fff", border: "none", borderRadius: "4px", padding: "4px 8px", cursor: "pointer", fontSize: "12px" }}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ) : (
+                    <label style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", width: "100%", height: "80px", border: "2px dashed #444", borderRadius: "8px", cursor: "pointer", background: "#222" }}>
+                      <span style={{ fontSize: "12px", color: "#aaa" }}>Upload Map (Grayscale)</span>
+                      <input 
+                        type="file" 
+                        accept="image/png, image/jpeg, image/webp" 
+                        style={{ display: "none" }} 
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          const reader = new FileReader();
+                          reader.onload = (ev) => {
+                            if (ev.target?.result) {
+                              updateParam(selectedLayer.id, "swayMap", ev.target.result);
+                            }
+                          };
+                          reader.readAsDataURL(file);
+                        }}
+                      />
+                    </label>
+                  )}
                 </div>
               </>
             )}

@@ -742,6 +742,101 @@ function FogEffect({ params }: { params: any }) {
 }
 
 import { useDominantColor } from "@/hooks/useDominantColor";
+// ─────────────────────────────────────────────────────────────
+// Sprite Layer (Phase 4: Assets & Textures)
+// ─────────────────────────────────────────────────────────────
+function SpriteLayer({ params }: { params: any }) {
+  const { viewport } = useThree();
+  
+  const texture = useMemo(() => {
+    if (!params.image) return null;
+    try {
+      const tex = new THREE.TextureLoader().load(params.image);
+      return tex;
+    } catch (e) {
+      return null;
+    }
+  }, [params.image]);
+
+  const swayMapTex = useMemo(() => {
+    if (!params.swayMap) return null;
+    try {
+      return new THREE.TextureLoader().load(params.swayMap);
+    } catch (e) { return null; }
+  }, [params.swayMap]);
+
+  const uniforms = useMemo(() => ({
+    uTime: { value: 0 },
+    uSway: { value: params.sway || 0 },
+    swayMap: { value: swayMapTex },
+    useSwayMap: { value: !!swayMapTex ? 1.0 : 0.0 }
+  }), [params.sway, swayMapTex]);
+
+  useFrame((state) => {
+    uniforms.uTime.value = state.clock.elapsedTime;
+  });
+
+  if (!texture) return null;
+
+  // Map 0-100 properties to WebGL viewport coordinates
+  const vx = (params.x / 100 - 0.5) * viewport.width;
+  const vy = -(params.y / 100 - 0.5) * viewport.height;
+  
+  // Use width property to scale relative to the viewport (1000 width = 100% of viewport width)
+  const sizeX = (params.width / 1000) * viewport.width;
+  const sizeY = (params.height / 1000) * viewport.width;
+  
+  const rotationZ = -(params.rotation || 0) * (Math.PI / 180);
+
+  return (
+    <mesh position={[vx, vy, 0]} rotation={[0, 0, rotationZ]}>
+      {/* Dense geometry (16x16 segments) is required for smooth vertex displacement / sway */}
+      <planeGeometry args={[sizeX, sizeY, 16, 16]} />
+      <shaderMaterial
+        transparent
+        depthWrite={false}
+        uniforms={{
+          map: { value: texture },
+          opacity: { value: params.opacity ?? 1.0 },
+          ...uniforms
+        }}
+        vertexShader={`
+          uniform float uTime;
+          uniform float uSway;
+          uniform sampler2D swayMap;
+          uniform float useSwayMap;
+          varying vec2 vUv;
+          void main() {
+            vUv = uv;
+            vec3 pos = position;
+            
+            float swayStrength = 0.0;
+            if (useSwayMap > 0.5) {
+              // Read the red channel of the distortion texture
+              swayStrength = texture2D(swayMap, uv).r * uSway * 10.0;
+            } else {
+              // Fallback: bottom anchor
+              swayStrength = uv.y * uSway * 10.0;
+            }
+            
+            pos.x += sin(uTime * 2.0 + pos.y * 0.05) * swayStrength;
+            
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+          }
+        `}
+        fragmentShader={`
+          uniform sampler2D map;
+          uniform float opacity;
+          varying vec2 vUv;
+          void main() {
+            vec4 texColor = texture2D(map, vUv);
+            gl_FragColor = vec4(texColor.rgb, texColor.a * opacity);
+          }
+        `}
+      />
+    </mesh>
+  );
+}
 
 // ─────────────────────────────────────────────────────────────
 // 5. Main Renderer
@@ -873,9 +968,10 @@ export function WebGLEffectRenderer({ videoSrc, effects, isOverlay = false, sele
   const waterCaustics = currentEffects.find(e => e.type === "water-caustics" && e.enabled);
   const blowingLeaves = currentEffects.find(e => e.type === "blowing-leaves" && e.enabled);
   const appLauncher = currentEffects.find(e => e.type === "app-launcher" && e.enabled);
+  const sprites = currentEffects.filter(e => e.type === "sprite" && e.enabled);
 
   // Check if any WebGL effect is active — skip Canvas entirely if none
-  const hasWebGLEffects = snow || rain || audioVis || trail || ripple || ribbonTrail || vignette || bloomEffect || glitchEffect || parallax || fireflies || stars || fog || waterCaustics || blowingLeaves;
+  const hasWebGLEffects = sprites.length > 0 || snow || rain || audioVis || trail || ripple || ribbonTrail || vignette || bloomEffect || glitchEffect || parallax || fireflies || stars || fog || waterCaustics || blowingLeaves;
 
   const resolveParams = (p: any) => {
     if (!p) return p;
@@ -886,7 +982,7 @@ export function WebGLEffectRenderer({ videoSrc, effects, isOverlay = false, sele
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (isOverlay || !selectedLayerId || !onUpdateParam) return;
     const layer = currentEffects.find(l => l.id === selectedLayerId);
-    if (!layer || (layer.type !== "clock" && layer.type !== "audio-visualizer" && layer.type !== "blur-region" && layer.type !== "music-player" && layer.type !== "app-launcher")) return;
+    if (!layer || (layer.type !== "clock" && layer.type !== "audio-visualizer" && layer.type !== "blur-region" && layer.type !== "music-player" && layer.type !== "app-launcher" && layer.type !== "sprite")) return;
     
     dragState.current = {
       isDragging: true,
@@ -1011,6 +1107,8 @@ export function WebGLEffectRenderer({ videoSrc, effects, isOverlay = false, sele
                 isOverlay={isOverlay}
               />
             )}
+
+            {sprites.map(s => <SpriteLayer key={s.id} params={s.params} />)}
 
             {/* Post Processing Shaders */}
             {(vignette || bloomEffect || glitchEffect) && (
