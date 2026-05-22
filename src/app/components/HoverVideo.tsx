@@ -15,7 +15,8 @@ export function HoverVideo({ video, className, onClick }: HoverVideoProps) {
   const [isHovered, setIsHovered] = useState(false);
   const [imgError, setImgError] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const src = video.local_path
+  const isLocalFile = video.local_path && !video.local_path.startsWith("http");
+  const src = isLocalFile
     ? convertFileSrc(video.local_path)
     : video.video_url;
 
@@ -108,7 +109,7 @@ export function HoverVideo({ video, className, onClick }: HoverVideoProps) {
         <video 
           ref={videoRef}
           src={src}
-          crossOrigin={video.local_path ? "anonymous" : undefined}
+          crossOrigin={isLocalFile ? "anonymous" : undefined}
           muted
           loop
           playsInline

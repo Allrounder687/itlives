@@ -34,13 +34,22 @@ pub fn set_rotation(
 }
 
 #[tauri::command]
-pub fn advance_rotation(
+pub async fn advance_rotation(
     state: State<'_, AppStateStore>,
     scale_percent: u64,
 ) -> Result<QueueAdvanceResult, String> {
     let current = wallpaper::state::get(&state);
-    let advanced = wallpaper::state::advance_queue(&state)?;
-    wallpaper::desktop::set_video(
+    let mut advanced = wallpaper::state::advance_queue(&state)?;
+    
+    if advanced.video.local_path.is_empty() || advanced.video.local_path.starts_with("http") {
+        log::info!("[Core] Download on advance triggered for source: {}", advanced.video.source);
+        let provider = crate::wallpaper::providers::get_provider(&advanced.video.source)?;
+        let local_path = provider.download_video(&advanced.video).await?;
+        advanced.video.local_path = local_path;
+        let _ = crate::wallpaper::desktop::cleanup_cache(15);
+    }
+
+    crate::wallpaper::desktop::set_video(
         &advanced.video.local_path,
         scale_percent,
         current.volume_percent,

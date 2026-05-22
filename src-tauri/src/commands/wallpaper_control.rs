@@ -18,7 +18,7 @@ pub async fn apply_wallpaper(
     start_time: Option<f64>,
     end_time: Option<f64>,
 ) -> Result<WallpaperState, String> {
-    if video.local_path.is_empty() {
+    if video.local_path.is_empty() || video.local_path.starts_with("http") {
         log::info!("[Core] Download on apply triggered for source: {}", video.source);
         let provider = crate::wallpaper::providers::get_provider(&video.source)?;
         let local_path = provider.download_video(&video).await?;

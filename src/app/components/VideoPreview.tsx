@@ -50,7 +50,8 @@ export function VideoPreview({
 
   const isStaticImage = isStaticWallpaper(video);
 
-  const videoSrc = video.local_path
+  const isLocalFile = video.local_path && !video.local_path.startsWith("http");
+  const videoSrc = isLocalFile
     ? convertFileSrc(video.local_path)
     : video.video_url;
 

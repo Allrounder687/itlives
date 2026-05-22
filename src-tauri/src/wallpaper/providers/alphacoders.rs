@@ -97,7 +97,7 @@ impl VideoProvider for AlphaCodersProvider {
             // Fortunately, alphacoders often provides JPG thumbs as well: "thumb-350-1407175.webp" or ".jpg"
             // Let's generate a webp/jpg URL for the thumbnail.
             // Typical picture thumb: https://images2.alphacoders.com/140/thumb-350-1407175.webp
-            let thumbnail_url = format!("https://{}thumb-350-{}.jpg", prefix, id);
+            let thumbnail_url = format!("https://{}thumb-{}.jpg", prefix, id);
 
             let result = VideoResult {
                 id: id.clone(),
