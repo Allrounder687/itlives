@@ -6,7 +6,7 @@ export function VolumeSlider({ initialVolume, onCommit }: { initialVolume: numbe
   const [localVal, setLocalVal] = useState(initialVolume);
 
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
       <input
         type="range"
         min="0"
@@ -19,13 +19,15 @@ export function VolumeSlider({ initialVolume, onCommit }: { initialVolume: numbe
           WebkitAppearance: "none",
           width: "80px",
           height: "4px",
-          background: "rgba(255,255,255,0.1)",
+          background: `linear-gradient(to right, var(--accent) ${localVal}%, rgba(255,255,255,0.1) ${localVal}%)`,
           borderRadius: "2px",
           outline: "none",
-          cursor: "pointer"
+          cursor: "pointer",
+          flexShrink: 0,
         }}
       />
-      <strong>{localVal}%</strong>
+      <strong style={{ fontSize: "13px", minWidth: "32px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{localVal}%</strong>
     </div>
   );
 }
+

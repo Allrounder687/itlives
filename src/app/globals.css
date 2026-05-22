@@ -19,6 +19,10 @@
   --accent: #9ae600;
   --accent-deep: #5ea800;
   --accent-soft: rgba(154, 230, 0, 0.14);
+  --nav-accent: rgba(255, 255, 255, 0.92);
+  --nav-accent-bg: rgba(255, 255, 255, 0.10);
+  --nav-accent-border: rgba(255, 255, 255, 0.18);
+  --nav-accent-glow: rgba(255, 255, 255, 0.06);
   --danger: #ff5b67;
   --shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
   --radius: 22px;

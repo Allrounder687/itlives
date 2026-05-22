@@ -130,7 +130,7 @@ export function ControlBar({
             <button
               key={src.id}
               type="button"
-              className={`action-btn ${source === src.id ? "action-btn--primary" : "action-btn--ghost"}`}
+              className={`action-btn ${source === src.id ? "action-btn--filter-active" : "action-btn--ghost"}`}
               style={{ 
                 flex: 1, 
                 fontSize: "12px", 
@@ -392,7 +392,7 @@ export function ControlBar({
               key={cat}
               type="button"
               className={`pill ${query.toLowerCase() === cat.toLowerCase() ? "" : "pill--muted"}`}
-              style={{ padding: "8px 16px", cursor: "pointer", border: "none", whiteSpace: "nowrap" }}
+              style={{ padding: "6px 14px", cursor: "pointer", border: "none", whiteSpace: "nowrap", minWidth: "fit-content" }}
               onClick={() => onCategoryChange && onCategoryChange(cat.toLowerCase())}
             >
               {cat}

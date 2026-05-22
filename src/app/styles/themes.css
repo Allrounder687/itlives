@@ -13,6 +13,10 @@
   --accent: #9ae600;
   --accent-deep: #5ea800;
   --accent-soft: rgba(154, 230, 0, 0.14);
+  --nav-accent: rgba(255, 255, 255, 0.92);
+  --nav-accent-bg: rgba(255, 255, 255, 0.10);
+  --nav-accent-border: rgba(255, 255, 255, 0.18);
+  --nav-accent-glow: rgba(255, 255, 255, 0.06);
   --danger: #ff5b67;
   --shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
   --radius: 22px;
@@ -35,6 +39,10 @@
   --accent: #ff00bb;
   --accent-deep: #bc008a;
   --accent-soft: rgba(255, 0, 187, 0.14);
+  --nav-accent: rgba(255, 255, 255, 0.92);
+  --nav-accent-bg: rgba(255, 255, 255, 0.10);
+  --nav-accent-border: rgba(255, 255, 255, 0.18);
+  --nav-accent-glow: rgba(255, 255, 255, 0.06);
   --danger: #ff2a6d;
   --glow: 0 0 15px rgba(255, 0, 187, 0.3);
   --primary-gradient: linear-gradient(135deg, #ff00bb 0%, #bc008a 45%, #8a0065 100%);
@@ -53,6 +61,10 @@
   --accent: #88c0d0;
   --accent-deep: #5e81ac;
   --accent-soft: rgba(136, 192, 208, 0.14);
+  --nav-accent: rgba(255, 255, 255, 0.92);
+  --nav-accent-bg: rgba(255, 255, 255, 0.10);
+  --nav-accent-border: rgba(255, 255, 255, 0.18);
+  --nav-accent-glow: rgba(255, 255, 255, 0.06);
   --danger: #bf616a;
   --glow: 0 0 15px rgba(136, 192, 208, 0.3);
   --primary-gradient: linear-gradient(135deg, #88c0d0 0%, #5e81ac 45%, #4c566a 100%);
@@ -71,6 +83,10 @@
   --accent: #6f00ff;
   --accent-deep: #4c00af;
   --accent-soft: rgba(111, 0, 255, 0.14);
+  --nav-accent: rgba(255, 255, 255, 0.92);
+  --nav-accent-bg: rgba(255, 255, 255, 0.10);
+  --nav-accent-border: rgba(255, 255, 255, 0.18);
+  --nav-accent-glow: rgba(255, 255, 255, 0.06);
   --danger: #ff4081;
   --glow: 0 0 15px rgba(111, 0, 255, 0.3);
   --primary-gradient: linear-gradient(135deg, #6f00ff 0%, #4c00af 45%, #2a0063 100%);
@@ -89,6 +105,10 @@
   --accent: #b58900;
   --accent-deep: #859900;
   --accent-soft: rgba(38, 139, 210, 0.14);
+  --nav-accent: rgba(255, 255, 255, 0.92);
+  --nav-accent-bg: rgba(255, 255, 255, 0.10);
+  --nav-accent-border: rgba(255, 255, 255, 0.18);
+  --nav-accent-glow: rgba(255, 255, 255, 0.06);
   --danger: #dc322f;
   --glow: 0 0 15px rgba(38, 139, 210, 0.3);
   --primary-gradient: linear-gradient(135deg, #b58900 0%, #859900 45%, #586e75 100%);

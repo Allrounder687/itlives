@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useWallpaper } from "@/hooks/useWallpaper";
 import { TitleBar } from "./components/TitleBar";
 import { Sidebar, TabState } from "./components/Sidebar";
@@ -30,6 +30,26 @@ function Home() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isOverlayMode, setIsOverlayMode] = useState(false);
   const [overlayConfig, setOverlayConfig] = useState<{ videoSrc?: string; layers?: any[] }>({});
+  const [isErrorDismissed, setIsErrorDismissed] = useState(false);
+  const [isErrorVisible, setIsErrorVisible] = useState(false);
+
+  // Reset error dismissal when a new error appears
+  const prevErrorRef = useRef(wallpaper.error);
+  useEffect(() => {
+    if (wallpaper.error && wallpaper.error !== prevErrorRef.current) {
+      setIsErrorDismissed(false);
+      setIsErrorVisible(true);
+    }
+    if (!wallpaper.error) {
+      setIsErrorVisible(false);
+    }
+    prevErrorRef.current = wallpaper.error;
+  }, [wallpaper.error]);
+
+  const dismissError = useCallback(() => {
+    setIsErrorDismissed(true);
+    setTimeout(() => setIsErrorVisible(false), 300);
+  }, []);
 
   useEffect(() => {
     if (typeof document !== "undefined") {
@@ -187,21 +207,8 @@ function Home() {
 
         <main className="workspace">
           <DependencyChecker />
-          {wallpaper.error && (
-            <div className="callout callout--error" style={{ margin: "1rem 0" }}>
-              <span className="callout__label">Engine Error</span>
-              <p>{wallpaper.error}</p>
-              {wallpaper.errorHint && <p>{wallpaper.errorHint}</p>}
-              {wallpaper.error.includes("mpv not found") && (
-                <div style={{ marginTop: "1rem" }}>
-                   <p className="muted">This application requires <strong>mpv</strong> to render video wallpapers.</p>
-                   <code style={{ background: "rgba(0,0,0,0.3)", padding: "4px 8px", borderRadius: "4px" }}>winget install shinchiro.mpv</code>
-                </div>
-              )}
-            </div>
-          )}
 
-          <HeroPanel wallpaper={wallpaper} />
+          <HeroPanel wallpaper={wallpaper} activeTab={activeTab} />
 
           {activeTab === "discover" && (
             <section className="panel panel--main">
@@ -360,6 +367,33 @@ function Home() {
           isHidden={wallpaper.hiddenVideos.includes(wallpaper.currentVideo.id)}
           onToggleHide={wallpaper.hasAdultPin ? () => wallpaper.toggleHideVideo(wallpaper.currentVideo!.id) : undefined}
         />
+      )}
+
+      {/* Floating Error Toast */}
+      {wallpaper.error && isErrorVisible && (
+        <div className={`error-toast ${isErrorDismissed ? "error-toast--exiting" : "error-toast--entering"}`}>
+          <div className="error-toast__icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="15" y1="9" x2="9" y2="15" />
+              <line x1="9" y1="9" x2="15" y2="15" />
+            </svg>
+          </div>
+          <div className="error-toast__body">
+            <strong className="error-toast__title">Engine Error</strong>
+            <p className="error-toast__message">{wallpaper.error}</p>
+            {wallpaper.errorHint && <p className="error-toast__hint">{wallpaper.errorHint}</p>}
+            {wallpaper.error.includes("mpv not found") && (
+              <code className="error-toast__code">winget install shinchiro.mpv</code>
+            )}
+          </div>
+          <button className="error-toast__dismiss" onClick={dismissError} aria-label="Dismiss error">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
       )}
     </div>
   );
