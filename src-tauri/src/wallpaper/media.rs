@@ -5,6 +5,7 @@ use windows::Storage::Streams::DataReader;
 
 lazy_static::lazy_static! {
     static ref MEDIA_POLLING: Arc<AtomicBool> = Arc::new(AtomicBool::new(false));
+    static ref CURRENT_MEDIA: std::sync::Mutex<MediaInfo> = std::sync::Mutex::new(MediaInfo::default());
 }
 
 #[derive(serde::Serialize, Clone, Default, PartialEq)]
@@ -62,6 +63,11 @@ pub fn media_seek(position: f64) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+#[tauri::command]
+pub fn get_current_media_info() -> Result<MediaInfo, String> {
+    Ok(CURRENT_MEDIA.lock().unwrap().clone())
 }
 
 pub fn init_media_polling(app_handle: AppHandle) {
@@ -133,12 +139,18 @@ pub fn init_media_polling(app_handle: AppHandle) {
 
                     if new_info != last_info {
                         last_info = new_info.clone();
+                        if let Ok(mut lock) = CURRENT_MEDIA.lock() {
+                            *lock = new_info.clone();
+                        }
                         let _ = app_handle.emit("media-updated", new_info);
                     }
                 } else {
                     let new_info = MediaInfo::default();
                     if new_info != last_info {
                         last_info = new_info.clone();
+                        if let Ok(mut lock) = CURRENT_MEDIA.lock() {
+                            *lock = new_info.clone();
+                        }
                         let _ = app_handle.emit("media-updated", new_info);
                     }
                 }

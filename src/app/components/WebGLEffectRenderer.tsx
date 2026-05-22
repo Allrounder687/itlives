@@ -809,6 +809,44 @@ export function WebGLEffectRenderer({ videoSrc, effects, isOverlay = false, sele
       }
     };
     setupIPC();
+
+    // Hover logic for Ignore Cursor Events toggle
+    let wasInteractive = false;
+    const setupOverlayInteraction = async () => {
+      try {
+        const { listen } = await import("@tauri-apps/api/event");
+        if (!isMounted) return;
+
+        // Note: setIgnoreCursorEvents(false) does not work when the window is behind SHELLDLL_DefView
+        // so we manually proxy global clicks into synthetic DOM events.
+        const uClick = await listen<{x: number, y: number}>("cursor-click", (e) => {
+          let payload = e.payload as any;
+          if (typeof payload === "string") { try { payload = JSON.parse(payload); } catch(e){} }
+          if (!payload || typeof payload.x !== "number") return;
+          
+          const clientX = payload.x / (window.devicePixelRatio || 1);
+          const clientY = payload.y / (window.devicePixelRatio || 1);
+          
+          const el = document.elementFromPoint(clientX, clientY);
+          if (el && el.closest('.interactive-widget')) {
+            const btn = el.tagName === 'BUTTON' ? el : el.closest('button');
+            if (btn) {
+              (btn as HTMLElement).click();
+            } else {
+              el.dispatchEvent(new PointerEvent("pointerdown", {
+                bubbles: true, cancelable: true, clientX, clientY, view: window
+              }));
+              el.dispatchEvent(new MouseEvent("click", {
+                bubbles: true, cancelable: true, clientX, clientY, view: window
+              }));
+            }
+          }
+        });
+        unlistenFunctions.push(uClick);
+      } catch (err) {}
+    };
+    setupOverlayInteraction();
+
     return () => { isMounted = false; unlistenFunctions.forEach(fn => fn()); };
   }, [isOverlay]);
 
@@ -933,7 +971,7 @@ export function WebGLEffectRenderer({ videoSrc, effects, isOverlay = false, sele
 
       {/* WebGL Canvas — only mounted when effects are active */}
       {hasWebGLEffects && (
-        <div style={{ position: "absolute", inset: 0, zIndex: 10, pointerEvents: isOverlay ? "none" : "auto" }}>
+        <div style={{ position: "absolute", inset: 0, zIndex: 10, pointerEvents: "none" }}>
           <Canvas
             orthographic
             camera={{ position: [0, 0, 100], zoom: 1 }}
@@ -941,6 +979,7 @@ export function WebGLEffectRenderer({ videoSrc, effects, isOverlay = false, sele
             onCreated={({ gl }) => {
               return () => { gl.dispose(); };
             }}
+            style={{ width: "100%", height: "100%", pointerEvents: "none" }}
           >
             {parallax && <ParallaxShift intensity={parallax.params.intensity || 1.0} />}
             {snow && <FallingParticles type="snow" params={resolveParams(snow.params)} />}
@@ -1119,6 +1158,12 @@ function MusicPlayerWidget({ params, isOverlay }: { params: any; isOverlay?: boo
 
     const setupEvents = async () => {
       try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        if (isMounted) {
+          const currentMedia: any = await invoke("get_current_media_info");
+          if (currentMedia) setMedia(currentMedia);
+        }
+
         const { listen } = await import("@tauri-apps/api/event");
         if (!isMounted) return;
         const u1 = await listen<any>("media-updated", (e) => setMedia(e.payload));
@@ -1160,7 +1205,7 @@ function MusicPlayerWidget({ params, isOverlay }: { params: any; isOverlay?: boo
     top: `${y}%`,
     transform: `translate(-50%, -50%) scale(${scale})`,
     opacity,
-    zIndex: 9,
+    zIndex: 50,
     userSelect: "none",
     pointerEvents: "auto", // Allow interaction in overlay mode
     display: "flex",
@@ -1197,6 +1242,7 @@ function MusicPlayerWidget({ params, isOverlay }: { params: any; isOverlay?: boo
 
   return (
     <div 
+      className="interactive-widget"
       style={{ ...baseStyle, ...currentTheme }} 
       onMouseEnter={() => setIsHovered(true)} 
       onMouseLeave={() => setIsHovered(false)}

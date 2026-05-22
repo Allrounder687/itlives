@@ -195,6 +195,7 @@ pub fn run() {
             crate::wallpaper::media::media_next,
             crate::wallpaper::media::media_prev,
             crate::wallpaper::media::media_seek,
+            crate::wallpaper::media::get_current_media_info,
             commands::wallpaper_control::apply_wallpaper,
             commands::wallpaper_control::stop_wallpaper,
             commands::wallpaper_control::get_wallpaper_status,
