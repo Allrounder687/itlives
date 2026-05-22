@@ -72,7 +72,7 @@ export function useWallpaper() {
   const browseLocalVideo = useCallback(async () => {
     try {
       const { open } = await getDialogApi();
-      const selected = await open({ multiple: false, filters: [{ name: "Wallpapers", extensions: ["mp4", "webm", "jpg", "jpeg", "png", "webp"] }] });
+      const selected = await open({ multiple: false, filters: [{ name: "Wallpapers", extensions: ["mp4", "webm", "jpg", "jpeg", "png", "webp", "html"] }] });
       if (typeof selected !== "string" || !selected) return;
       const { invoke } = await getCoreApi();
       const video = await invoke<VideoResult>("fetch_video", { source: "direct", query: selected, order: "trending" });

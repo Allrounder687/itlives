@@ -55,7 +55,8 @@ export default function DisplaySelector() {
         Target Display
       </div>
       <div style={{ display: "flex", gap: "6px", overflowX: "auto", paddingBottom: "2px" }}>
-        {monitors.map((m, i) => {
+        {[...monitors, { name: "SPAN_ALL", width: 0, height: 0, x: 0, y: 0, scale_factor: 1, is_primary: false }].map((m, i) => {
+          const isSpanAll = m.name === "SPAN_ALL";
           const isSelected = selectedMonitor?.name === m.name;
           return (
             <button
@@ -83,8 +84,8 @@ export default function DisplaySelector() {
             >
               <MonitorIcon active={isSelected} />
               <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
-                <span style={{ lineHeight: 1 }}>{m.name}{m.is_primary ? " (Primary)" : ""}</span>
-                <span style={{ fontSize: "10px", opacity: 0.6, lineHeight: 1, marginTop: "2px" }}>{m.width}×{m.height}</span>
+                <span style={{ lineHeight: 1 }}>{isSpanAll ? "Span All Displays" : m.name}{m.is_primary ? " (Primary)" : ""}</span>
+                {!isSpanAll && <span style={{ fontSize: "10px", opacity: 0.6, lineHeight: 1, marginTop: "2px" }}>{m.width}×{m.height}</span>}
               </div>
             </button>
           );

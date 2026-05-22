@@ -33,6 +33,7 @@ pub async fn apply_wallpaper(
     let _ = wallpaper::state::set_rotation(&state, false, current.rotation_interval_seconds);
     
     let path_lower = video.local_path.to_lowercase();
+    let is_web = path_lower.ends_with(".html");
     let is_static_image = path_lower.ends_with(".jpg") 
         || path_lower.ends_with(".jpeg") 
         || path_lower.ends_with(".png") 
@@ -40,7 +41,28 @@ pub async fn apply_wallpaper(
         || video.source == "wallhaven"
         || video.source == "pinterest";
 
-    if is_static_image {
+    if is_web {
+        wallpaper::desktop::set_web_wallpaper(
+            app.clone(),
+            &video.local_path,
+            monitor.clone(),
+        )?;
+    } else if is_static_image {
+        // If applying static image, close webviews
+        let m_key = monitor.as_ref().cloned().unwrap_or_else(|| "default".to_string());
+        if m_key == "SPAN_ALL" {
+            for (label, window) in app.webview_windows() {
+                if label.starts_with("web_wallpaper_") {
+                    let _ = window.close();
+                }
+            }
+        } else {
+            let window_label = format!("web_wallpaper_{}", m_key.replace(" ", "_").replace("\\", "_"));
+            if let Some(window) = app.get_webview_window(&window_label) {
+                let _ = window.close();
+            }
+        }
+        
         let local_path = video.local_path.clone();
         tokio::task::spawn_blocking(move || {
             wallpaper::desktop::set_static_image(&local_path)
@@ -74,6 +96,11 @@ pub fn stop_wallpaper(
     
     if let Some(window) = app_handle.get_webview_window("effects_overlay") {
         let _ = window.hide();
+    }
+    for (label, window) in app_handle.webview_windows() {
+        if label.starts_with("web_wallpaper_") {
+            let _ = window.close();
+        }
     }
 
     wallpaper::state::clear_active(&state)

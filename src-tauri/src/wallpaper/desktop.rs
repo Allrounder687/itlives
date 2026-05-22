@@ -88,57 +88,15 @@ pub mod win32 {
 
     unsafe extern "system" fn enum_cb(hwnd: HWND, _lparam: LPARAM) -> BOOL {
         let shelldll: Vec<u16> = "SHELLDLL_DefView\0".encode_utf16().collect();
-
-        let mut class_name = [0u16; 256];
-        let len = windows::Win32::UI::WindowsAndMessaging::GetClassNameW(hwnd, &mut class_name);
-        let c_name = String::from_utf16_lossy(&class_name[..len as usize]);
-
-        if c_name == "WorkerW" || c_name == "Progman" {
-            let shell = FindWindowExW(
-                hwnd,
-                HWND::default(),
-                PCWSTR(shelldll.as_ptr()),
-                PCWSTR::null(),
-            );
-
-            // If it DOES have SHELLDLL_DefView, it is the parent containing icons!
-            if shell.is_ok() && !shell.unwrap().is_invalid() {
-                use windows::Win32::UI::WindowsAndMessaging::{
-                    GetClassNameW, GetWindow, GW_HWNDNEXT, GW_HWNDPREV,
-                };
-
-                // 1. Check adjacent Next Sibling (Windows 10 Standard)
-                if let Ok(next) = GetWindow(hwnd, GW_HWNDNEXT) {
-                    let mut cn_sub = [0u16; 256];
-                    let len_sub = GetClassNameW(next, &mut cn_sub);
-                    let class_sub = String::from_utf16_lossy(&cn_sub[..len_sub as usize]);
-                    if class_sub == "WorkerW" {
-                        if let Ok(mut g) = FOUND_WORKERW.lock() {
-                            *g = next.0 as isize;
-                        }
-                        return BOOL(0);
-                    }
-                }
-
-                // 2. Check adjacent Previous Sibling (Windows 11 Fallback)
-                if let Ok(prev) = GetWindow(hwnd, GW_HWNDPREV) {
-                    let mut cn_sub = [0u16; 256];
-                    let len_sub = GetClassNameW(prev, &mut cn_sub);
-                    let class_sub = String::from_utf16_lossy(&cn_sub[..len_sub as usize]);
-                    if class_sub == "WorkerW" {
-                        if let Ok(mut g) = FOUND_WORKERW.lock() {
-                            *g = prev.0 as isize;
-                        }
-                        return BOOL(0);
-                    }
-                }
-
-                // Standard fallback to self layer if sibling is missing
-                if let Ok(mut g) = FOUND_WORKERW.lock() {
-                    *g = hwnd.0 as isize;
-                }
-                return BOOL(0);
+        let shell = FindWindowExW(hwnd, HWND(0 as _), PCWSTR(shelldll.as_ptr()), PCWSTR::null());
+        
+        if shell.is_ok() && !shell.unwrap().is_invalid() {
+            // This is the window that actually holds the icons!
+            // The old PowerShell script embedded directly into this window, and shoved mpv behind SHELLDLL_DefView.
+            if let Ok(mut g) = FOUND_WORKERW.lock() {
+                *g = hwnd.0 as isize;
             }
+            return BOOL(0);
         }
         BOOL(1)
     }
@@ -163,15 +121,14 @@ pub mod win32 {
         let mut wnd_pid = 0;
         windows::Win32::UI::WindowsAndMessaging::GetWindowThreadProcessId(hwnd, Some(&mut wnd_pid));
         if wnd_pid == SEARCH_PID {
-            // Check if window is visible and has no owner (it's a main window)
-            use windows::Win32::UI::WindowsAndMessaging::{IsWindowVisible, GetWindow, GW_OWNER};
-            if IsWindowVisible(hwnd).as_bool() && GetWindow(hwnd, GW_OWNER).is_err() {
-                FOUND_HWND = hwnd;
-                return BOOL(0); // Stop enumeration
-            }
+            let mut class_name = [0u16; 256];
+            let len = windows::Win32::UI::WindowsAndMessaging::GetClassNameW(hwnd, &mut class_name);
+            let c_name = String::from_utf16_lossy(&class_name[..len as usize]);
             
-            // If it's mpv, it might be borderless/invisible initially during startup, so we might just grab the first one we see
-            FOUND_HWND = hwnd;
+            if c_name == "mpv" {
+                FOUND_HWND = hwnd;
+                return BOOL(0); // Stop enumeration, we found the actual mpv player window!
+            }
         }
         BOOL(1)
     }
@@ -223,8 +180,12 @@ pub fn set_video(
             }
         }
     }
-    let m_key = target_m.as_ref().and_then(|m| m.name().cloned()).unwrap_or_else(|| "default".to_string());
-
+    let mut m_key = target_m.as_ref().and_then(|m| m.name().cloned()).unwrap_or_else(|| "default".to_string());
+    if let Some(ref m_name) = monitor_name {
+        if m_name == "SPAN_ALL" {
+            m_key = "SPAN_ALL".to_string();
+        }
+    }
     if let Ok(last) = LAST_CONFIG.lock() {
         if let Some(config) = last.get(&m_key) {
             if config == &new_config {
@@ -234,18 +195,62 @@ pub fn set_video(
         }
     }
 
-    // Stop existing video on this specific monitor
-    stop_video_for_monitor(&m_key);
+    // If launching SPAN_ALL, stop all specific monitors.
+    // If launching a specific monitor, ensure SPAN_ALL is stopped.
+    if m_key == "SPAN_ALL" {
+        let _ = stop_video();
+    } else {
+        stop_video_for_monitor("SPAN_ALL");
+        stop_video_for_monitor(&m_key);
+    }
 
     #[cfg(windows)]
     {
         let mpv_path = find_mpv().ok_or("mpv not found. Install: winget install shinchiro.mpv")?;
         let workerw = win32::get_desktop_workerw().unwrap_or(0);
         
-        let width = target_m.as_ref().map(|m| m.size().width).unwrap_or(1920);
-        let height = target_m.as_ref().map(|m| m.size().height).unwrap_or(1080);
-        let x = target_m.as_ref().map(|m| m.position().x).unwrap_or(0);
-        let y = target_m.as_ref().map(|m| m.position().y).unwrap_or(0);
+    let mut width = target_m.as_ref().map(|m| m.size().width).unwrap_or(1920);
+    let mut height = target_m.as_ref().map(|m| m.size().height).unwrap_or(1080);
+    let mut x = target_m.as_ref().map(|m| m.position().x).unwrap_or(0);
+    let mut y = target_m.as_ref().map(|m| m.position().y).unwrap_or(0);
+
+    // Close any web wallpaper for this monitor
+    let window_label = format!("web_wallpaper_{}", m_key.replace(" ", "_").replace("\\", "_"));
+    if let Some(window) = app.get_webview_window(&window_label) {
+        let _ = window.close();
+    }
+    
+    // If SPAN_ALL, close all web wallpapers
+    if m_key == "SPAN_ALL" {
+        for (label, window) in app.webview_windows() {
+            if label.starts_with("web_wallpaper_") {
+                let _ = window.close();
+            }
+        }
+    }
+
+        if m_key == "SPAN_ALL" {
+            let mut min_x = i32::MAX;
+            let mut min_y = i32::MAX;
+            let mut max_x = i32::MIN;
+            let mut max_y = i32::MIN;
+            for m in &monitors {
+                let mx = m.position().x;
+                let my = m.position().y;
+                let mw = m.size().width as i32;
+                let mh = m.size().height as i32;
+                min_x = min_x.min(mx);
+                min_y = min_y.min(my);
+                max_x = max_x.max(mx + mw);
+                max_y = max_y.max(my + mh);
+            }
+            if min_x != i32::MAX {
+                x = min_x;
+                y = min_y;
+                width = (max_x - min_x) as u32;
+                height = (max_y - min_y) as u32;
+            }
+        }
 
         let target_width = ((width as f64 * scale_percent as f64 / 100.0) / 2.0).round() as u32 * 2;
         let target_height = ((height as f64 * scale_percent as f64 / 100.0) / 2.0).round() as u32 * 2;
@@ -322,7 +327,7 @@ pub fn set_video(
         if workerw != 0 {
             let m_key_thread = m_key.clone();
             std::thread::spawn(move || {
-                for _ in 0..20 { // Try for up to 10 seconds (20 * 500ms)
+                for _ in 0..30 { // Try for up to 15 seconds (30 * 500ms)
                     std::thread::sleep(std::time::Duration::from_millis(500));
                     if let Some(hwnd) = win32::find_hwnd_by_pid(pid) {
                         unsafe {
@@ -330,10 +335,25 @@ pub fn set_video(
                                 windows::Win32::Foundation::HWND(hwnd as _),
                                 windows::Win32::Foundation::HWND(workerw as _)
                             );
-                            // Also call SetWindowPos to push it behind icons and properly size it
+                            
+                            // Emulate exactly what the old PowerShell script did!
+                            let shelldll: Vec<u16> = "SHELLDLL_DefView\0".encode_utf16().collect();
+                            let shell_hwnd = windows::Win32::UI::WindowsAndMessaging::FindWindowExW(
+                                windows::Win32::Foundation::HWND(workerw as _),
+                                windows::Win32::Foundation::HWND(0 as _),
+                                windows::core::PCWSTR(shelldll.as_ptr()),
+                                windows::core::PCWSTR::null()
+                            ).unwrap_or(windows::Win32::Foundation::HWND(1 as _)); // HWND_BOTTOM fallback
+                            
+                            let target_z = if shell_hwnd != windows::Win32::Foundation::HWND(0 as _) && shell_hwnd != windows::Win32::Foundation::HWND(1 as _) {
+                                shell_hwnd
+                            } else {
+                                windows::Win32::Foundation::HWND(1 as _) // HWND_BOTTOM
+                            };
+
                             let _ = windows::Win32::UI::WindowsAndMessaging::SetWindowPos(
                                 windows::Win32::Foundation::HWND(hwnd as _),
-                                windows::Win32::Foundation::HWND(0 as _),
+                                target_z,
                                 x, y, width as i32, height as i32,
                                 windows::Win32::UI::WindowsAndMessaging::SWP_SHOWWINDOW
                             );
@@ -356,6 +376,132 @@ pub fn set_video(
 
     log::info!("Video wallpaper set to: {} on monitor {}", path, m_key);
     Ok(format!("Wallpaper set: {} on {}", path, m_key))
+}
+
+pub fn set_web_wallpaper(
+    app: tauri::AppHandle,
+    url: &str,
+    monitor_name: Option<String>,
+) -> Result<String, String> {
+    use tauri::Manager;
+    let monitors = app.available_monitors().unwrap_or_default();
+    let mut target_m = monitors.first().cloned();
+    let mut m_key = target_m.as_ref().and_then(|m| m.name().cloned()).unwrap_or_else(|| "default".to_string());
+    
+    if let Some(ref m_name) = monitor_name {
+        if m_name == "SPAN_ALL" {
+            m_key = "SPAN_ALL".to_string();
+        } else {
+            for m in &monitors {
+                if m.name().map(|n| n == m_name).unwrap_or(false) {
+                    target_m = Some(m.clone());
+                    m_key = m_name.clone();
+                    break;
+                }
+            }
+        }
+    }
+
+    if m_key == "SPAN_ALL" {
+        let _ = stop_video();
+    } else {
+        stop_video_for_monitor("SPAN_ALL");
+        stop_video_for_monitor(&m_key);
+    }
+
+    let mut width = target_m.as_ref().map(|m| m.size().width).unwrap_or(1920);
+    let mut height = target_m.as_ref().map(|m| m.size().height).unwrap_or(1080);
+    let mut x = target_m.as_ref().map(|m| m.position().x).unwrap_or(0);
+    let mut y = target_m.as_ref().map(|m| m.position().y).unwrap_or(0);
+
+    if m_key == "SPAN_ALL" {
+        let mut min_x = i32::MAX;
+        let mut min_y = i32::MAX;
+        let mut max_x = i32::MIN;
+        let mut max_y = i32::MIN;
+        for m in &monitors {
+            let mx = m.position().x;
+            let my = m.position().y;
+            let mw = m.size().width as i32;
+            let mh = m.size().height as i32;
+            min_x = min_x.min(mx);
+            min_y = min_y.min(my);
+            max_x = max_x.max(mx + mw);
+            max_y = max_y.max(my + mh);
+        }
+        if min_x != i32::MAX {
+            x = min_x;
+            y = min_y;
+            width = (max_x - min_x) as u32;
+            height = (max_y - min_y) as u32;
+        }
+    }
+
+    let window_label = format!("web_wallpaper_{}", m_key.replace(" ", "_").replace("\\", "_"));
+
+    if let Some(window) = app.get_webview_window(&window_label) {
+        window.eval(&format!("window.location.replace('{}');", url.replace("'", "\\'"))).map_err(|e| e.to_string())?;
+        if let Ok(mut current) = CURRENT_VIDEO.lock() {
+            current.insert(m_key.clone(), url.to_string());
+        }
+        return Ok(format!("Web wallpaper updated to {} on {}", url, m_key));
+    }
+
+    let parsed_url = if url.starts_with("http") {
+        tauri::Url::parse(url).unwrap()
+    } else {
+        let path = std::path::Path::new(url);
+        if !path.exists() {
+            return Err(format!("Local HTML file not found: {}", url));
+        }
+        tauri::Url::from_file_path(path).unwrap()
+    };
+
+    let window = tauri::WebviewWindowBuilder::new(&app, &window_label, tauri::WebviewUrl::External(parsed_url))
+        .decorations(false)
+        .transparent(true)
+        .skip_taskbar(true)
+        .build()
+        .map_err(|e| format!("Failed to build webview: {}", e))?;
+
+    #[cfg(windows)]
+    {
+        let hwnd = window.hwnd().unwrap();
+        let workerw = win32::get_desktop_workerw().unwrap_or(0);
+        unsafe {
+            let _ = windows::Win32::UI::WindowsAndMessaging::SetParent(
+                windows::Win32::Foundation::HWND(hwnd.0 as _),
+                windows::Win32::Foundation::HWND(workerw as _)
+            );
+            
+            let shelldll: Vec<u16> = "SHELLDLL_DefView\0".encode_utf16().collect();
+            let shell_hwnd = windows::Win32::UI::WindowsAndMessaging::FindWindowExW(
+                windows::Win32::Foundation::HWND(workerw as _),
+                windows::Win32::Foundation::HWND(0 as _),
+                windows::core::PCWSTR(shelldll.as_ptr()),
+                windows::core::PCWSTR::null()
+            ).unwrap_or(windows::Win32::Foundation::HWND(1 as _));
+            
+            let target_z = if shell_hwnd != windows::Win32::Foundation::HWND(0 as _) && shell_hwnd != windows::Win32::Foundation::HWND(1 as _) {
+                shell_hwnd
+            } else {
+                windows::Win32::Foundation::HWND(1 as _) // HWND_BOTTOM
+            };
+
+            let _ = windows::Win32::UI::WindowsAndMessaging::SetWindowPos(
+                windows::Win32::Foundation::HWND(hwnd.0 as _),
+                target_z,
+                x, y, width as i32, height as i32,
+                windows::Win32::UI::WindowsAndMessaging::SWP_SHOWWINDOW
+            );
+        }
+    }
+
+    if let Ok(mut current) = CURRENT_VIDEO.lock() {
+        current.insert(m_key.clone(), url.to_string());
+    }
+
+    Ok(format!("Web wallpaper set: {} on {}", url, m_key))
 }
 
 /// Stops the video wallpaper on a specific monitor (by its key).
