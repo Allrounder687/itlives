@@ -9,6 +9,10 @@ interface ThemeOption {
 const THEMES: ThemeOption[] = [
   { id: "master-system", name: "Master System", colors: ["#07110a", "#9ae600"] },
   { id: "ocean-blue", name: "Ocean Blue", colors: ["#0d1117", "#2f81f7"] },
+  { id: "sunset-cyber", name: "Sunset Cyber", colors: ["#0c0614", "#ff7c3b"] },
+  { id: "emerald-nebula", name: "Emerald Nebula", colors: ["#040b08", "#00ff9d"] },
+  { id: "dracula-eclipse", name: "Dracula Eclipse", colors: ["#08070c", "#bd93f9"] },
+  { id: "rose-gold", name: "Rose Gold", colors: ["#0c0c0e", "#e0a98c"] },
   { id: "cyberpunk", name: "Night City", colors: ["#0d021f", "#ff00bb"] },
   { id: "nordic-frost", name: "Nordic Frost", colors: ["#0b1116", "#88c0d0"] },
   { id: "midnight-haze", name: "Midnight Haze", colors: ["#05060d", "#6f00ff"] },
