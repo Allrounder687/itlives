@@ -36,6 +36,31 @@ export function YouTubePanel({ onApplyWallpaper, onStop, isPlaying }: YouTubePan
   const playerRef = useRef<HTMLIFrameElement>(null);
   const [activeThumb, setActiveThumb] = useState<"start" | "end">("start");
   const [iframeStart, setIframeStart] = useState(0);
+  const [history, setHistory] = useState<YtMetaResult[]>([]);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("yt_history");
+      if (stored) {
+        setHistory(JSON.parse(stored));
+      }
+    } catch (e) {
+      console.error("Failed to load YouTube history", e);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (yt.meta) {
+      setHistory((prev) => {
+        if (prev.some((item) => item.id === yt.meta!.id)) {
+          return prev;
+        }
+        const updated = [yt.meta!, ...prev].slice(0, 10);
+        localStorage.setItem("yt_history", JSON.stringify(updated));
+        return updated;
+      });
+    }
+  }, [yt.meta]);
 
   const [isYtdlpInstalled, setIsYtdlpInstalled] = useState(true);
   const [isCheckingYtdlp, setIsCheckingYtdlp] = useState(true);
@@ -486,6 +511,56 @@ export function YouTubePanel({ onApplyWallpaper, onStop, isPlaying }: YouTubePan
                 The extractor will fetch the video metadata and let you trim a clip range
                 to download and set as your desktop wallpaper.
               </p>
+            </div>
+          )}
+
+          {/* Recent Extractions History */}
+          {history.length > 0 && (
+            <div className="yt-history-section" style={{ borderTop: "1px solid rgba(255,255,255,0.06)", marginTop: "2.5rem", paddingTop: "1.5rem" }}>
+              <span className="eyebrow" style={{ display: "block", marginBottom: "0.75rem" }}>Recent Extractions</span>
+              <div className="yt-history-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: "12px" }}>
+                {history.map((item) => (
+                  <div
+                    key={item.id}
+                    className="yt-history-card panel"
+                    style={{
+                      cursor: "pointer",
+                      overflow: "hidden",
+                      display: "flex",
+                      flexDirection: "column",
+                      borderRadius: "var(--radius)",
+                      border: "1px solid var(--panel-stroke)",
+                      background: "var(--bg-elevated)",
+                      transition: "transform 0.2s, border-color 0.2s, box-shadow 0.2s"
+                    }}
+                    onClick={() => {
+                      yt.setUrl(item.video_url || `https://www.youtube.com/watch?v=${item.id}`);
+                      yt.setMeta(item);
+                    }}
+                    onMouseOver={(e) => {
+                      e.currentTarget.style.transform = "translateY(-2px)";
+                      e.currentTarget.style.borderColor = "var(--accent)";
+                      e.currentTarget.style.boxShadow = "0 6px 16px rgba(0,0,0,0.3)";
+                    }}
+                    onMouseOut={(e) => {
+                      e.currentTarget.style.transform = "none";
+                      e.currentTarget.style.borderColor = "var(--panel-stroke)";
+                      e.currentTarget.style.boxShadow = "none";
+                    }}
+                  >
+                    <div style={{ position: "relative", width: "100%", aspectRatio: "16/9", background: "#000" }}>
+                      <img src={item.thumbnail_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                      <span className="quality-badge" style={{ position: "absolute", bottom: "4px", right: "4px", padding: "1px 4px", fontSize: "8px", background: "rgba(0,0,0,0.7)", borderRadius: "4px" }}>
+                        {formatDuration(item.duration)}
+                      </span>
+                    </div>
+                    <div style={{ padding: "8px", fontSize: "11px", display: "flex", flexDirection: "column", gap: "3px" }}>
+                      <strong style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.id}</strong>
+                      <span style={{ fontSize: "9px", color: "var(--text-soft)" }}>{item.width}x{item.height} (YouTube)</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </>

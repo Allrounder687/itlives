@@ -8,6 +8,7 @@ interface ThemeOption {
 
 const THEMES: ThemeOption[] = [
   { id: "master-system", name: "Master System", colors: ["#07110a", "#9ae600"] },
+  { id: "ocean-blue", name: "Ocean Blue", colors: ["#0d1117", "#2f81f7"] },
   { id: "cyberpunk", name: "Night City", colors: ["#0d021f", "#ff00bb"] },
   { id: "nordic-frost", name: "Nordic Frost", colors: ["#0b1116", "#88c0d0"] },
   { id: "midnight-haze", name: "Midnight Haze", colors: ["#05060d", "#6f00ff"] },

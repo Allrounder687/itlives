@@ -8,24 +8,6 @@
 
 
 :root {
-  --bg: #07110a;
-  --bg-elevated: rgba(11, 24, 15, 0.78);
-  --bg-strong: rgba(18, 35, 22, 0.94);
-  --panel-edge: rgba(153, 255, 88, 0.12);
-  --panel-stroke: rgba(255, 255, 255, 0.06);
-  --text: #edf7ea;
-  --text-soft: #99aa9c;
-  --text-dim: #6f8172;
-  --accent: #9ae600;
-  --accent-deep: #5ea800;
-  --accent-soft: rgba(154, 230, 0, 0.14);
-  --nav-accent: rgba(255, 255, 255, 0.92);
-  --nav-accent-bg: rgba(255, 255, 255, 0.10);
-  --nav-accent-border: rgba(255, 255, 255, 0.18);
-  --nav-accent-glow: rgba(255, 255, 255, 0.06);
-  --danger: #ff5b67;
-  --shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
-  --radius: 22px;
   --font-display: "Inter", sans-serif;
   --font-body: "Inter", sans-serif;
   --font-mono: "JetBrains Mono", monospace;

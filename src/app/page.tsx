@@ -249,6 +249,7 @@ function Home() {
                   if (!valid) alert("Incorrect PIN");
                 }
               }}
+              onLock={wallpaper.lockAdult}
               onApply={(item) => wallpaper.applyWallpaper(item.video)}
               onPreview={(item) => wallpaper.selectVideo(item.video)}
               onToggleFavorite={(item) => wallpaper.toggleFavorite(item.video)}

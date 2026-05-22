@@ -139,6 +139,15 @@ export function useYouTube() {
     }
   }, [state.url, state.startTime, state.endTime, state.maxHeight]);
 
+  const setMeta = useCallback((meta: YtMetaResult | null) => {
+    setState((s) => ({
+      ...s,
+      meta,
+      startTime: 0,
+      endTime: meta ? Math.min(meta.duration, 30) : 0,
+    }));
+  }, []);
+
   const setError = useCallback((error: string | null) => {
     setState((s) => ({ ...s, error }));
   }, []);
@@ -152,5 +161,6 @@ export function useYouTube() {
     fetchMeta,
     downloadClip,
     setError,
+    setMeta,
   };
 }
