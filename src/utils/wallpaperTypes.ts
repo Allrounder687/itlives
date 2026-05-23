@@ -49,7 +49,6 @@ export interface PersistedState {
   wallhaven_api_key: string;
   disabled_sources: string[];
   pinterest_urls: string[];
-  adult_pin: string | null;
   hidden_videos: string[];
 }
 
@@ -84,9 +83,7 @@ export interface WallpaperState {
   wallhavenApiKey: string;
   disabledSources: string[];
   pinterestUrls: string[];
-  hasAdultPin: boolean;
   hiddenVideos: string[];
-  isAdultUnlocked: boolean;
   searchResults: VideoResult[];
   page: number;
   category: string;
@@ -95,7 +92,6 @@ export interface WallpaperState {
   hasMore?: boolean;
   duplicateNotice?: string | null;
   previewDismissed: boolean;
-  adultPin: string | null;
   resolutions: string | null;
   ratios: string | null;
   colors: string | null;
@@ -129,9 +125,7 @@ export function applyPersistedState(persisted: PersistedState, current: Wallpape
     pinterestUrls: persisted.pinterest_urls ?? [
       "https://www.pinterest.com/search/pins/?q=fantasy%20wallpaper&rs=ac&len=12&source_id=ac_ysOA3Mkj&eq=fantasy%20wall&etslf=5698"
     ],
-    hasAdultPin: persisted.adult_pin !== null && persisted.adult_pin !== undefined && persisted.adult_pin !== "",
     hiddenVideos: persisted.hidden_videos ?? [],
-    adultPin: persisted.adult_pin,
     resolutions: current.resolutions ?? null,
     ratios: current.ratios ?? null,
     colors: current.colors ?? null,

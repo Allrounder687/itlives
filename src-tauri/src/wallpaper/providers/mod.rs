@@ -5,7 +5,6 @@
 pub mod direct_url;
 pub mod motionbgs;
 pub mod alphacoders;
-pub mod redgifs;
 pub mod youtube;
 pub mod wallhaven;
 pub mod pinterest;
@@ -160,7 +159,6 @@ pub async fn download_to_cache(
 /// Registry: returns the provider for a given source name.
 pub fn get_provider(source: &str) -> Result<Box<dyn VideoProvider>, String> {
     match source.to_lowercase().as_str() {
-        "redgifs" => Ok(Box::new(redgifs::RedGifsProvider)),
         "motionbgs" => Ok(Box::new(motionbgs::MotionBgsProvider)),
         "alphacoders" => Ok(Box::new(alphacoders::AlphaCodersProvider)),
         "youtube" | "yt" => Ok(Box::new(youtube::YouTubeProvider)),
@@ -169,7 +167,7 @@ pub fn get_provider(source: &str) -> Result<Box<dyn VideoProvider>, String> {
         "pinterest" => Ok(Box::new(pinterest::PinterestProvider)),
         "wallpaperwaves" => Ok(Box::new(wallpaperwaves::WallpaperWavesProvider)),
         _ => Err(format!(
-            "Unknown video source: '{}'. Available: redgifs, motionbgs, alphacoders, youtube, direct, wallhaven, pinterest, wallpaperwaves",
+            "Unknown video source: '{}'. Available: motionbgs, alphacoders, youtube, direct, wallhaven, pinterest, wallpaperwaves",
             source
         )),
     }
@@ -178,7 +176,6 @@ pub fn get_provider(source: &str) -> Result<Box<dyn VideoProvider>, String> {
 /// Lists all available provider names.
 pub fn list_providers() -> Vec<String> {
     vec![
-        "redgifs".to_string(),
         "motionbgs".to_string(),
         "alphacoders".to_string(),
         "youtube".to_string(),

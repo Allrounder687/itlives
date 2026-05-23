@@ -16,8 +16,9 @@ static MONITOR_STARTED: AtomicBool = AtomicBool::new(false);
 /// Thread-safe flag to force resume if we want to override
 static FORCE_PAUSE: AtomicBool = AtomicBool::new(false);
 static IS_PAUSED: AtomicBool = AtomicBool::new(true);
+use tauri::Emitter;
 
-pub fn start_monitor(state_store: AppStateStore) {
+pub fn start_monitor(state_store: AppStateStore, app_handle: tauri::AppHandle) {
     if MONITOR_STARTED.swap(true, Ordering::SeqCst) {
         return;
     }
@@ -53,6 +54,12 @@ pub fn start_monitor(state_store: AppStateStore) {
                 log::info!("Performance monitor: State changing to Paused = {} because: {}", should_pause, reason);
                 if set_mpv_pause(should_pause) {
                     IS_PAUSED.store(should_pause, Ordering::Relaxed);
+                    
+                    #[derive(serde::Serialize, Clone)]
+                    struct PausePayload {
+                        paused: bool,
+                    }
+                    let _ = app_handle.emit("wallpaper-paused", PausePayload { paused: should_pause });
                 }
             }
         }
@@ -132,20 +139,9 @@ fn check_should_pause_detailed() -> Option<&'static str> {
             return None;
         }
 
-        // 4. Check for fullscreen application
-        let mut rect = RECT::default();
-        if GetWindowRect(hwnd, &mut rect).is_ok() {
-            let width = rect.right - rect.left;
-            let height = rect.bottom - rect.top;
-
-            let screen_w = GetSystemMetrics(SM_CXSCREEN);
-            let screen_h = GetSystemMetrics(SM_CYSCREEN);
-
-            if width >= screen_w && height >= screen_h {
-                if fg_class != "WorkerW" && fg_class != "Progman" && fg_class != "mpv" {
-                    return Some("Focused window is fullscreen (Non-Desktop, Non-App)");
-                }
-            }
+        // 4. Check for foreground application
+        if fg_class != "WorkerW" && fg_class != "Progman" && fg_class != "mpv" {
+             return Some("Focused window is active (Non-Desktop, Non-App)");
         }
 
         None

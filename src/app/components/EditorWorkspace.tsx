@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, startTransition } from "react";
 import { EffectLayer } from "./CanvasEffectRenderer";
 import { WebGLEffectRenderer } from "./WebGLEffectRenderer";
 import { VideoResult } from "@/hooks/useWallpaper";
@@ -14,6 +14,7 @@ interface EditorWorkspaceProps {
   onApplyPreset?: (preset: any) => void;
   onApplyWallpaper?: (video: VideoResult) => Promise<void>;
   onUploadMedia?: () => Promise<void>;
+  onStopWallpaper?: () => void;
 }
 
 const EFFECT_TEMPLATES: Record<string, Omit<EffectLayer, "id">> = {
@@ -154,7 +155,7 @@ const DEMO_PRESETS: { key: string, name: string, thumbnail: string, path: string
   }
 ];
 
-export function EditorWorkspace({ currentVideo, onSelectVideo, onApplyWallpaper, onUploadMedia }: EditorWorkspaceProps) {
+export function EditorWorkspace({ currentVideo, onSelectVideo, onApplyWallpaper, onUploadMedia, onStopWallpaper }: EditorWorkspaceProps) {
   const [layers, setLayers] = useState<EffectLayer[]>([
     { id: "vignette-1", type: "vignette", name: "Vignette Frame", enabled: true, params: { intensity: 0.5 } }
   ]);
@@ -176,7 +177,9 @@ export function EditorWorkspace({ currentVideo, onSelectVideo, onApplyWallpaper,
   };
 
   const updateParam = (id: string, key: string, value: any) => {
-    setLayers(prev => prev.map(l => l.id === id ? { ...l, params: { ...l.params, [key]: value } } : l));
+    startTransition(() => {
+      setLayers(prev => prev.map(l => l.id === id ? { ...l, params: { ...l.params, [key]: value } } : l));
+    });
   };
 
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
@@ -527,6 +530,9 @@ export function EditorWorkspace({ currentVideo, onSelectVideo, onApplyWallpaper,
                 try {
                   const { invoke } = await import("@tauri-apps/api/core");
                   await invoke("apply_desktop_effects", { layersJson: JSON.stringify(emptyConfig) });
+                  if (onStopWallpaper) {
+                    onStopWallpaper();
+                  }
                 } catch (err) {
                   console.error("[Editor] Invoke failed:", err);
                 }

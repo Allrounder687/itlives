@@ -83,7 +83,6 @@ export function ControlBar({
   onRatiosChange,
   onColorsChange,
 }: ControlBarProps) {
-  const [showRedGifs, setShowRedGifs] = useState(false);
   const [showPinterestSources, setShowPinterestSources] = useState(true);
   const [newPinUrl, setNewPinUrl] = useState("");
   const [pinAddStatus, setPinAddStatus] = useState<"idle" | "adding" | "added" | "duplicate">("idle");
@@ -149,30 +148,9 @@ export function ControlBar({
     await onSetPinterestUrls(pinterestUrls.filter((_, i) => i !== idx));
   };
 
-  useEffect(() => {
-    const checkUnlock = () => {
-      setShowRedGifs(localStorage.getItem("unlock_redgifs") === "true");
-    };
-    checkUnlock();
-    window.addEventListener("unlock_redgifs", checkUnlock);
-    return () => window.removeEventListener("unlock_redgifs", checkUnlock);
-  }, []);
+
 
   const handleQueryChange = (val: string) => {
-    if (val.trim().toLowerCase() === "unlock_redgifs") {
-        localStorage.setItem("unlock_redgifs", "true");
-        window.dispatchEvent(new Event("unlock_redgifs"));
-        onQueryChange("");
-        onSourceChange("redgifs");
-        return;
-    }
-    if (val.trim().toLowerCase() === "lock_redgifs") {
-        localStorage.setItem("unlock_redgifs", "false");
-        window.dispatchEvent(new Event("unlock_redgifs"));
-        onQueryChange("");
-        onSourceChange("unified");
-        return;
-    }
     onQueryChange(val);
   };
 
@@ -181,23 +159,12 @@ export function ControlBar({
       <div className="control-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
         <span className="eyebrow" style={{ color: "var(--accent)" }}>
           {source === "direct" ? "Direct Media Entry" : 
-           source === "redgifs" ? "NSFW Engine" : 
            source === "wallhaven" ? "WallHaven Static Feed" : 
            source === "pinterest" ? "Pinterest Static Feed" : 
            source === "wallpaperwaves" ? "Wallpaper Waves Live Feed" : 
            source === "alphacoders" ? "AlphaCoders Live Feed" : 
            "Discover Unified Feed"}
         </span>
-        {showRedGifs && (
-            <button
-                type="button"
-                className={`action-btn ${source === "redgifs" ? "action-btn--primary" : "action-btn--ghost"}`}
-                style={{ fontSize: "10px", padding: "4px 8px" }}
-                onClick={() => onSourceChange(source === "redgifs" ? "unified" : "redgifs")}
-            >
-                {source === "redgifs" ? "Exit NSFW Engine" : "Enter NSFW Engine"}
-            </button>
-        )}
       </div>
 
       {source !== "direct" && (
@@ -216,8 +183,7 @@ export function ControlBar({
             { id: "alphacoders", label: "🎬 AlphaCoders", desc: "Live video loops" },
             { id: "wallpaperwaves", label: "🌊 WP Waves", desc: "Premium loops" },
             { id: "wallhaven", label: "🖼️ WallHaven", desc: "Premium static images" },
-            { id: "pinterest", label: "📌 Pinterest", desc: "Art & static designs" },
-            ...(showRedGifs ? [{ id: "redgifs", label: "🔞 NSFW Loop", desc: "Adult content" }] : [])
+            { id: "pinterest", label: "📌 Pinterest", desc: "Art & static designs" }
           ].map((src) => (
             <button
               key={src.id}

@@ -11,7 +11,6 @@ import { ControlBar } from "./components/ControlBar";
 import { SearchResults } from "./components/SearchResults";
 import { FloatingPreview } from "./components/FloatingPreview";
 import { UnifiedLibrary } from "./components/LibraryList";
-import { PrivacyPanel } from "./components/PrivacyPanel";
 import { AutomationPanel } from "./components/AutomationPanel";
 import { VideoPreview } from "./components/VideoPreview";
 import { QueuePanel } from "./components/QueuePanel";
@@ -384,16 +383,6 @@ function Home() {
               favorites={wallpaper.favorites} recents={wallpaper.recents}
               imports={wallpaper.imports} favoriteIds={favoriteIds} queueIds={queueIds}
               hiddenVideos={wallpaper.hiddenVideos}
-              isAdultUnlocked={wallpaper.isAdultUnlocked}
-              hasAdultPin={wallpaper.hasAdultPin}
-              onUnlock={async () => {
-                const pin = prompt("Enter PIN to unlock hidden content:");
-                if (pin) {
-                  const valid = await wallpaper.verifyAdultPin(pin);
-                  if (!valid) alert("Incorrect PIN");
-                }
-              }}
-              onLock={wallpaper.lockAdult}
               onApply={(item) => wallpaper.applyWallpaper(item.video)}
               onPreview={(item) => wallpaper.selectVideo(item.video)}
               onToggleFavorite={(item) => wallpaper.toggleFavorite(item.video)}
@@ -418,13 +407,6 @@ function Home() {
                 <WallpaperSourcePanel wallpaper={wallpaper} />
                 <AutomationPanel wallpaper={wallpaper} />
                 <QueuePanel wallpaper={wallpaper} />
-                <PrivacyPanel 
-                  hasAdultPin={wallpaper.hasAdultPin}
-                  isAdultUnlocked={wallpaper.isAdultUnlocked}
-                  onSetPin={wallpaper.setAdultPin}
-                  onVerifyPin={wallpaper.verifyAdultPin}
-                  onLock={wallpaper.lockAdult}
-                />
               </div>
             </section>
           )}
@@ -490,6 +472,7 @@ function Home() {
               onSelectVideo={(video) => wallpaper.selectVideo(video)}
               onApplyWallpaper={async (v) => { await wallpaper.applyWallpaper(v); }} 
               onUploadMedia={wallpaper.browseLocalVideo}
+              onStopWallpaper={wallpaper.stopWallpaper}
             />
           )}
 

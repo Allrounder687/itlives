@@ -658,7 +658,7 @@ pub fn set_blur(_blur: u32) -> Result<(), String> {
 
 /// Gets the cache directory for downloaded videos.
 pub fn get_cache_dir() -> PathBuf {
-    app_data_dir().join("wallpapers").join("redgifs")
+    app_data_dir().join("wallpapers").join("cache")
 }
 
 pub fn app_data_dir() -> PathBuf {

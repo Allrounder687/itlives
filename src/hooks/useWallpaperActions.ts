@@ -32,11 +32,12 @@ export function useWallpaperActions(state: WallpaperState, setState: React.Dispa
   }, [state.wallpaperScalePercent, setState]);
 
   const fetchVideoTags = useCallback(async (source: string, id: string): Promise<string[]> => {
+    if (source === "redgifs") return []; // Legacy fallback to prevent backend errors for old saved wallpapers
     try {
       const { invoke } = await getCoreApi();
       return await invoke<string[]>("fetch_video_tags", { source, id });
     } catch (error) {
-      console.error("Failed to fetch tags:", error);
+      console.warn("[itLives] Failed to fetch tags for legacy or invalid source:", error);
       return [];
     }
   }, []);

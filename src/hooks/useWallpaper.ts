@@ -81,28 +81,6 @@ export function useWallpaper() {
     } catch (e) { console.error("Browse failed", e); }
   }, [setState]);
 
-  const setAdultPin = useCallback(async (pin: string | null) => {
-    try {
-      const { invoke } = await getCoreApi();
-      const persisted = await invoke<PersistedState>("set_adult_pin", { pin });
-      setState((s) => ({ ...applyPersistedState(persisted, s), isAdultUnlocked: true }));
-    } catch (e) { console.error("Set PIN failed", e); }
-  }, [setState]);
-
-  const verifyAdultPin = useCallback(async (pin: string): Promise<boolean> => {
-    try {
-      const { invoke } = await getCoreApi();
-      const valid = await invoke<boolean>("verify_adult_pin", { pin });
-      if (valid) {
-        setState((s) => ({ ...s, isAdultUnlocked: true }));
-      }
-      return valid;
-    } catch (e) {
-      console.error("Verify PIN failed", e);
-      return false;
-    }
-  }, [setState]);
-
   const toggleHideVideo = useCallback(async (videoId: string) => {
     try {
       const { invoke } = await getCoreApi();
@@ -192,8 +170,6 @@ export function useWallpaper() {
     setWallhavenApiKey,
     setDisabledSources,
     setPinterestUrls,
-    setAdultPin,
-    verifyAdultPin,
     toggleHideVideo,
     fetchMonitors,
     setRestoreOnLaunch,
@@ -222,6 +198,5 @@ export function useWallpaper() {
     }),
     selectVideo: (video: VideoResult) => setState(s => ({ ...s, currentVideo: video, previewDismissed: false })),
     dismissPreview: () => setState(s => ({ ...s, previewDismissed: true })),
-    lockAdult: () => setState(s => ({ ...s, isAdultUnlocked: false })),
   };
 }

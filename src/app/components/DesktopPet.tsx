@@ -1,11 +1,21 @@
-import React, { useEffect, useRef, useState, useMemo } from "react";
+import React, { useEffect, useRef, useState, useMemo, useCallback, Suspense } from "react";
 import * as THREE from "three";
 import { useFrame, createPortal } from "@react-three/fiber";
-import { useGLTF, useAnimations, Clone, Html } from "@react-three/drei";
+import { useGLTF, useAnimations, Clone, Billboard, useTexture } from "@react-three/drei";
+import { SkeletonUtils } from "three-stdlib";
 
-type PetBehavior = "wander" | "follow-cursor" | "idle-only";
+import { SpriteSheet } from "./SpriteSheet";
 
-interface DesktopPetProps {
+
+import { useTauriCursor } from "../../hooks/pet/useTauriCursor";
+import { useTauriAudio } from "../../hooks/pet/useTauriAudio";
+import { useKokoroTTS } from "../../hooks/pet/useKokoroTTS";
+import { usePetAI, PetAIParams } from "../../hooks/pet/usePetAI";
+import { useTauriClick } from "../../hooks/pet/useTauriClick";
+
+export type PetBehavior = "wander" | "follow-cursor" | "idle-only";
+
+export interface DesktopPetProps {
   params: any;
   isOverlay: boolean;
   widgets?: any[];
@@ -40,20 +50,26 @@ useGLTF.preload(ANIM_RANGED_PATH);
 useGLTF.preload(ANIM_SPECIAL_PATH);
 useGLTF.preload(ANIM_TOOLS_PATH);
 
+useTexture.preload("/assets/Dark VFX 1/Dark VFX 1 (40x32).png");
+useTexture.preload("/assets/Dark VFX 2/Dark VFX 2 (48x64).png");
+
+const tempDir = new THREE.Vector3();
+
 function PetEntity({ params, isOverlay, widgets, onUpdateParam, isPrimary, myPosRef, myStateRef, friendPosRef, friendStateRef }: DesktopPetProps & { isPrimary: boolean, myPosRef: any, myStateRef: any, friendPosRef: any, friendStateRef: any }) {
   const outerGroup = useRef<THREE.Group>(null);
   const animGroup = useRef<THREE.Group>(null);
+
   
   const skinName = isPrimary ? (params.skin || "Knight") : (params.companionSkin || "Mage");
   const skinPath = SKINS[skinName] || SKINS["Knight"];
 
+  const { scene: skinScene } = useGLTF(skinPath);
+
   const clonedScene = useMemo(() => {
-    const { SkeletonUtils } = require('three-stdlib');
-    return SkeletonUtils.clone(useGLTF(skinPath).scene);
-  }, [skinPath]);
+    return SkeletonUtils.clone(skinScene);
+  }, [skinScene]);
 
   // Load models
-  const { scene: mannequinScene } = useGLTF(skinPath);
   const { animations: animGeneral } = useGLTF(ANIM_GENERAL_PATH);
   const { animations: animMovement } = useGLTF(ANIM_MOVEMENT_PATH);
   const { animations: animMelee } = useGLTF(ANIM_MELEE_PATH);
@@ -78,243 +94,45 @@ function PetEntity({ params, isOverlay, widgets, onUpdateParam, isPrimary, myPos
   const scale = params.scale || 50.0;
   const speedScale = params.speed || 1.0;
 
-  // AI State
+  // AI State Refs
   const aiState = myStateRef;
   const targetPos = useRef(new THREE.Vector3(0, 0, 0));
   const currentPos = myPosRef;
-  const cursorTarget = useRef<{ x: number, y: number } | null>(null);
   const timer = useRef(0);
-  const audioVolume = useRef(0);
   const danceTimer = useRef(0);
   const singTimer = useRef(0);
   const heldWidgetRef = useRef<any>(null);
   const targetWidgetRef = useRef<any>(null);
   const throwVelocity = useRef(new THREE.Vector3(0, 0, 0));
 
-  // Custom Material
-  const customMaterial = useMemo(() => {
-    return new THREE.MeshStandardMaterial({
-      color: params.color || "#00aaff",
-      roughness: 0.5,
-      metalness: 0.1,
-    });
-  }, [params.color]);
+  const [activePower, setActivePower] = useState<string | null>(null);
 
   const [headBone, setHeadBone] = useState<THREE.Object3D | null>(null);
 
-  // Apply Custom Material to Clone and find head
   useEffect(() => {
-    /* 
-    // We disable custom material so the Knight retains his original textures!
-    clonedScene.traverse((child: any) => {
-      if (child.isMesh) {
-        child.material = customMaterial;
-      }
-    });
-    */
     const head = clonedScene.getObjectByName('head');
     if (head) setHeadBone(head);
-  }, [clonedScene, customMaterial]);
+  }, [clonedScene]);
 
   useEffect(() => {
     setBehavior(params.behavior || "wander");
   }, [params.behavior]);
 
-  // IPC Cursor listener for "follow-cursor" mode
-  useEffect(() => {
-    let isMounted = true;
-    let unlisten: () => void;
-
-    if (behavior !== "follow-cursor") return;
-
-    const setupIPC = async () => {
-      try {
-        if (!isOverlay) {
-          const handleMove = (e: MouseEvent) => {
-            const w = window.innerWidth;
-            const h = window.innerHeight;
-            cursorTarget.current = { x: e.clientX - w / 2, y: -e.clientY + h / 2 };
-          };
-          window.addEventListener("mousemove", handleMove);
-          unlisten = () => window.removeEventListener("mousemove", handleMove);
-          return;
-        }
-
-        const { listen } = await import("@tauri-apps/api/event");
-        if (!isMounted) return;
-
-
-        unlisten = await listen<{ x: number, y: number }>("cursor-moved", (e) => {
-          let payload = e.payload as any;
-          if (typeof payload === "string") { try { payload = JSON.parse(payload); } catch (err) { } }
-          if (!payload || typeof payload.x !== "number") return;
-          const w = window.innerWidth;
-          const h = window.innerHeight;
-          cursorTarget.current = {
-            x: (payload.x / (window.devicePixelRatio || 1)) - w / 2,
-            y: -(payload.y / (window.devicePixelRatio || 1)) + h / 2
-          };
-        });
-      } catch (err) { }
-    };
-    let unlistenFunctions: Array<() => void> = [];
-    setupIPC();
-
-    // Setup Audio Listener for dancing
-    const setupAudio = async () => {
-      try {
-        const { invoke } = await import("@tauri-apps/api/core");
-        const { listen } = await import("@tauri-apps/api/event");
-        if (!isMounted) return;
-
-        await invoke("start_audio_capture");
-        const u = await listen<number[]>("audio-fft", (e) => {
-          const data = e.payload;
-          if (data && data.length > 0) {
-            let sum = 0;
-            for (let i = 0; i < data.length; i++) sum += data[i];
-            audioVolume.current = sum / data.length;
-          }
-        });
-        unlistenFunctions.push(u);
-      } catch (err) { }
-    };
-    setupAudio();
-
-    return () => {
-      isMounted = false;
-      if (unlisten) unlisten();
-      unlistenFunctions.forEach(fn => fn());
-    };
-  }, [behavior, isOverlay]);
-
-  const paramsRef = useRef(params);
-  useEffect(() => { paramsRef.current = params; }, [params]);
-
   const behaviorRef = useRef(behavior);
   useEffect(() => { behaviorRef.current = behavior; }, [behavior]);
 
-  // Click to move logic
-  const playVoiceLine = async (text: string) => {
-    if (paramsRef.current.muted) return;
+  // Use Custom Hooks
+  const cursorTarget = useTauriCursor(behavior, isOverlay);
+  const audioVolume = useTauriAudio(behavior, isOverlay);
+  const { playVoiceLine } = useKokoroTTS(params.muted);
+  const { updateAI } = usePetAI();
 
-    try {
-      if (!(window as any).kokoroTTS) {
-        console.log("Loading Kokoro TTS model...");
-        const kokoro = await import("kokoro-js");
-        (window as any).kokoroTTS = await kokoro.KokoroTTS.from_pretrained("onnx-community/Kokoro-82M-v1.0-ONNX", {
-          dtype: "q8",
-          device: "wasm"
-        });
-      }
+  const triggerPower = useCallback((vfxId: string) => {
+    setActivePower(vfxId);
+  }, []);
 
-      const audioData = await (window as any).kokoroTTS.generate(text, { voice: "af_heart" });
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const audioBuffer = audioContext.createBuffer(1, audioData.audio.length, audioData.sampling_rate);
-      audioBuffer.getChannelData(0).set(audioData.audio);
-
-      const source = audioContext.createBufferSource();
-      source.buffer = audioBuffer;
-      source.connect(audioContext.destination);
-      source.start();
-    } catch (err) {
-      console.error("Kokoro TTS fallback:", err);
-      if (typeof window !== "undefined" && window.speechSynthesis) {
-        window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.pitch = 2.0;
-        utterance.rate = 1.3;
-        utterance.volume = 0.5;
-        window.speechSynthesis.speak(utterance);
-      }
-    }
-  };
-
-  useEffect(() => {
-    let isMounted = true;
-    let unlisten: () => void;
-    let lastClickTime = 0;
-
-    const handleSingleClick = (x: number, y: number) => {
-      if (behaviorRef.current === "wander") return; // Ignore clicks while in wander mode!
-      if (aiState.current === "PUNCH" || aiState.current === "CUSTOM") return;
-
-      const lines = ["Target acquired!", "On my way!", "Initiating punch sequence!", "Destroy!"];
-      playVoiceLine(lines[Math.floor(Math.random() * lines.length)]);
-
-      const w = window.innerWidth;
-      const h = window.innerHeight;
-      let clampedX = x;
-      let clampedY = y;
-      if (clampedX < -w / 2 + 50) clampedX = -w / 2 + 50;
-      if (clampedX > w / 2 - 50) clampedX = w / 2 - 50;
-      if (clampedY < -h / 2 + 50) clampedY = -h / 2 + 50;
-      if (clampedY > h / 2 - 50) clampedY = h / 2 - 50;
-
-      targetPos.current.set(clampedX, clampedY, 0);
-      const dist = currentPos.current.distanceTo(targetPos.current);
-      aiState.current = "CLICK_MOVE";
-      if (dist > 200) {
-        playAnim("Running_A");
-      } else {
-        playAnim("Walking_A");
-      }
-    };
-
-    const setupListener = async () => {
-      try {
-        if (!isOverlay) {
-          const handleClick = (e: MouseEvent) => {
-            const now = Date.now();
-            if (now - lastClickTime > 400) {
-              const w = window.innerWidth;
-              const h = window.innerHeight;
-              handleSingleClick(e.clientX - w / 2, -e.clientY + h / 2);
-              lastClickTime = now;
-            }
-          };
-          window.addEventListener("click", handleClick);
-          unlisten = () => window.removeEventListener("click", handleClick);
-          return;
-        }
-
-        const { listen } = await import("@tauri-apps/api/event");
-        if (!isMounted) return;
-
-        unlisten = await listen<{ x: number, y: number }>("cursor-click", (e) => {
-          const now = Date.now();
-          if (now - lastClickTime > 400) {
-            let payload = e.payload as any;
-            if (typeof payload === "string") { try { payload = JSON.parse(payload); } catch (err) { } }
-            if (!payload || typeof payload.x !== "number") return;
-            const w = window.innerWidth;
-            const h = window.innerHeight;
-            handleSingleClick(
-              (payload.x / (window.devicePixelRatio || 1)) - w / 2,
-              -(payload.y / (window.devicePixelRatio || 1)) + h / 2
-            );
-            lastClickTime = now;
-          }
-        });
-      } catch (err) { }
-    };
-    setupListener();
-
-    return () => {
-      isMounted = false;
-      if (unlisten) unlisten();
-    };
-  }, [isOverlay]);
-
-  // Play initial animation
-  useEffect(() => {
-    if (actions["Idle_A"]) {
-      actions["Idle_A"].reset().fadeIn(0.5).play();
-    }
-  }, [actions]);
-
-  // Change animation helper
-  const getAttackAnimForSkin = (skin: string) => {
+  // Animation Helper
+  const getAttackAnimForSkin = useCallback((skin: string) => {
     const attacks: Record<string, string[]> = {
       "Knight": ["Melee_1H_Attack_Chop", "Melee_1H_Attack_Slice_Diagonal", "Melee_Block_Attack"],
       "Barbarian": ["Melee_2H_Attack_Chop", "Melee_2H_Attack_Spin", "Melee_2H_Attack_Slice"],
@@ -326,425 +144,73 @@ function PetEntity({ params, isOverlay, widgets, onUpdateParam, isPrimary, myPos
     const available = list.filter(a => actions[a]);
     if (available.length > 0) return available[Math.floor(Math.random() * available.length)];
     return "Melee_Unarmed_Attack_Punch_A"; // Fallback
-  };
+  }, [actions]);
 
-  const playAnim = (name: string, duration = 0.3) => {
+  const playAnim = useCallback((name: string, duration = 0.3) => {
     if (!actions[name]) return;
-    // Fade out others
     Object.values(actions).forEach(action => {
       if (action && action.isRunning() && action !== actions[name]) {
         action.fadeOut(duration);
       }
     });
-    actions[name].reset().fadeIn(duration).play();
-  };
+    const action = actions[name]!;
+    action.reset().fadeIn(duration);
+
+    const oneShot = ["Hit", "Defeat", "Spawn", "Attack", "Punch", "Kick", "PickUp", "Throw", "_Down", "_StandUp", "Interact", "Spellcast", "Chop", "Slice", "Block", "Shoot", "Summon", "Stab"];
+    if (oneShot.some(s => name.includes(s))) {
+       action.setLoop(THREE.LoopOnce, 1);
+       action.clampWhenFinished = true;
+    } else {
+       action.setLoop(THREE.LoopRepeat, Infinity);
+    }
+    action.play();
+  }, [actions]);
+
+  // Handle global click
+  useTauriClick(behaviorRef, isOverlay, (clampedX, clampedY) => {
+    if (behaviorRef.current === "wander") return;
+    if (aiState.current === "PUNCH" || aiState.current === "CUSTOM") return;
+
+    const lines = ["Target acquired!", "On my way!", "Initiating punch sequence!", "Destroy!"];
+    playVoiceLine(lines[Math.floor(Math.random() * lines.length)]);
+
+    targetPos.current.set(clampedX, clampedY, 0);
+    const dist = currentPos.current.distanceTo(targetPos.current);
+    aiState.current = "CLICK_MOVE";
+    if (dist > 200) {
+      playAnim("Running_A");
+    } else {
+      playAnim("Walking_A");
+    }
+  });
+
 
   useFrame((state, delta) => {
     if (!animGroup.current || !outerGroup.current) return;
 
-    timer.current -= delta;
+    let anyRunning = false;
+    Object.values(actions).forEach(a => {
+      if (a && a.isRunning()) anyRunning = true;
+    });
+    if (!anyRunning && actions["Idle_A"]) {
+      actions["Idle_A"].reset().play();
+    }
+
+    const aiParams: PetAIParams = {
+      behavior, aiState, timer, danceTimer, singTimer, targetPos, currentPos, cursorTarget,
+      audioVolume, heldWidgetRef, targetWidgetRef, throwVelocity, friendPosRef, friendStateRef,
+      playAnim, playVoiceLine, getAttackAnimForSkin, skinName, names, actions, params, isOverlay, widgets,
+      triggerPower
+    };
+
+    const { isMoving, targetVec } = updateAI(delta, aiParams);
 
     const speedWalk = 100 * speedScale;
     const speedRun = 250 * speedScale;
 
-    let isMoving = false;
-    let targetVec = targetPos.current;
-
-    const vol = audioVolume.current;
-
-    // Check if music is loud enough to trigger dancing!
-    if (vol > 0.05 && !aiState.current.startsWith("WIDGET_") && aiState.current !== "PUNCH" && aiState.current !== "CLICK_MOVE") {
-      danceTimer.current = 2.0; // Keep dancing 2s after silence
-      if (aiState.current !== "DANCE") {
-        aiState.current = "DANCE";
-        playAnim("Cheering");
-        singTimer.current = 2.0; // Wait 2s before first line
-      } else {
-        singTimer.current -= delta;
-        if (singTimer.current <= 0) {
-          const singLines = ["La la la!", "Ooh yeah!", "Singing in the rain!", "Drop the beat!"];
-          playVoiceLine(singLines[Math.floor(Math.random() * singLines.length)]);
-          singTimer.current = 10.0 + Math.random() * 5.0; // Sing every 10-15s
-        }
-      }
-    } else if (aiState.current === "DANCE") {
-      danceTimer.current -= delta;
-      if (danceTimer.current <= 0) {
-        aiState.current = "IDLE";
-        playAnim("Idle_A");
-        timer.current = 1.0;
-      }
-    }
-
-    if (behavior === "idle-only") {
-      if (aiState.current !== "IDLE") {
-        aiState.current = "IDLE";
-        playAnim(Math.random() > 0.5 ? "Idle_A" : "Idle_B");
-      }
-      // Randomly switch idle animations occasionally
-      if (timer.current <= 0) {
-        timer.current = 5 + Math.random() * 5;
-        const roll = Math.random();
-        if (roll > 0.95) playAnim("Cheering", 0.5);
-        else if (roll > 0.90) playAnim("Waving", 0.5);
-        else if (roll > 0.85) playAnim("Sit_Floor_Down", 0.5);
-        else if (roll > 0.80) playAnim("Sit_Floor_Idle", 0.5);
-        else if (roll > 0.75) playAnim("Push_Ups", 0.5);
-        else if (roll > 0.70) playAnim("Interact", 0.5); // Check ground
-        else if (roll > 0.65) playAnim("PickUp", 0.5);
-        else playAnim(Math.random() > 0.5 ? "Idle_A" : "Idle_B", 0.5);
-      }
-    }
-    else if (behavior === "wander") {
-      if (aiState.current === "IDLE") {
-        if (timer.current <= 0) {
-          const roll = Math.random();
-          if (roll > 0.95 && !isOverlay) {
-            // 5% chance: throw a desktop icon
-            aiState.current = "ICON_MOVE";
-            const w = window.innerWidth;
-            const h = window.innerHeight;
-            targetPos.current.set((Math.random() - 0.5) * (w - 100), (Math.random() - 0.5) * (h - 100), 0);
-            playAnim("Running_A");
-          } else if (widgets && widgets.length > 0 && roll > 0.55) {
-            // 40% chance: go interact with a widget
-            const wTarget = widgets[Math.floor(Math.random() * widgets.length)];
-            targetWidgetRef.current = wTarget;
-            const sw = window.innerWidth;
-            const sh = window.innerHeight;
-            const px = wTarget.params.x || 50;
-            const py = wTarget.params.y || 50;
-            const pw = wTarget.params.w || 20;
-            const screenX = (px / 100) * sw;
-            const screenY = (py / 100) * sh;
-            const screenW = (pw / 100) * sw;
-
-            const targetX = screenX + screenW / 2 - sw / 2;
-            const targetY = -(screenY - sh / 2) + 15; // 15px above top edge
-
-            let clampedX = targetX;
-            if (clampedX < -sw / 2 + 50) clampedX = -sw / 2 + 50;
-            if (clampedX > sw / 2 - 50) clampedX = sw / 2 - 50;
-
-            targetPos.current.set(clampedX, targetY, 0);
-            aiState.current = "WIDGET_MOVE";
-            playAnim("Running_A");
-          } else if (roll > 0.3) {
-            // 25% chance: do a fun animation in-place
-            const skip = ["Walk", "Run", "Idle", "Jump", "Dodge", "Death", "Hit", "Defeat", "Spawn"];
-            const availableAnims = names.filter(n => !skip.some(s => n.includes(s)));
-            const randomAnim = availableAnims.length > 0 ? availableAnims[Math.floor(Math.random() * availableAnims.length)] : "Cheering";
-            playAnim(randomAnim);
-            timer.current = actions[randomAnim]?.getClip().duration || 2.0;
-            
-            // Fun voice lines for idle animations
-            const idleLines = ["Hmm...", "What's over here?", "La la la!", "Bored!", "Stretching time!"];
-            if (Math.random() > 0.6) playVoiceLine(idleLines[Math.floor(Math.random() * idleLines.length)]);
-          } else {
-            // 30% chance: walk somewhere new
-            const w = window.innerWidth;
-            const h = window.innerHeight;
-            targetPos.current.set((Math.random() - 0.5) * (w - 100), (Math.random() - 0.5) * (h - 100), 0);
-            aiState.current = "WALK";
-            playAnim("Walking_A");
-          }
-        }
-      } else if (aiState.current === "FOLLOW_FRIEND") {
-        if (friendPosRef && friendPosRef.current) {
-          targetPos.current.copy(friendPosRef.current);
-          const dist = currentPos.current.distanceTo(targetPos.current);
-          if (dist < 80 || timer.current <= 0) {
-            aiState.current = "IDLE";
-            playAnim("Idle_A");
-            timer.current = 1.0 + Math.random() * 2.0;
-            if (dist < 80 && Math.random() > 0.7) {
-              playAnim("Cheering");
-              playVoiceLine("Hello friend!");
-            }
-          } else {
-            isMoving = true;
-          }
-        } else {
-          aiState.current = "IDLE";
-        }
-      } else if (aiState.current === "BATTLE_ATTACK") {
-        if (timer.current <= 0) {
-          aiState.current = "IDLE";
-        }
-      } else if (aiState.current === "BATTLE_HIT_INIT") {
-        aiState.current = "BATTLE_HIT";
-        timer.current = 0.5;
-        playAnim("Hit_A");
-        playVoiceLine(Math.random() > 0.5 ? "Ouch!" : "Hey!");
-      } else if (aiState.current === "BATTLE_HIT") {
-        if (timer.current <= 0) {
-          aiState.current = "BATTLE_ATTACK"; // Retaliate!
-          timer.current = 1.0;
-          playAnim(getAttackAnimForSkin(skinName));
-          playVoiceLine("My turn!");
-          if (friendStateRef) friendStateRef.current = "BATTLE_HIT_INIT";
-        }
-      } else if (aiState.current === "WALK") {
-        const dist = currentPos.current.distanceTo(targetVec);
-        if (dist < 10) {
-          // Reached! Sometimes do a little animation here too
-          aiState.current = "IDLE";
-          const arrivalAnims = ["Idle_A", "Idle_B", "Cheering", "Waving", "Sit_Floor_Down"];
-          const pick = arrivalAnims[Math.floor(Math.random() * arrivalAnims.length)];
-          playAnim(pick);
-          timer.current = 2 + Math.random() * 6; // wait 2-8 seconds
-        } else {
-          isMoving = true;
-        }
-      } else if (aiState.current === "WIDGET_MOVE") {
-        const dist = currentPos.current.distanceTo(targetVec);
-        if (dist < 10) {
-          const widgetRoll = Math.random();
-          if (widgetRoll > 0.75) {
-            // 25% chance: pick up and throw the widget
-            aiState.current = "WIDGET_PICKUP";
-            heldWidgetRef.current = targetWidgetRef.current;
-            const anims = names.filter(n => n.includes("Interact") || n.includes("PickUp"));
-            playAnim(anims.length > 0 ? anims[0] : "Interact");
-            timer.current = 1.0;
-            playVoiceLine("Heave!");
-          } else {
-            // 75% chance: do a fun animation ON the widget (sleep, sit, push-ups, etc.)
-            aiState.current = "WIDGET_INTERACT";
-            // Curated widget interaction animations for maximum variety
-            const widgetAnims = [
-              "Sit_Floor_Down", "Sit_Floor_Idle", "Sit_Floor_StandUp",
-              "Push_Ups", "Cheering", "Waving",
-              "Interact", "PickUp",
-              "Melee_Unarmed_Attack_Punch_A", "Melee_Unarmed_Attack_Kick",
-              "Spellcast_Long", "Spellcast_Shoot",
-              "Bench_Press", "Mining",
-              "Chopping", "Hammering", "Sweeping",
-            ];
-            // Filter to only animations that actually exist
-            const available = widgetAnims.filter(a => actions[a]);
-            // Fallback: grab any non-locomotion anim
-            const skip = ["Walk", "Run", "Idle", "Jump", "Dodge", "Death", "Hit", "Defeat", "Spawn"];
-            const fallback = names.filter(n => !skip.some(s => n.includes(s)));
-            const pool = available.length > 0 ? available : fallback;
-            const randomAnim = pool.length > 0 ? pool[Math.floor(Math.random() * pool.length)] : "Push_Ups";
-            playAnim(randomAnim);
-            timer.current = (actions[randomAnim]?.getClip().duration || 3.0) + 1.0; // Hold it a bit longer
-            
-            // Contextual voice lines for widget interactions
-            const interactLines = ["Cozy!", "This is my spot now!", "Nap time!", "Working out!", "Mine!", "Let me try this!"];
-            playVoiceLine(interactLines[Math.floor(Math.random() * interactLines.length)]);
-          }
-        } else {
-          isMoving = true;
-        }
-      } else if (aiState.current === "WIDGET_PICKUP") {
-        if (timer.current <= 0) {
-          aiState.current = "WIDGET_HOLD";
-          playAnim("Walking_A");
-          const w = window.innerWidth;
-          const h = window.innerHeight;
-          let bestSpot = new THREE.Vector3(0, 0, 0);
-          let maxDist = -1;
-
-          if (params.mayhemMode && friendPosRef && friendPosRef.current) {
-            bestSpot.copy(friendPosRef.current);
-            maxDist = 9999;
-          } else {
-          
-          for (let i = 0; i < 20; i++) {
-             const tx = (Math.random() - 0.5) * (w - 200);
-             const ty = (Math.random() - 0.5) * (h - 200);
-             let minDist = 9999;
-             if (widgets) {
-               widgets.forEach(wid => {
-                  const wx = (wid.params.x / 100) * w - w/2;
-                  const wy = -(wid.params.y / 100) * h + h/2;
-                  const d = Math.hypot(tx - wx, ty - wy);
-                  if (d < minDist) minDist = d;
-               });
-             }
-             if (minDist > maxDist) {
-                maxDist = minDist;
-                bestSpot.set(tx, ty, 0);
-             }
-          }
-          } // End of mayhem check
-          targetPos.current.copy(bestSpot);
-          playVoiceLine("I'm moving this!");
-        }
-      } else if (aiState.current === "WIDGET_HOLD") {
-        const dist = currentPos.current.distanceTo(targetVec);
-
-        if (heldWidgetRef.current) {
-          const percentX = ((currentPos.current.x + window.innerWidth / 2) / window.innerWidth) * 100;
-          const percentY = (-(currentPos.current.y + 80 - window.innerHeight / 2) / window.innerHeight) * 100;
-          heldWidgetRef.current.params.x = percentX;
-          heldWidgetRef.current.params.y = percentY;
-
-          const wNode = document.getElementById("widget-" + heldWidgetRef.current.id);
-          if (wNode) {
-            wNode.style.left = `${percentX}%`;
-            wNode.style.top = `${percentY}%`;
-          }
-          window.dispatchEvent(new CustomEvent("widget-move", { detail: { id: heldWidgetRef.current.id, x: percentX, y: percentY } }));
-        }
-
-        if (dist < 10) {
-          aiState.current = "WIDGET_THROW";
-          const anims = names.filter(n => n.includes("Throw") || n.includes("Punch"));
-          playAnim(anims.length > 0 ? anims[0] : "Interact");
-          timer.current = 0.5;
-          if (params.mayhemMode && friendPosRef && friendPosRef.current) {
-            const dir = new THREE.Vector3().subVectors(friendPosRef.current, currentPos.current).normalize();
-            throwVelocity.current.set(dir.x * 20, -dir.y * 20, 0); // Invert Y because of screen coords
-          } else {
-            throwVelocity.current.set((Math.random() - 0.5) * 15, (Math.random() - 0.5) * 15, 0);
-          }
-          playVoiceLine("Yeet!");
-        } else {
-          isMoving = true;
-        }
-      } else if (aiState.current === "WIDGET_THROW") {
-        if (timer.current <= 0) {
-          aiState.current = "WIDGET_AIRBORNE";
-        }
-      } else if (aiState.current === "WIDGET_AIRBORNE") {
-        const hw = heldWidgetRef.current;
-        if (hw) {
-          const px = (hw.params.x / 100) * window.innerWidth;
-          const py = (hw.params.y / 100) * window.innerHeight;
-
-          const nextX = px + throwVelocity.current.x;
-          const nextY = py - throwVelocity.current.y;
-          
-          // Friction instead of gravity!
-          throwVelocity.current.x *= 0.92;
-          throwVelocity.current.y *= 0.92;
-          
-          const speed = Math.sqrt(throwVelocity.current.x**2 + throwVelocity.current.y**2);
-
-          if (speed < 0.5 || nextY > window.innerHeight - 50 || nextY < 50 || nextX < 50 || nextX > window.innerWidth - 50) {
-            // Landed!
-            aiState.current = "IDLE";
-            playAnim("Idle_A");
-            timer.current = 1.0;
-            heldWidgetRef.current = null;
-
-            if (params.enableCracks !== false) {
-              window.dispatchEvent(new CustomEvent("pet-punch-crack", {
-                detail: { x: nextX - window.innerWidth / 2, y: -(nextY - window.innerHeight / 2) }
-              }));
-            }
-
-            // Save final position to React state
-            if (onUpdateParam) {
-              onUpdateParam(hw.id, "x", (nextX / window.innerWidth) * 100);
-              onUpdateParam(hw.id, "y", (nextY / window.innerHeight) * 100);
-            }
-          } else {
-            hw.params.x = (nextX / window.innerWidth) * 100;
-            hw.params.y = (nextY / window.innerHeight) * 100;
-
-            const wNode = document.getElementById("widget-" + hw.id);
-            if (wNode) {
-              wNode.style.left = `${hw.params.x}%`;
-              wNode.style.top = `${hw.params.y}%`;
-            }
-            window.dispatchEvent(new CustomEvent("widget-move", { detail: { id: hw.id, x: hw.params.x, y: hw.params.y } }));
-          }
-        } else {
-          aiState.current = "IDLE";
-        }
-      } else if (aiState.current === "ICON_MOVE") {
-        const dist = currentPos.current.distanceTo(targetVec);
-        if (dist < 10) {
-          aiState.current = "ICON_THROW";
-          const anims = names.filter(n => n.includes("Spellcast") || n.includes("Throw") || n.includes("Interact"));
-          playAnim(anims.length > 0 ? anims[Math.floor(Math.random() * anims.length)] : "Interact");
-          timer.current = 1.0;
-          playVoiceLine("Incoming!");
-        } else {
-          isMoving = true;
-        }
-      } else if (aiState.current === "ICON_THROW") {
-        if (timer.current <= 0) {
-          aiState.current = "IDLE";
-          playAnim("Idle_A");
-          timer.current = 1.0;
-          import("@tauri-apps/api/core").then(({ invoke }) => {
-            invoke("invoke_throw_random_desktop_icon").catch(console.error);
-          });
-        }
-      } else if (aiState.current === "WIDGET_INTERACT") {
-        if (timer.current <= 0) {
-          aiState.current = "IDLE";
-          playAnim("Idle_A");
-          timer.current = 1 + Math.random() * 2;
-        }
-      } else if (aiState.current === "CLICK_MOVE") {
-        const dist = currentPos.current.distanceTo(targetVec);
-        if (dist < 10) {
-          // Reached the clicked spot! Do a punch!
-          aiState.current = "PUNCH";
-          playAnim("Melee_Unarmed_Attack_Punch_A", 0.2);
-          timer.current = 1.0; // Punch animation duration
-
-          const hitLines = ["Take that!", "Bam!", "Pow!", "Gotcha!"];
-          playVoiceLine(hitLines[Math.floor(Math.random() * hitLines.length)]);
-
-          if (params.enableCracks !== false) {
-            window.dispatchEvent(new CustomEvent("pet-punch-crack", {
-              detail: { x: targetVec.x, y: targetVec.y }
-            }));
-          }
-        } else {
-          isMoving = true;
-        }
-      } else if (aiState.current === "PUNCH") {
-        // Just wait for timer
-        if (timer.current <= 0) {
-          aiState.current = "IDLE";
-          playAnim("Idle_A");
-        }
-      }
-    }
-    else if (behavior === "follow-cursor") {
-      if (cursorTarget.current) {
-        targetVec = new THREE.Vector3(cursorTarget.current.x, cursorTarget.current.y, 0);
-        const dist = currentPos.current.distanceTo(targetVec);
-
-        if (dist > 150) {
-          if (aiState.current !== "RUN") {
-            aiState.current = "RUN";
-            playAnim("Running_A");
-          }
-          isMoving = true;
-        } else if (dist > 50) {
-          if (aiState.current !== "WALK") {
-            aiState.current = "WALK";
-            playAnim("Walking_A");
-          }
-          isMoving = true;
-        } else {
-          if (aiState.current !== "IDLE") {
-            aiState.current = "IDLE";
-            playAnim("Idle_A");
-          }
-        }
-      }
-    }
-    else {
-      // Custom Animation Loop
-      if (aiState.current !== "CUSTOM") {
-        aiState.current = "CUSTOM";
-        playAnim(behavior as string, 0.5);
-      }
-    }
-
     // Movement logic
     if (isMoving) {
-      const dir = new THREE.Vector3().subVectors(targetVec, currentPos.current).normalize();
+      tempDir.subVectors(targetVec, currentPos.current).normalize();
       let currentSpeed = speedWalk;
       if (aiState.current === "RUN" || aiState.current === "WIDGET_MOVE" || aiState.current === "ICON_MOVE") currentSpeed = speedRun;
       else if (aiState.current === "CLICK_MOVE") {
@@ -752,115 +218,82 @@ function PetEntity({ params, isOverlay, widgets, onUpdateParam, isPrimary, myPos
         currentSpeed = dist > 200 ? speedRun : speedWalk;
       }
 
-      currentPos.current.add(dir.multiplyScalar(currentSpeed * delta));
+      currentPos.current.add(tempDir.multiplyScalar(currentSpeed * delta));
 
-      // Rotation: Face the movement direction
-      const angle = Math.atan2(dir.x, dir.y);
-      const targetRot = angle;
-      let r = animGroup.current.rotation.y;
-      let diff = targetRot - r;
-      while (diff < -Math.PI) diff += Math.PI * 2;
-      while (diff > Math.PI) diff -= Math.PI * 2;
+      // Rotation (Correct mapping: invert Y for proper Up/Down facing)
+      const angle = Math.atan2(tempDir.x, -tempDir.y);
+      let r = animGroup.current.rotation.y % (Math.PI * 2);
+      if (r > Math.PI) r -= Math.PI * 2;
+      if (r < -Math.PI) r += Math.PI * 2;
+      animGroup.current.rotation.y = r; // Prevent infinite growth
+
+      let diff = angle - r;
+      if (diff < -Math.PI) diff += Math.PI * 2;
+      if (diff > Math.PI) diff -= Math.PI * 2;
       animGroup.current.rotation.y += diff * 10 * delta;
     } else if (friendPosRef && friendPosRef.current && (aiState.current === "BATTLE_ATTACK" || aiState.current === "BATTLE_HIT" || aiState.current === "BATTLE_HIT_INIT")) {
-      // Face the friend during battle even if not moving
-      const dir = new THREE.Vector3().subVectors(friendPosRef.current, currentPos.current).normalize();
-      if (dir.lengthSq() > 0.001) {
-        const angle = Math.atan2(dir.x, dir.y);
-        let r = animGroup.current.rotation.y;
+      tempDir.subVectors(friendPosRef.current, currentPos.current).normalize();
+      if (tempDir.lengthSq() > 0.001) {
+        const angle = Math.atan2(tempDir.x, -tempDir.y);
+        let r = animGroup.current.rotation.y % (Math.PI * 2);
+        if (r > Math.PI) r -= Math.PI * 2;
+        if (r < -Math.PI) r += Math.PI * 2;
+        animGroup.current.rotation.y = r;
+
         let diff = angle - r;
-        while (diff < -Math.PI) diff += Math.PI * 2;
-        while (diff > Math.PI) diff -= Math.PI * 2;
+        if (diff < -Math.PI) diff += Math.PI * 2;
+        if (diff > Math.PI) diff -= Math.PI * 2;
         animGroup.current.rotation.y += diff * 15 * delta;
       }
     }
 
+    // Apply movement via direct transform
     outerGroup.current.position.copy(currentPos.current);
 
-    // Adjust mixer time scale based on speedScale
-    if (mixer) {
-      mixer.timeScale = speedScale;
-    }
+    if (mixer) mixer.timeScale = speedScale;
   });
 
   return (
-    <group ref={outerGroup} position={[0, -300, 0]}>
-      {/* Lights so the MeshStandardMaterial isn't black! */}
-      <ambientLight intensity={1.5} />
-      <directionalLight position={[10, 20, 30]} intensity={2.5} castShadow />
-
+    <group ref={outerGroup} position={[currentPos.current.x, currentPos.current.y, currentPos.current.z]}>
       <group ref={animGroup} scale={[scale, scale, scale]}>
-        <primitive object={clonedScene} castShadow receiveShadow />
-        {params.name && (
-          <Html position={[0, 1.5, 0]} center style={{ pointerEvents: 'none', whiteSpace: 'nowrap' }}>
-            <div style={{
-              background: 'rgba(0,0,0,0.5)',
-              color: 'white',
-              padding: '2px 8px',
-              borderRadius: '8px',
-              fontFamily: 'sans-serif',
-              fontSize: '12px',
-              fontWeight: 'bold',
-              textShadow: '1px 1px 0 #000'
-            }}>
-              {params.name}
-            </div>
-          </Html>
-        )}
-
-        {/* Render a cute face directly attached to the head bone (disabled for Knight) */}
-        {/* headBone && createPortal(
-          <group>
-            <group position={[0, 0.25, 0.22]} scale={[1.5, 1.5, 1.5]}>
-              <mesh position={[0.06, 0, 0]}><sphereGeometry args={[0.035]} /><meshBasicMaterial color="#111111" /></mesh>
-              <mesh position={[-0.06, 0, 0]}><sphereGeometry args={[0.035]} /><meshBasicMaterial color="#111111" /></mesh>
-              <mesh position={[0.1, -0.04, 0.01]}><sphereGeometry args={[0.02]} /><meshBasicMaterial color="#ff5555" transparent opacity={0.8} /></mesh>
-              <mesh position={[-0.1, -0.04, 0.01]}><sphereGeometry args={[0.02]} /><meshBasicMaterial color="#ff5555" transparent opacity={0.8} /></mesh>
-              <mesh position={[0, -0.05, 0.03]}><boxGeometry args={[0.06, 0.015, 0.01]} /><meshBasicMaterial color="#111111" /></mesh>
-            </group>
-            <group position={[0, 0.25, -0.22]} rotation={[0, Math.PI, 0]} scale={[1.5, 1.5, 1.5]}>
-              <mesh position={[0.06, 0, 0]}><sphereGeometry args={[0.035]} /><meshBasicMaterial color="#111111" /></mesh>
-              <mesh position={[-0.06, 0, 0]}><sphereGeometry args={[0.035]} /><meshBasicMaterial color="#111111" /></mesh>
-              <mesh position={[0.1, -0.04, 0.01]}><sphereGeometry args={[0.02]} /><meshBasicMaterial color="#ff5555" transparent opacity={0.8} /></mesh>
-              <mesh position={[-0.1, -0.04, 0.01]}><sphereGeometry args={[0.02]} /><meshBasicMaterial color="#ff5555" transparent opacity={0.8} /></mesh>
-              <mesh position={[0, -0.05, 0.03]}><boxGeometry args={[0.06, 0.015, 0.01]} /><meshBasicMaterial color="#111111" /></mesh>
-            </group>
-          </group>,
-          headBone
-        ) */}
+        <primitive object={clonedScene} />
       </group>
+      {activePower && (
+        <Suspense fallback={null}>
+          <Billboard position={[0, scale * 2.0, 0]}>
+            <SpriteSheet 
+              url={activePower === "dark_vfx_1" ? "/assets/Dark VFX 1/Dark VFX 1 (40x32).png" : "/assets/Dark VFX 2/Dark VFX 2 (48x64).png"}
+              columns={activePower === "dark_vfx_1" ? 10 : 16}
+              rows={activePower === "dark_vfx_1" ? 2 : 1}
+              fps={15}
+              scale={[scale * 3.0, scale * 3.0, 1]}
+              onFinish={() => setActivePower(null)}
+            />
+          </Billboard>
+        </Suspense>
+      )}
     </group>
   );
 }
 
-
 export function DesktopPet(props: DesktopPetProps) {
   const primaryPosRef = useRef(new THREE.Vector3(0, -300, 0));
-  const primaryStateRef = useRef<any>("IDLE");
+  const primaryStateRef = useRef("IDLE");
+  const companionPosRef = useRef(new THREE.Vector3(100, -300, 0));
+  const companionStateRef = useRef("IDLE");
 
-  const companionPosRef = useRef(new THREE.Vector3(150, -300, 0));
-  const companionStateRef = useRef<any>("IDLE");
+  const primarySkin = props.params.skin || "Knight";
+  const companionSkin = props.params.companionSkin || "Mage";
 
   return (
-    <>
-       <PetEntity 
-          isPrimary={true} 
-          myPosRef={primaryPosRef}
-          myStateRef={primaryStateRef}
-          friendPosRef={props.params.enableCompanion ? companionPosRef : null}
-          friendStateRef={props.params.enableCompanion ? companionStateRef : null}
-          {...props} 
-       />
-       {props.params.enableCompanion && (
-          <PetEntity 
-            isPrimary={false} 
-            myPosRef={companionPosRef}
-            myStateRef={companionStateRef}
-            friendPosRef={primaryPosRef}
-            friendStateRef={primaryStateRef}
-            {...props} 
-          />
-       )}
-    </>
+    <group>
+      <ambientLight intensity={1.5} />
+      <directionalLight position={[10, 20, 30]} intensity={2.5} />
+      
+      <PetEntity key={`primary-${primarySkin}`} isPrimary={true} myPosRef={primaryPosRef} myStateRef={primaryStateRef} friendPosRef={companionPosRef} friendStateRef={companionStateRef} {...props} />
+      {props.params.enableCompanion && (
+        <PetEntity key={`companion-${companionSkin}`} isPrimary={false} myPosRef={companionPosRef} myStateRef={companionStateRef} friendPosRef={primaryPosRef} friendStateRef={primaryStateRef} {...props} />
+      )}
+    </group>
   );
 }

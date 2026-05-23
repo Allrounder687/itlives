@@ -1440,6 +1440,7 @@ export function WebGLEffectRenderer({ videoSrc, effects, isOverlay = false, sele
         <div style={{ position: "absolute", inset: 0, zIndex: 10, pointerEvents: "none" }}>
           <Canvas
             orthographic
+            dpr={[1, 1.5]}
             camera={{ position: [0, 0, 100], zoom: 1 }}
             gl={{ alpha: !hasPostProcessing, antialias: false, powerPreference: "high-performance" }}
             onCreated={({ gl }) => {
@@ -1486,10 +1487,12 @@ export function WebGLEffectRenderer({ videoSrc, effects, isOverlay = false, sele
             {sprites.map(s => <SpriteLayer key={s.id} params={s.params} />)}
 
             {/* Post Processing Shaders */}
-            {(vignette || bloomEffect || glitchEffect || godRays || vhs || liquidRipple || rainOnGlass) && (
-              <EffectComposer>
-                {godRays ? <ScreenSpaceGodRays params={resolveParams(godRays.params)} /> : null as any}
-                {liquidRipple ? <LiquidRipple
+            {(() => {
+              const passes: React.ReactElement[] = [];
+              if (godRays) passes.push(<ScreenSpaceGodRays key="godrays" params={resolveParams(godRays.params)} />);
+              if (liquidRipple) passes.push(
+                <LiquidRipple
+                  key="liquid"
                   isOverlay={isOverlay}
                   intensity={liquidRipple.params.intensity}
                   waveMode={liquidRipple.params.waveMode || "off"}
@@ -1508,23 +1511,27 @@ export function WebGLEffectRenderer({ videoSrc, effects, isOverlay = false, sele
                   autoZoneH={liquidRipple.params.autoZoneH}
                   raindrops={liquidRipple.params.raindrops}
                   rainIntensity={liquidRipple.params.rainIntensity}
-                /> : null as any}
-                {rainOnGlass ? <RainOnGlass params={resolveParams(rainOnGlass.params)} /> : null as any}
-                {vignette ? <Vignette eskil={false} offset={vignette.params.offset || 0.1} darkness={vignette.params.intensity || 0.6} /> : null as any}
-                {bloomEffect ? <Bloom luminanceThreshold={bloomEffect.params.threshold || 0.5} luminanceSmoothing={bloomEffect.params.smoothing || 0.9} intensity={bloomEffect.params.intensity || 1.0} height={bloomEffect.params.height || 300} /> : null as any}
-                {glitchEffect ? <Glitch delay={new THREE.Vector2(glitchEffect.params.delayMin || 1.5, glitchEffect.params.delayMax || 3.5)} duration={new THREE.Vector2(0.1, 0.3)} strength={new THREE.Vector2(glitchEffect.params.strength || 0.1, (glitchEffect.params.strength || 0.1) * 2)} mode={GlitchMode.SPORADIC} active /> : null as any}
-                {vhs ? (
-                  <>
-                    <ChromaticAberration
-                      blendFunction={BlendFunction.NORMAL}
-                      offset={new THREE.Vector2(vhs.params.rgbShift || 0.02, vhs.params.rgbShift || 0.02)}
-                    />
-                    <Noise opacity={vhs.params.noise || 0.3} blendFunction={BlendFunction.OVERLAY} />
-                    <Scanline density={vhs.params.scanlines || 1.0} opacity={0.5} blendFunction={BlendFunction.OVERLAY} />
-                  </>
-                ) : null as any}
-              </EffectComposer>
-            )}
+                />
+              );
+              if (rainOnGlass) passes.push(<RainOnGlass key="rain" params={resolveParams(rainOnGlass.params)} />);
+              if (vignette) passes.push(<Vignette key="vignette" eskil={false} offset={vignette.params.offset || 0.1} darkness={vignette.params.intensity || 0.6} />);
+              if (bloomEffect) passes.push(<Bloom key="bloom" luminanceThreshold={bloomEffect.params.threshold || 0.5} luminanceSmoothing={bloomEffect.params.smoothing || 0.9} intensity={bloomEffect.params.intensity || 1.0} height={bloomEffect.params.height || 300} />);
+              if (glitchEffect) passes.push(<Glitch key="glitch" delay={new THREE.Vector2(glitchEffect.params.delayMin || 1.5, glitchEffect.params.delayMax || 3.5)} duration={new THREE.Vector2(0.1, 0.3)} strength={new THREE.Vector2(glitchEffect.params.strength || 0.1, (glitchEffect.params.strength || 0.1) * 2)} mode={GlitchMode.SPORADIC} active />);
+              
+              if (vhs) {
+                passes.push(<ChromaticAberration key="vhs-chroma" blendFunction={BlendFunction.NORMAL} offset={new THREE.Vector2(vhs.params.rgbShift || 0.02, vhs.params.rgbShift || 0.02)} />);
+                passes.push(<Noise key="vhs-noise" opacity={vhs.params.noise || 0.3} blendFunction={BlendFunction.OVERLAY} />);
+                passes.push(<Scanline key="vhs-scan" density={vhs.params.scanlines || 1.0} opacity={0.5} blendFunction={BlendFunction.OVERLAY} />);
+              }
+
+              if (passes.length === 0) return null;
+
+              return (
+                <EffectComposer key={passes.map(p => p.key).join("-")}>
+                  {passes}
+                </EffectComposer>
+              );
+            })()}
           </Canvas>
         </div>
       )}

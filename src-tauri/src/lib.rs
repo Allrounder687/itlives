@@ -185,7 +185,7 @@ pub fn run() {
                 )?;
             }
 
-            wallpaper::performance::start_monitor(monitor_store.clone());
+            wallpaper::performance::start_monitor(monitor_store.clone(), app.handle().clone());
 
             // Start local API server for Raycast & Rainmeter integrations (needs AppHandle)
             integrations::start(state_store.clone(), app.handle().clone());
@@ -259,8 +259,8 @@ pub fn run() {
             commands::settings::set_wallhaven_api_key,
             commands::settings::set_disabled_sources,
             commands::settings::set_pinterest_urls,
-            commands::settings::set_adult_pin,
-            commands::settings::verify_adult_pin,
+
+
             commands::settings::toggle_hide_video,
             commands::video::fetch_wallhaven_collections,
             commands::batch::start_wallhaven_batch_download,

@@ -7,7 +7,6 @@ interface WallpaperSourcePanelProps {
     wallhavenApiKey: string;
     disabledSources: string[];
     pinterestUrls: string[];
-    isAdultUnlocked?: boolean;
     setWallhavenApiKey: (key: string) => Promise<void>;
     setDisabledSources: (sources: string[]) => Promise<void>;
     setPinterestUrls: (urls: string[]) => Promise<void>;
@@ -27,7 +26,6 @@ const SOURCES: WallpaperSourceOption[] = [
   { id: "wallpaperwaves", name: "Wallpaper Waves Feed", desc: "Premium live loops and animated wallpapers", emoji: "🌊" },
   { id: "wallhaven", name: "WallHaven Feed", desc: "Premium static imagery provider", emoji: "🖼️" },
   { id: "pinterest", name: "Pinterest Feed", desc: "Aesthetic design and photography scrapers", emoji: "📌" },
-  { id: "redgifs", name: "NSFW Engine", desc: "Mature content loops", emoji: "🔞" },
 ];
 
 export function WallpaperSourcePanel({ wallpaper }: WallpaperSourcePanelProps) {
@@ -293,7 +291,7 @@ export function WallpaperSourcePanel({ wallpaper }: WallpaperSourcePanelProps) {
             Enabled Wallpaper Sources
           </label>
           <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-            {SOURCES.filter(s => s.id !== "redgifs" || wallpaper.isAdultUnlocked).map((source) => {
+            {SOURCES.map((source) => {
               const isEnabled = !wallpaper.disabledSources.includes(source.id);
               return (
                 <div

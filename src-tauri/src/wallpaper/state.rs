@@ -41,7 +41,6 @@ pub struct WallpaperState {
     pub wallhaven_api_key: String,
     pub disabled_sources: Vec<String>,
     pub pinterest_urls: Vec<String>,
-    pub adult_pin: Option<String>,
     pub hidden_videos: Vec<String>,
 }
 
@@ -73,7 +72,6 @@ impl Default for WallpaperState {
             pinterest_urls: vec![
                 "https://www.pinterest.com/search/pins/?q=fantasy%20wallpaper&rs=ac&len=12&source_id=ac_ysOA3Mkj&eq=fantasy%20wall&etslf=5698".to_string()
             ],
-            adult_pin: None,
             hidden_videos: Vec::new(),
         }
     }
@@ -496,22 +494,6 @@ pub fn advance_queue(store: &AppStateStore) -> Result<QueueAdvanceResult, String
         video,
         state: state.clone(),
     })
-}
-
-pub fn set_adult_pin(store: &AppStateStore, pin: Option<String>) -> Result<WallpaperState, String> {
-    let state = store.update(|s| {
-        s.adult_pin = pin;
-        Ok(())
-    })?;
-    Ok(state)
-}
-
-pub fn verify_adult_pin(store: &AppStateStore, pin: String) -> bool {
-    let state = get(store);
-    match state.adult_pin {
-        Some(ref p) => p == &pin,
-        None => false,
-    }
 }
 
 pub fn toggle_hide_video(store: &AppStateStore, video_id: String) -> Result<WallpaperState, String> {

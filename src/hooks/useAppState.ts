@@ -46,10 +46,8 @@ export function useAppState() {
     hasMore: true,
     duplicateNotice: null,
     previewDismissed: true,
-    hasAdultPin: false,
     hiddenVideos: [],
-    isAdultUnlocked: false,
-    adultPin: null,
+
     resolutions: null,
     ratios: null,
     colors: null,
