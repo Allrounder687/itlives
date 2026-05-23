@@ -5,3 +5,4 @@ pub mod batch;
 pub mod settings;
 pub mod profiles;
 pub mod package;
+pub mod desktop_icons;

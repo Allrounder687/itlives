@@ -218,6 +218,7 @@ pub fn run() {
             crate::wallpaper::media::media_set_volume,
             commands::wallpaper_control::apply_wallpaper,
             commands::wallpaper_control::stop_wallpaper,
+            commands::desktop_icons::invoke_throw_random_desktop_icon,
             commands::wallpaper_control::get_wallpaper_status,
             commands::settings::list_sources,
             commands::settings::cleanup_cache,

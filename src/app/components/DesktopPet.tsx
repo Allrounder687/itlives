@@ -9,6 +9,7 @@ interface DesktopPetProps {
   params: any;
   isOverlay: boolean;
   widgets?: any[];
+  onUpdateParam?: (layerId: string, paramName: string, value: any) => void;
 }
 
 const MANNEQUIN_PATH = "/assets/KayKit_Character_Animations_1.1/Mannequin Character/characters/Mannequin_Medium.glb";
@@ -32,7 +33,7 @@ useGLTF.preload(ANIM_RANGED_PATH);
 useGLTF.preload(ANIM_SPECIAL_PATH);
 useGLTF.preload(ANIM_TOOLS_PATH);
 
-export function DesktopPet({ params, isOverlay, widgets }: DesktopPetProps) {
+export function DesktopPet({ params, isOverlay, widgets, onUpdateParam }: DesktopPetProps) {
   const outerGroup = useRef<THREE.Group>(null);
   const animGroup = useRef<THREE.Group>(null);
   const clonedScene = useMemo(() => {
@@ -67,11 +68,17 @@ export function DesktopPet({ params, isOverlay, widgets }: DesktopPetProps) {
   const speedScale = params.speed || 1.0;
   
   // AI State
-  const aiState = useRef<"IDLE" | "WALK" | "RUN" | "CLICK_MOVE" | "PUNCH" | "CUSTOM" | "WIDGET_MOVE" | "WIDGET_INTERACT">("IDLE");
+  const aiState = useRef<"IDLE" | "WALK" | "RUN" | "CLICK_MOVE" | "PUNCH" | "CUSTOM" | "WIDGET_MOVE" | "WIDGET_INTERACT" | "DANCE" | "WIDGET_PICKUP" | "WIDGET_HOLD" | "WIDGET_THROW" | "WIDGET_AIRBORNE" | "ICON_MOVE" | "ICON_THROW">("IDLE");
   const targetPos = useRef(new THREE.Vector3(0, 0, 0));
   const currentPos = useRef(new THREE.Vector3(0, -300, 0)); // Start somewhat bottom-center
   const cursorTarget = useRef<{x: number, y: number} | null>(null);
   const timer = useRef(0);
+  const audioVolume = useRef(0);
+  const danceTimer = useRef(0);
+  const singTimer = useRef(0);
+  const heldWidgetRef = useRef<any>(null);
+  const targetWidgetRef = useRef<any>(null);
+  const throwVelocity = useRef(new THREE.Vector3(0, 0, 0));
   
   // Custom Material
   const customMaterial = useMemo(() => {
@@ -136,11 +143,34 @@ export function DesktopPet({ params, isOverlay, widgets }: DesktopPetProps) {
         });
       } catch (err) {}
     };
+    let unlistenFunctions: Array<() => void> = [];
     setupIPC();
+    
+    // Setup Audio Listener for dancing
+    const setupAudio = async () => {
+      try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        const { listen } = await import("@tauri-apps/api/event");
+        if (!isMounted) return;
+        
+        await invoke("start_audio_capture");
+        const u = await listen<number[]>("audio-fft", (e) => {
+          const data = e.payload;
+          if (data && data.length > 0) {
+            let sum = 0;
+            for (let i = 0; i < data.length; i++) sum += data[i];
+            audioVolume.current = sum / data.length;
+          }
+        });
+        unlistenFunctions.push(u);
+      } catch (err) {}
+    };
+    setupAudio();
     
     return () => {
       isMounted = false;
       if (unlisten) unlisten();
+      unlistenFunctions.forEach(fn => fn());
     };
   }, [behavior, isOverlay]);
 
@@ -292,6 +322,32 @@ export function DesktopPet({ params, isOverlay, widgets }: DesktopPetProps) {
     let isMoving = false;
     let targetVec = targetPos.current;
     
+    const vol = audioVolume.current;
+    
+    // Check if music is loud enough to trigger dancing!
+    if (vol > 0.05 && !aiState.current.startsWith("WIDGET_") && aiState.current !== "PUNCH" && aiState.current !== "CLICK_MOVE") {
+      danceTimer.current = 2.0; // Keep dancing 2s after silence
+      if (aiState.current !== "DANCE") {
+        aiState.current = "DANCE";
+        playAnim("Cheering");
+        singTimer.current = 2.0; // Wait 2s before first line
+      } else {
+        singTimer.current -= delta;
+        if (singTimer.current <= 0) {
+          const singLines = ["La la la!", "Ooh yeah!", "Singing in the rain!", "Drop the beat!"];
+          playVoiceLine(singLines[Math.floor(Math.random() * singLines.length)]);
+          singTimer.current = 10.0 + Math.random() * 5.0; // Sing every 10-15s
+        }
+      }
+    } else if (aiState.current === "DANCE") {
+      danceTimer.current -= delta;
+      if (danceTimer.current <= 0) {
+        aiState.current = "IDLE";
+        playAnim("Idle_A");
+        timer.current = 1.0;
+      }
+    }
+
     if (behavior === "idle-only") {
       if (aiState.current !== "IDLE") {
         aiState.current = "IDLE";
@@ -315,9 +371,18 @@ export function DesktopPet({ params, isOverlay, widgets }: DesktopPetProps) {
       if (aiState.current === "IDLE") {
         if (timer.current <= 0) {
           const roll = Math.random();
-          if (widgets && widgets.length > 0 && roll > 0.6) {
+          if (roll > 0.85 && !isOverlay) {
+            // Target a random desktop icon (only if in main app or maybe just anywhere)
+            // Actually wait, we can just throw desktop icons from anywhere!
+            aiState.current = "ICON_MOVE";
+            const w = window.innerWidth;
+            const h = window.innerHeight;
+            targetPos.current.set((Math.random() - 0.5) * (w - 100), (Math.random() - 0.5) * (h - 100), 0);
+            playAnim("Running_A");
+          } else if (widgets && widgets.length > 0 && roll > 0.6) {
             // Target a widget!
             const wTarget = widgets[Math.floor(Math.random() * widgets.length)];
+            targetWidgetRef.current = wTarget;
             const sw = window.innerWidth;
             const sh = window.innerHeight;
             const px = wTarget.params.x || 50;
@@ -338,10 +403,12 @@ export function DesktopPet({ params, isOverlay, widgets }: DesktopPetProps) {
             aiState.current = "WIDGET_MOVE";
             playAnim("Running_A");
           } else if (roll > 0.8) {
-            // Just do a fun animation and stay idle
-            const anims = ["Cheering", "Waving", "Interact", "PickUp", "Sit_Floor_Idle", "Fishing_Idle", "Working_A"];
-            playAnim(anims[Math.floor(Math.random() * anims.length)]);
-            timer.current = 2 + Math.random() * 3;
+            // Pick a completely random animation from all available animations!
+            const skip = ["Walk", "Run", "Idle", "Jump", "Dodge", "Death", "Hit", "Defeat", "Spawn"];
+            const availableAnims = names.filter(n => !skip.some(s => n.includes(s)));
+            const randomAnim = availableAnims.length > 0 ? availableAnims[Math.floor(Math.random() * availableAnims.length)] : "Cheering";
+            playAnim(randomAnim);
+            timer.current = actions[randomAnim]?.getClip().duration || 2.0;
           } else {
             // Time to walk somewhere new!
             const w = window.innerWidth;
@@ -364,12 +431,125 @@ export function DesktopPet({ params, isOverlay, widgets }: DesktopPetProps) {
       } else if (aiState.current === "WIDGET_MOVE") {
         const dist = currentPos.current.distanceTo(targetVec);
         if (dist < 10) {
-          aiState.current = "WIDGET_INTERACT";
-          const anims = ["Push_Ups", "Working_A", "Melee_Unarmed_Attack_Punch_A"];
-          playAnim(anims[Math.floor(Math.random() * anims.length)]);
-          timer.current = 3 + Math.random() * 4;
+          if (Math.random() > 0.5) {
+            aiState.current = "WIDGET_PICKUP";
+            heldWidgetRef.current = targetWidgetRef.current;
+            const anims = names.filter(n => n.includes("Interact") || n.includes("PickUp"));
+            playAnim(anims.length > 0 ? anims[0] : "Interact");
+            timer.current = 1.0;
+            playVoiceLine("Heave!");
+          } else {
+            aiState.current = "WIDGET_INTERACT";
+            const skip = ["Walk", "Run", "Idle", "Jump", "Dodge", "Death", "Hit", "Defeat", "Spawn"];
+            const availableAnims = names.filter(n => !skip.some(s => n.includes(s)));
+            const randomAnim = availableAnims.length > 0 ? availableAnims[Math.floor(Math.random() * availableAnims.length)] : "Push_Ups";
+            playAnim(randomAnim);
+            timer.current = actions[randomAnim]?.getClip().duration || 3.0;
+          }
         } else {
           isMoving = true;
+        }
+      } else if (aiState.current === "WIDGET_PICKUP") {
+        if (timer.current <= 0) {
+          aiState.current = "WIDGET_HOLD";
+          playAnim("Walking_A");
+          const w = window.innerWidth;
+          const h = window.innerHeight;
+          targetPos.current.set((Math.random() - 0.5) * (w - 100), (Math.random() - 0.5) * (h - 100), 0);
+          playVoiceLine("I'm moving this!");
+        }
+      } else if (aiState.current === "WIDGET_HOLD") {
+        const dist = currentPos.current.distanceTo(targetVec);
+        
+        if (heldWidgetRef.current) {
+           const percentX = ((currentPos.current.x + window.innerWidth/2) / window.innerWidth) * 100;
+           const percentY = (-(currentPos.current.y + 80 - window.innerHeight/2) / window.innerHeight) * 100;
+           heldWidgetRef.current.params.x = percentX;
+           heldWidgetRef.current.params.y = percentY;
+           
+           const wNode = document.getElementById("widget-" + heldWidgetRef.current.id);
+           if (wNode) {
+               wNode.style.left = `${percentX}%`;
+               wNode.style.top = `${percentY}%`;
+           }
+           window.dispatchEvent(new CustomEvent("widget-move", { detail: { id: heldWidgetRef.current.id, x: percentX, y: percentY } }));
+        }
+        
+        if (dist < 10) {
+          aiState.current = "WIDGET_THROW";
+          const anims = names.filter(n => n.includes("Throw") || n.includes("Punch"));
+          playAnim(anims.length > 0 ? anims[0] : "Interact");
+          timer.current = 0.5;
+          throwVelocity.current.set((Math.random() - 0.5) * 30, 25, 0);
+          playVoiceLine("Yeet!");
+        } else {
+          isMoving = true;
+        }
+      } else if (aiState.current === "WIDGET_THROW") {
+        if (timer.current <= 0) {
+          aiState.current = "WIDGET_AIRBORNE";
+        }
+      } else if (aiState.current === "WIDGET_AIRBORNE") {
+         const hw = heldWidgetRef.current;
+         if (hw) {
+             const px = (hw.params.x / 100) * window.innerWidth;
+             const py = (hw.params.y / 100) * window.innerHeight;
+             
+             const nextX = px + throwVelocity.current.x;
+             const nextY = py - throwVelocity.current.y;
+             throwVelocity.current.y -= 1.5; // Gravity
+             
+             if (nextY > window.innerHeight - 50 || nextX < 0 || nextX > window.innerWidth) {
+               // Landed!
+               aiState.current = "IDLE";
+               playAnim("Idle_A");
+               timer.current = 1.0;
+               heldWidgetRef.current = null;
+               
+               if (params.enableCracks !== false) {
+                 window.dispatchEvent(new CustomEvent("pet-punch-crack", {
+                   detail: { x: nextX - window.innerWidth/2, y: -(nextY - window.innerHeight/2) }
+                 }));
+               }
+               
+               // Save final position to React state
+               if (onUpdateParam) {
+                 onUpdateParam(hw.id, "x", (nextX / window.innerWidth) * 100);
+                 onUpdateParam(hw.id, "y", (nextY / window.innerHeight) * 100);
+               }
+             } else {
+               hw.params.x = (nextX / window.innerWidth) * 100;
+               hw.params.y = (nextY / window.innerHeight) * 100;
+               
+               const wNode = document.getElementById("widget-" + hw.id);
+               if (wNode) {
+                   wNode.style.left = `${hw.params.x}%`;
+                   wNode.style.top = `${hw.params.y}%`;
+               }
+               window.dispatchEvent(new CustomEvent("widget-move", { detail: { id: hw.id, x: hw.params.x, y: hw.params.y } }));
+             }
+         } else {
+            aiState.current = "IDLE";
+         }
+      } else if (aiState.current === "ICON_MOVE") {
+        const dist = currentPos.current.distanceTo(targetVec);
+        if (dist < 10) {
+          aiState.current = "ICON_THROW";
+          const anims = names.filter(n => n.includes("Spellcast") || n.includes("Throw") || n.includes("Interact"));
+          playAnim(anims.length > 0 ? anims[Math.floor(Math.random() * anims.length)] : "Interact");
+          timer.current = 1.0;
+          playVoiceLine("Incoming!");
+        } else {
+          isMoving = true;
+        }
+      } else if (aiState.current === "ICON_THROW") {
+        if (timer.current <= 0) {
+          aiState.current = "IDLE";
+          playAnim("Idle_A");
+          timer.current = 1.0;
+          import("@tauri-apps/api/core").then(({ invoke }) => {
+            invoke("invoke_throw_random_desktop_icon").catch(console.error);
+          });
         }
       } else if (aiState.current === "WIDGET_INTERACT") {
         if (timer.current <= 0) {
@@ -441,7 +621,7 @@ export function DesktopPet({ params, isOverlay, widgets }: DesktopPetProps) {
     if (isMoving) {
       const dir = new THREE.Vector3().subVectors(targetVec, currentPos.current).normalize();
       let currentSpeed = speedWalk;
-      if (aiState.current === "RUN") currentSpeed = speedRun;
+      if (aiState.current === "RUN" || aiState.current === "WIDGET_MOVE" || aiState.current === "ICON_MOVE") currentSpeed = speedRun;
       else if (aiState.current === "CLICK_MOVE") {
         const dist = currentPos.current.distanceTo(targetVec);
         currentSpeed = dist > 200 ? speedRun : speedWalk;

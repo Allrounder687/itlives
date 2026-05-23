@@ -189,6 +189,19 @@ function Home() {
     }
   };
 
+  const handleOverlayParamUpdate = useCallback((layerId: string, paramName: string, value: any) => {
+    setOverlayConfig(prev => {
+      if (!prev || !prev.layers) return prev;
+      const newLayers = prev.layers.map(layer => {
+        if (layer.id === layerId) {
+          return { ...layer, params: { ...layer.params, [paramName]: value } };
+        }
+        return layer;
+      });
+      return { ...prev, layers: newLayers };
+    });
+  }, []);
+
   if (isOverlayMode) {
     return (
       <main className="workspace-overlay" style={{ background: "transparent", width: "100vw", height: "100vh", overflow: "hidden" }}>
@@ -200,7 +213,12 @@ function Home() {
           }
         ` }} />
         {/* Overlay ignores all pointer events at OS level and captures desktop directly */}
-        <WebGLEffectRenderer videoSrc={overlayConfig?.videoSrc || ""} effects={overlayConfig?.layers || []} isOverlay={true} />
+        <WebGLEffectRenderer 
+          videoSrc={overlayConfig?.videoSrc || ""} 
+          effects={overlayConfig?.layers || []} 
+          isOverlay={true} 
+          onUpdateParam={handleOverlayParamUpdate}
+        />
       </main>
     );
   }

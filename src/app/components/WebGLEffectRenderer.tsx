@@ -364,7 +364,7 @@ function InteractiveParticles({ trailEnabled, rippleEnabled, isOverlay, trailPar
 // ─────────────────────────────────────────────────────────────
 // 3. Audio Visualizer System
 // ─────────────────────────────────────────────────────────────
-function AudioVisualizer({ params }: { params: any }) {
+function AudioVisualizer({ params, layerId }: { params: any, layerId?: string }) {
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const fftData = useRef<number[]>(new Array(64).fill(0));
   const smoothedData = useRef<number[]>(new Array(64).fill(0));
@@ -1419,17 +1419,17 @@ export function WebGLEffectRenderer({ videoSrc, effects, isOverlay = false, sele
 
       {/* Clock Widget (CSS overlay — not WebGL) */}
       {clock && (
-        <ClockWidget params={clock.params} autoColor={autoColor} />
+        <ClockWidget params={clock.params} layerId={clock.id} autoColor={autoColor} />
       )}
 
       {/* Music Player Widget */}
       {musicPlayer && (
-        <MusicPlayerWidget params={musicPlayer.params} isOverlay={isOverlay} />
+        <MusicPlayerWidget params={musicPlayer.params} layerId={musicPlayer.id} isOverlay={isOverlay} />
       )}
 
       {/* App Launcher Widget */}
       {appLauncher && (
-        <AppLauncherWidget params={appLauncher.params} isOverlay={isOverlay} />
+        <AppLauncherWidget params={appLauncher.params} layerId={appLauncher.id} isOverlay={isOverlay} />
       )}
 
       {/* Screen Cracks from Desktop Pet */}
@@ -1456,7 +1456,7 @@ export function WebGLEffectRenderer({ videoSrc, effects, isOverlay = false, sele
             {particleEmitter && <ParticleEmitter params={resolveParams(particleEmitter.params)} isOverlay={isOverlay} />}
             {stars && <Starfield params={resolveParams(stars.params)} />}
             {fog && <FogEffect params={resolveParams(fog.params)} />}
-            {audioVis && <AudioVisualizer params={resolveParams(audioVis.params)} />}
+            {audioVis && <AudioVisualizer params={resolveParams(audioVis.params)} layerId={audioVis.id} />}
             {waterCaustics && <WaterCaustics params={resolveParams(waterCaustics.params)} />}
             {blowingLeaves && <BlowingLeaves params={resolveParams(blowingLeaves.params)} />}
             {desktopPet && (
@@ -1464,6 +1464,7 @@ export function WebGLEffectRenderer({ videoSrc, effects, isOverlay = false, sele
                 params={resolveParams(desktopPet.params)} 
                 isOverlay={isOverlay} 
                 widgets={[clock, musicPlayer, appLauncher, audioVis].filter(Boolean)} 
+                onUpdateParam={onUpdateParam}
               />
             )}
             <InteractiveParticles
@@ -1534,7 +1535,7 @@ export function WebGLEffectRenderer({ videoSrc, effects, isOverlay = false, sele
 // ─────────────────────────────────────────────────────────────
 // Clock Widget (CSS-based, not WebGL)
 // ─────────────────────────────────────────────────────────────
-function ClockWidget({ params, autoColor }: { params: any; autoColor?: string }) {
+function ClockWidget({ params, layerId, autoColor }: { params: any; layerId?: string; autoColor?: string }) {
   const [timeState, setTimeState] = useState({ text: "", dayText: "", h: 0, m: 0, s: 0 });
   const format = params.format || "24h";
   const style = params.style || "minimal";
@@ -1594,7 +1595,7 @@ function ClockWidget({ params, autoColor }: { params: any; autoColor?: string })
     const hAngle = ((timeState.h % 12) / 12) * 360 + (timeState.m / 60) * 30;
     
     return (
-      <div style={{ ...baseStyle, width: size, height: size, border: `4px solid ${color}`, borderRadius: "50%", boxShadow: `0 0 20px rgba(0,0,0,0.3), inset 0 0 20px rgba(0,0,0,0.3)` }}>
+      <div id={layerId ? `widget-${layerId}` : undefined} style={{ ...baseStyle, width: size, height: size, border: `4px solid ${color}`, borderRadius: "50%", boxShadow: `0 0 20px rgba(0,0,0,0.3), inset 0 0 20px rgba(0,0,0,0.3)` }}>
         {/* Hour markers */}
         {[...Array(12)].map((_, i) => (
           <div key={i} style={{ position: "absolute", left: "50%", top: "4px", width: "4px", height: "12px", background: color, transformOrigin: `50% ${center - 4}px`, transform: `translateX(-50%) rotate(${i * 30}deg)`, opacity: 0.6 }} />
@@ -1621,7 +1622,7 @@ function ClockWidget({ params, autoColor }: { params: any; autoColor?: string })
 
   if (style === "futuristic-day") {
     return (
-      <div style={{ ...baseStyle, display: "flex", flexDirection: "column", alignItems: "center" }}>
+      <div id={layerId ? `widget-${layerId}` : undefined} style={{ ...baseStyle, display: "flex", flexDirection: "column", alignItems: "center" }}>
         {/* Import futuristic font inline just for this style if not globally available */}
         <style dangerouslySetInnerHTML={{__html: `
           @import url('https://fonts.googleapis.com/css2?family=Syncopate:wght@400;700&display=swap');
@@ -1651,13 +1652,13 @@ function ClockWidget({ params, autoColor }: { params: any; autoColor?: string })
     );
   }
 
-  return <div style={styleMap[style] || styleMap.minimal}>{timeState.text}</div>;
+  return <div id={layerId ? `widget-${layerId}` : undefined} style={styleMap[style] || styleMap.minimal}>{timeState.text}</div>;
 }
 
 // ─────────────────────────────────────────────────────────────
 // Music Player Widget (CSS-based, not WebGL)
 // ─────────────────────────────────────────────────────────────
-function MusicPlayerWidget({ params, isOverlay }: { params: any; isOverlay?: boolean }) {
+function MusicPlayerWidget({ params, layerId, isOverlay }: { params: any; layerId?: string; isOverlay?: boolean }) {
   const [media, setMedia] = useState({ title: "", artist: "", album: "", is_playing: false, thumbnail_base64: null as string | null });
   const [timeline, setTimeline] = useState({ position: 0, start_time: 0, end_time: 0 });
   const [isHovered, setIsHovered] = useState(false);
@@ -1813,6 +1814,7 @@ function MusicPlayerWidget({ params, isOverlay }: { params: any; isOverlay?: boo
 
   return (
     <div 
+      id={layerId ? `widget-${layerId}` : undefined}
       className="interactive-widget"
       style={{ ...baseStyle, ...currentTheme }} 
       onMouseEnter={() => setIsHovered(true)} 
@@ -1912,7 +1914,7 @@ function MusicPlayerWidget({ params, isOverlay }: { params: any; isOverlay?: boo
 // ─────────────────────────────────────────────────────────────
 // App Launcher Widget
 // ─────────────────────────────────────────────────────────────
-function AppLauncherWidget({ params, isOverlay }: { params: any; isOverlay?: boolean }) {
+function AppLauncherWidget({ params, layerId, isOverlay }: { params: any; layerId?: string; isOverlay?: boolean }) {
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
 
   const apps = params.apps || [];
@@ -2010,14 +2012,14 @@ function AppLauncherWidget({ params, isOverlay }: { params: any; isOverlay?: boo
 
   if (apps.length === 0) {
     return (
-      <div className="interactive-widget" style={containerStyle}>
+      <div id={layerId ? `widget-${layerId}` : undefined} className="interactive-widget" style={containerStyle}>
         <div style={{ opacity: 0.6, fontSize: "14px", padding: "0 10px" }}>Add apps in properties panel</div>
       </div>
     );
   }
 
   return (
-    <div className="interactive-widget" style={containerStyle}>
+    <div id={layerId ? `widget-${layerId}` : undefined} className="interactive-widget" style={containerStyle}>
       {apps.map((app: any, idx: number) => {
         const isHovered = hoverIndex === idx;
         const scaleHover = isDock && isHovered ? 1.2 : 1.0;
