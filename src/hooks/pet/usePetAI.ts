@@ -27,6 +27,8 @@ export interface PetAIParams {
   isOverlay: boolean;
   widgets?: any[];
   triggerPower?: (vfxId: string) => void;
+  generateResponse?: (prompt: string, context?: number[]) => Promise<{ text: string, sentiment: string, context: number[] } | null>;
+  aiVoiceOnly?: boolean;
 }
 
 export function usePetAI() {
@@ -120,7 +122,7 @@ export function usePetAI() {
             const randomSpell = spellAnims.length > 0 ? spellAnims[Math.floor(Math.random() * spellAnims.length)] : "Cheering";
             p.playAnim(randomSpell);
             p.timer.current = p.actions[randomSpell]?.getClip().duration || 2.0;
-            p.playVoiceLine("Feel my power!");
+            if (!p.aiVoiceOnly) p.playVoiceLine("Feel my power!");
             
             // Randomly pick between Dark VFX 1 and 2
             const vfxId = Math.random() > 0.5 ? "dark_vfx_1" : "dark_vfx_2";
@@ -139,7 +141,13 @@ export function usePetAI() {
 
             // Fun voice lines for idle animations
             const idleLines = ["Hmm...", "What's over here?", "La la la!", "Bored!", "Stretching time!"];
-            if (Math.random() > 0.6) p.playVoiceLine(idleLines[Math.floor(Math.random() * idleLines.length)]);
+            if (p.generateResponse && Math.random() > 0.4) {
+              p.generateResponse("You are bored and wandering around my desktop screen. Say a random, very short, funny thought out loud.").then(res => {
+                if (res && res.text) p.playVoiceLine(res.text);
+              });
+            } else if (!p.aiVoiceOnly && Math.random() > 0.6) {
+              p.playVoiceLine(idleLines[Math.floor(Math.random() * idleLines.length)]);
+            }
           } else {
             // 30% chance: walk somewhere new
             const w = window.innerWidth;
@@ -159,7 +167,7 @@ export function usePetAI() {
             p.timer.current = 1.0 + Math.random() * 2.0;
             if (dist < 80 && Math.random() > 0.7) {
               p.playAnim("Cheering");
-              p.playVoiceLine("Hello friend!");
+              if (!p.aiVoiceOnly) p.playVoiceLine("Hello friend!");
             }
           } else {
             isMoving = true;
@@ -179,13 +187,13 @@ export function usePetAI() {
         p.aiState.current = "BATTLE_HIT";
         p.timer.current = 0.5;
         p.playAnim("Hit_A");
-        p.playVoiceLine(Math.random() > 0.5 ? "Ouch!" : "Hey!");
+        if (!p.aiVoiceOnly) p.playVoiceLine(Math.random() > 0.5 ? "Ouch!" : "Hey!");
       } else if (p.aiState.current === "BATTLE_HIT") {
         if (p.timer.current <= 0) {
           p.aiState.current = "BATTLE_ATTACK"; // Retaliate!
           p.timer.current = 1.0;
           p.playAnim(p.getAttackAnimForSkin(p.skinName));
-          p.playVoiceLine("My turn!");
+          if (!p.aiVoiceOnly) p.playVoiceLine("My turn!");
           if (p.friendStateRef) p.friendStateRef.current = "BATTLE_HIT_INIT";
         }
       } else if (p.aiState.current === "WALK") {
@@ -211,7 +219,7 @@ export function usePetAI() {
             const anims = p.names.filter((n) => n.includes("Interact") || n.includes("PickUp"));
             p.playAnim(anims.length > 0 ? anims[0] : "Interact");
             p.timer.current = 1.0;
-            p.playVoiceLine("Heave!");
+            if (!p.aiVoiceOnly) p.playVoiceLine("Heave!");
           } else {
             // 75% chance: do a fun animation ON the widget (sleep, sit, push-ups, etc.)
             p.aiState.current = "WIDGET_INTERACT";
@@ -247,7 +255,13 @@ export function usePetAI() {
 
             // Contextual voice lines for widget interactions
             const interactLines = ["Cozy!", "This is my spot now!", "Nap time!", "Working out!", "Mine!", "Let me try this!"];
-            p.playVoiceLine(interactLines[Math.floor(Math.random() * interactLines.length)]);
+            if (p.generateResponse && Math.random() > 0.5) {
+              p.generateResponse("You just found a desktop widget and you're interacting with it. Say a quick, funny reaction.").then(res => {
+                if (res && res.text) p.playVoiceLine(res.text);
+              });
+            } else if (!p.aiVoiceOnly) {
+              p.playVoiceLine(interactLines[Math.floor(Math.random() * interactLines.length)]);
+            }
           }
         } else {
           isMoving = true;
@@ -376,7 +390,13 @@ export function usePetAI() {
           const anims = p.names.filter((n) => n.includes("Spellcast") || n.includes("Throw") || n.includes("Interact"));
           p.playAnim(anims.length > 0 ? anims[Math.floor(Math.random() * anims.length)] : "Interact");
           p.timer.current = 1.0;
-          p.playVoiceLine("Incoming!");
+          if (p.generateResponse && Math.random() > 0.5) {
+            p.generateResponse("You are about to pick up one of my desktop icons and throw it across the screen! Say a mischievous 1-sentence warning.").then(res => {
+              if (res && res.text) p.playVoiceLine(res.text);
+            });
+          } else if (!p.aiVoiceOnly) {
+            p.playVoiceLine("Incoming!");
+          }
         } else {
           isMoving = true;
         }
@@ -393,7 +413,7 @@ export function usePetAI() {
         if (p.timer.current <= 0) {
           p.aiState.current = "IDLE";
           p.playAnim("Idle_A");
-          p.timer.current = 1 + Math.random() * 2;
+            p.timer.current = 1 + Math.random() * 2;
         }
       } else if (p.aiState.current === "CLICK_MOVE") {
         const dist = p.currentPos.current.distanceTo(targetVec);
@@ -404,7 +424,7 @@ export function usePetAI() {
           p.timer.current = 1.0; // Punch animation duration
 
           const hitLines = ["Take that!", "Bam!", "Pow!", "Gotcha!"];
-          p.playVoiceLine(hitLines[Math.floor(Math.random() * hitLines.length)]);
+          if (!p.aiVoiceOnly) p.playVoiceLine(hitLines[Math.floor(Math.random() * hitLines.length)]);
 
           if (p.params.enableCracks !== false) {
             window.dispatchEvent(

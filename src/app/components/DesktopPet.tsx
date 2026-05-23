@@ -12,6 +12,7 @@ import { useTauriAudio } from "../../hooks/pet/useTauriAudio";
 import { useKokoroTTS } from "../../hooks/pet/useKokoroTTS";
 import { usePetAI, PetAIParams } from "../../hooks/pet/usePetAI";
 import { useTauriClick } from "../../hooks/pet/useTauriClick";
+import { useOllama } from "../../hooks/pet/useOllama";
 
 export type PetBehavior = "wander" | "follow-cursor" | "idle-only";
 
@@ -109,6 +110,8 @@ function PetEntity({ params, isOverlay, widgets, onUpdateParam, isPrimary, myPos
 
   const [headBone, setHeadBone] = useState<THREE.Object3D | null>(null);
 
+  const { generateResponse } = useOllama();
+
   useEffect(() => {
     const head = clonedScene.getObjectByName('head');
     if (head) setHeadBone(head);
@@ -166,6 +169,42 @@ function PetEntity({ params, isOverlay, widgets, onUpdateParam, isPrimary, myPos
     action.play();
   }, [actions]);
 
+  // Handle LLM Chat Responses
+  useEffect(() => {
+    let unlisten: any;
+    import("@tauri-apps/api/event").then(({ listen }) => {
+      listen("pet-chat-response", (e: any) => {
+        const { text, sentiment } = e.payload;
+        
+        // Interrupt whatever the pet is doing
+        playVoiceLine(text);
+        
+        // Pick animation based on sentiment
+        let anim = "Cheering";
+        if (sentiment === "sad") anim = "Defeat";
+        else if (sentiment === "angry") anim = "Melee_Unarmed_Attack_Punch_A";
+        else if (sentiment === "surprised") anim = "Jump";
+        else if (sentiment === "magic") anim = "Spellcast_Shoot";
+        else if (sentiment === "neutral") anim = "Waving";
+        
+        if (isPrimary && aiState) {
+          aiState.current = "CUSTOM";
+          playAnim(anim);
+          // Resume idle after animation duration
+          setTimeout(() => {
+            if (aiState.current === "CUSTOM") {
+              aiState.current = "IDLE";
+              playAnim("Idle_A");
+            }
+          }, 3000);
+        }
+      }).then(u => unlisten = u);
+    });
+    return () => {
+      if (unlisten) unlisten();
+    };
+  }, [playVoiceLine, playAnim, isPrimary, aiState]);
+
   // Handle global click
   useTauriClick(behaviorRef, isOverlay, (clampedX, clampedY) => {
     if (behaviorRef.current === "wander") return;
@@ -200,7 +239,7 @@ function PetEntity({ params, isOverlay, widgets, onUpdateParam, isPrimary, myPos
       behavior, aiState, timer, danceTimer, singTimer, targetPos, currentPos, cursorTarget,
       audioVolume, heldWidgetRef, targetWidgetRef, throwVelocity, friendPosRef, friendStateRef,
       playAnim, playVoiceLine, getAttackAnimForSkin, skinName, names, actions, params, isOverlay, widgets,
-      triggerPower
+      triggerPower, generateResponse, aiVoiceOnly: params.aiVoiceOnly === true
     };
 
     const { isMoving, targetVec } = updateAI(delta, aiParams);

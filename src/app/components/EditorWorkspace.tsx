@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect, startTransition } from "react";
+import { useState, useEffect, startTransition, useRef } from "react";
 import { EffectLayer } from "./CanvasEffectRenderer";
 import { WebGLEffectRenderer } from "./WebGLEffectRenderer";
 import { VideoResult } from "@/hooks/useWallpaper";
 import { DESKTOP_PET_ANIMATIONS } from "./DesktopPetAnimations";
+import { useOllama } from "../../hooks/pet/useOllama";
 import "./editor.css";
 
 
@@ -161,8 +162,26 @@ export function EditorWorkspace({ currentVideo, onSelectVideo, onApplyWallpaper,
   ]);
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>("vignette-1");
 
+  const { generateResponse, isThinking } = useOllama();
+  const [chatMessage, setChatMessage] = useState("");
+  const [chatHistory, setChatHistory] = useState<{role: "user"|"pet", text: string}[]>([]);
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const chatContext = useRef<number[]>([]);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
+  const hasDesktopPet = layers.some(l => l.type === "desktop-pet" && l.enabled);
+
   const addEffect = (type: keyof typeof EFFECT_TEMPLATES) => {
     const template = EFFECT_TEMPLATES[type];
+    if (type === "desktop-pet") {
+      try {
+        const defaultParams = localStorage.getItem("default-pet-params");
+        if (defaultParams) {
+          template.params = JSON.parse(defaultParams);
+        }
+      } catch(e) {}
+    }
+
     const newLayer: EffectLayer = {
       ...template,
       id: `${type}-${Date.now()}`,
@@ -203,6 +222,32 @@ export function EditorWorkspace({ currentVideo, onSelectVideo, onApplyWallpaper,
       }
     }
   };
+
+  const handleSendChatMessage = async () => {
+    if (!chatMessage.trim()) return;
+    const msg = chatMessage;
+    setChatMessage("");
+    setChatHistory(prev => [...prev, { role: "user", text: msg }]);
+
+    const res = await generateResponse(msg, chatContext.current);
+    if (res) {
+      chatContext.current = res.context;
+      setChatHistory(prev => [...prev, { role: "pet", text: res.text }]);
+      import("@tauri-apps/api/core").then(({ invoke }) => {
+        import("@tauri-apps/api/event").then(({ emit }) => {
+          emit("pet-chat-response", { text: res.text, sentiment: res.sentiment });
+        });
+      });
+    } else {
+      setChatHistory(prev => [...prev, { role: "pet", text: "*Failed to connect to Ollama. Make sure it is running locally.*" }]);
+    }
+  };
+
+  useEffect(() => {
+    if (chatEndRef.current) {
+      chatEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [chatHistory, isChatOpen]);
 
   useEffect(() => {
     const handleLoadProfileEvent = (e: any) => {
@@ -1458,7 +1503,13 @@ export function EditorWorkspace({ currentVideo, onSelectVideo, onApplyWallpaper,
                 <div className="property-group">
                   <label className="checkbox-label">
                     <input type="checkbox" checked={selectedLayer.params.muted === true} onChange={(e) => updateParam(selectedLayer.id, "muted", e.target.checked)} />
-                    Mute Voice Lines
+                    Mute All Voice Lines
+                  </label>
+                </div>
+                <div className="property-group">
+                  <label className="checkbox-label">
+                    <input type="checkbox" checked={selectedLayer.params.aiVoiceOnly === true} onChange={(e) => updateParam(selectedLayer.id, "aiVoiceOnly", e.target.checked)} />
+                    AI Voice Lines Only (No Default Phrases)
                   </label>
                 </div>
                 <div className="property-group">
@@ -1476,6 +1527,18 @@ export function EditorWorkspace({ currentVideo, onSelectVideo, onApplyWallpaper,
                 <div className="property-group">
                   <label>Pet Color (Fallback)</label>
                   <input type="color" value={selectedLayer.params.color || "#00aaff"} onChange={(e) => updateParam(selectedLayer.id, "color", e.target.value)} style={{ width: "100%", height: "36px", border: "none", borderRadius: "8px", cursor: "pointer" }} />
+                </div>
+                <div className="property-group" style={{ marginTop: "16px" }}>
+                  <button 
+                    className="action-btn action-btn--secondary" 
+                    style={{ width: "100%", background: "rgba(154, 230, 0, 0.1)", color: "#9ae600", borderColor: "rgba(154, 230, 0, 0.3)" }}
+                    onClick={() => {
+                      localStorage.setItem("default-pet-params", JSON.stringify(selectedLayer.params));
+                      alert("Saved as default Pet settings!");
+                    }}
+                  >
+                    💾 Save as Default Pet Settings
+                  </button>
                 </div>
               </>
             )}
@@ -1949,6 +2012,113 @@ export function EditorWorkspace({ currentVideo, onSelectVideo, onApplyWallpaper,
           </div>
         </div>
       )}
+
+      {/* Floating Pet Chat UI */}
+      {hasDesktopPet && (
+        <div style={{
+          position: "fixed",
+          bottom: "30px",
+          right: "30px",
+          zIndex: 1000,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "flex-end"
+        }}>
+          {isChatOpen && (
+            <div style={{
+              width: "300px",
+              height: "400px",
+              background: "rgba(15, 15, 20, 0.95)",
+              border: "1px solid rgba(255,255,255,0.1)",
+              borderRadius: "16px",
+              boxShadow: "0 10px 40px rgba(0,0,0,0.5)",
+              marginBottom: "16px",
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
+              backdropFilter: "blur(10px)"
+            }}>
+              <div style={{ padding: "12px 16px", background: "rgba(255,255,255,0.05)", borderBottom: "1px solid rgba(255,255,255,0.1)", fontWeight: "bold", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span>🤖 Chat with Pet</span>
+                <span style={{ fontSize: "12px", opacity: 0.5 }}>llama3.2:3b</span>
+              </div>
+              <div style={{ flex: 1, padding: "16px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "12px" }}>
+                <div style={{ fontSize: "12px", opacity: 0.5, textAlign: "center" }}>Connected to local Ollama</div>
+                {chatHistory.map((msg, i) => (
+                  <div key={i} style={{
+                    alignSelf: msg.role === "user" ? "flex-end" : "flex-start",
+                    background: msg.role === "user" ? "#0066ff" : "rgba(255,255,255,0.1)",
+                    padding: "8px 12px",
+                    borderRadius: "12px",
+                    maxWidth: "85%",
+                    fontSize: "14px",
+                    lineHeight: 1.4
+                  }}>
+                    {msg.text}
+                  </div>
+                ))}
+                {isThinking && (
+                  <div style={{ alignSelf: "flex-start", opacity: 0.5, fontSize: "12px" }}>Pet is thinking...</div>
+                )}
+                <div ref={chatEndRef} />
+              </div>
+              <div style={{ padding: "12px", borderTop: "1px solid rgba(255,255,255,0.1)", display: "flex", gap: "8px" }}>
+                <input 
+                  type="text" 
+                  value={chatMessage}
+                  onChange={e => setChatMessage(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && handleSendChatMessage()}
+                  placeholder="Say something..."
+                  style={{
+                    flex: 1,
+                    background: "rgba(0,0,0,0.5)",
+                    border: "1px solid rgba(255,255,255,0.2)",
+                    borderRadius: "8px",
+                    padding: "8px 12px",
+                    color: "white",
+                    outline: "none"
+                  }}
+                />
+                <button 
+                  onClick={handleSendChatMessage}
+                  disabled={isThinking || !chatMessage.trim()}
+                  style={{
+                    background: "#0066ff",
+                    border: "none",
+                    borderRadius: "8px",
+                    padding: "0 16px",
+                    color: "white",
+                    cursor: "pointer",
+                    opacity: (isThinking || !chatMessage.trim()) ? 0.5 : 1
+                  }}
+                >
+                  Send
+                </button>
+              </div>
+            </div>
+          )}
+          <button 
+            onClick={() => setIsChatOpen(!isChatOpen)}
+            style={{
+              width: "60px",
+              height: "60px",
+              borderRadius: "30px",
+              background: isChatOpen ? "#ff4444" : "#0066ff",
+              border: "none",
+              color: "white",
+              fontSize: "24px",
+              cursor: "pointer",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+              transition: "transform 0.2s"
+            }}
+            onMouseEnter={e => e.currentTarget.style.transform = "scale(1.1)"}
+            onMouseLeave={e => e.currentTarget.style.transform = "scale(1)"}
+          >
+            {isChatOpen ? "✕" : "💬"}
+          </button>
+        </div>
+      )}
+
     </div>
   );
 }
