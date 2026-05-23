@@ -3,12 +3,15 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
-import { EffectComposer, Bloom, Vignette, Glitch } from "@react-three/postprocessing";
-import { GlitchMode } from "postprocessing";
+import { EffectComposer, Bloom, Vignette, Glitch, ChromaticAberration, Noise, Scanline } from "@react-three/postprocessing";
+import { GlitchMode, BlendFunction } from "postprocessing";
+import { LiquidRipple, ScreenSpaceGodRays, RainOnGlass } from "./postprocessing/CustomEffects";
 import { EffectLayer } from "./CanvasEffectRenderer";
 import { RibbonTrail } from "./RibbonTrail";
 import { WaterCaustics } from "./WaterCaustics";
 import { BlowingLeaves } from "./BlowingLeaves";
+import { DesktopPet } from "./DesktopPet";
+import { ScreenCracks } from "./ScreenCracks";
 import { getCoreApi } from "@/utils/tauriApis";
 
 // ─────────────────────────────────────────────────────────────
@@ -21,6 +24,13 @@ function FallingParticles({ type, params }: { type: "snow" | "rain", params: any
   const wind = params.wind || 0;
   const particleSize = params.size || (type === "rain" ? 4.0 : 6.0);
   const timeRef = useRef(0);
+  
+  const particleTex = useMemo(() => {
+    try {
+      const texPath = type === "rain" ? "/assets/brackeys_vfx_bundle/particles/alpha/trace_01_a.png" : "/assets/brackeys_vfx_bundle/particles/alpha/circle_05_a.png";
+      return new THREE.TextureLoader().load(texPath);
+    } catch(e) { return null; }
+  }, [type]);
 
   const [positions, velocities, depths] = useMemo(() => {
     const pos = new Float32Array(count * 3);
@@ -98,23 +108,25 @@ function FallingParticles({ type, params }: { type: "snow" | "rain", params: any
   const fragmentShader = type === "snow" ? `
     varying float vOpacity;
     uniform vec3 uColor;
+    uniform sampler2D uMap;
+    
     void main() {
-      vec2 uv = gl_PointCoord - vec2(0.5);
-      float d = length(uv);
-      if (d > 0.5) discard;
-      float alpha = smoothstep(0.5, 0.15, d) * vOpacity;
-      gl_FragColor = vec4(uColor, alpha);
+      vec4 texColor = texture2D(uMap, gl_PointCoord);
+      
+      // Use the red channel as alpha if it's a grayscale mask, otherwise use alpha
+      float texAlpha = texColor.a > 0.0 ? texColor.a : texColor.r;
+      
+      gl_FragColor = vec4(uColor * texColor.rgb, texAlpha * vOpacity * (0.8));
     }
   ` : `
     varying float vOpacity;
     uniform vec3 uColor;
+    uniform sampler2D uMap;
+    
     void main() {
-      vec2 uv = gl_PointCoord - vec2(0.5);
-      // Elongated vertically for rain streak
-      float d = length(uv * vec2(3.0, 1.0));
-      if (d > 0.5) discard;
-      float alpha = smoothstep(0.5, 0.1, d) * vOpacity * 0.7;
-      gl_FragColor = vec4(uColor, alpha);
+      vec4 texColor = texture2D(uMap, gl_PointCoord);
+      float texAlpha = texColor.a > 0.0 ? texColor.a : texColor.r;
+      gl_FragColor = vec4(uColor * texColor.rgb, texAlpha * vOpacity * 0.9);
     }
   `;
 
@@ -131,7 +143,11 @@ function FallingParticles({ type, params }: { type: "snow" | "rain", params: any
       <shaderMaterial
         transparent
         depthWrite={false}
-        uniforms={{ uColor: { value: uColorObj } }}
+        blending={THREE.AdditiveBlending}
+        uniforms={{ 
+          uColor: { value: uColorObj },
+          uMap: { value: particleTex }
+        }}
         vertexShader={vertexShader}
         fragmentShader={fragmentShader}
       />
@@ -156,6 +172,12 @@ function InteractiveParticles({ trailEnabled, rippleEnabled, isOverlay, trailPar
   const colors = useMemo(() => new Float32Array(maxParticles * 3), []);
   const sizesArr = useMemo(() => new Float32Array(maxParticles), []);
   const shapesArr = useMemo(() => new Float32Array(maxParticles), []);
+  
+  const trailTex = useMemo(() => {
+    try {
+      return new THREE.TextureLoader().load("/assets/brackeys_vfx_bundle/particles/alpha/magic_01_a.png");
+    } catch(e) { return null; }
+  }, []);
 
   const trailCol = useMemo(() => new THREE.Color(trailParams?.color || "#9ae600"), [trailParams?.color]);
   const rippleCol = useMemo(() => new THREE.Color(rippleParams?.color || "#ffffff"), [rippleParams?.color]);
@@ -295,6 +317,9 @@ function InteractiveParticles({ trailEnabled, rippleEnabled, isOverlay, trailPar
         transparent
         depthWrite={false}
         blending={THREE.AdditiveBlending}
+        uniforms={{
+          uMap: { value: trailTex }
+        }}
         vertexShader={`
           attribute float size;
           attribute vec3 color;
@@ -305,40 +330,30 @@ function InteractiveParticles({ trailEnabled, rippleEnabled, isOverlay, trailPar
             vColor = color;
             vShapeMode = shapeMode;
             vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-            gl_PointSize = size * 2.0;
+            gl_PointSize = size * 3.0; // slightly larger for textures
             gl_Position = projectionMatrix * mvPosition;
           }
         `}
         fragmentShader={`
           varying vec3 vColor;
           varying float vShapeMode;
+          uniform sampler2D uMap;
           void main() {
+            vec4 texColor = texture2D(uMap, gl_PointCoord);
+            float texAlpha = texColor.a > 0.0 ? texColor.a : texColor.r;
+            
+            // Still respect ring/square bounds somewhat if they want hard shapes, 
+            // but use the magical texture for the core look
             vec2 xy = gl_PointCoord.xy - vec2(0.5);
             float ll = length(xy);
             
-            float alpha = 0.0;
-            if (vShapeMode < 0.5) {
-              // Circle
-              if(ll > 0.5) discard;
-              alpha = (0.5 - ll) * 2.0;
-            } else if (vShapeMode < 1.5) {
-              // Spark (Star)
-              float a = atan(xy.y, xy.x);
-              float star = 0.5 + 0.5 * sin(a * 4.0);
-              if (ll > 0.5 * star) discard;
-              alpha = (0.5 * star - ll) * 3.0;
-            } else if (vShapeMode < 2.5) {
-              // Square
-              vec2 absXY = abs(xy);
-              if (max(absXY.x, absXY.y) > 0.4) discard;
-              alpha = 1.0;
-            } else {
+            float alphaMod = 1.0;
+            if (vShapeMode > 2.5) {
               // Ring
-              if (ll > 0.5 || ll < 0.35) discard;
-              alpha = 1.0;
+              if (ll > 0.5 || ll < 0.25) discard;
             }
             
-            gl_FragColor = vec4(vColor, alpha);
+            gl_FragColor = vec4(vColor * texColor.rgb, texAlpha * alphaMod);
           }
         `}
       />
@@ -530,6 +545,15 @@ function Fireflies({ params }: { params: any }) {
     return [pos, sd];
   }, [count]);
 
+  const col = useMemo(() => new THREE.Color(color), [color]);
+  
+  const particleTex = useMemo(() => {
+    if (!params.texture) return null;
+    try {
+      return new THREE.TextureLoader().load(params.texture);
+    } catch(e) { return null; }
+  }, [params.texture]);
+
   useFrame((state, delta) => {
     if (!pointsRef.current) return;
     timeRef.current += delta;
@@ -552,8 +576,6 @@ function Fireflies({ params }: { params: any }) {
     posAttr.needsUpdate = true;
   });
 
-  const col = useMemo(() => new THREE.Color(color), [color]);
-
   return (
     <points ref={pointsRef}>
       <bufferGeometry>
@@ -563,23 +585,283 @@ function Fireflies({ params }: { params: any }) {
         transparent
         depthWrite={false}
         blending={THREE.AdditiveBlending}
-        uniforms={{ uColor: { value: col }, uSize: { value: size }, uTime: { value: 0 } }}
+        uniforms={{ 
+          uColor: { value: col }, 
+          uSize: { value: size }, 
+          uTime: { value: 0 },
+          uMap: { value: particleTex },
+          useMap: { value: !!particleTex ? 1.0 : 0.0 }
+        }}
         vertexShader={`
           uniform float uSize;
           void main() {
             vec4 mv = modelViewMatrix * vec4(position, 1.0);
-            gl_PointSize = uSize * 1.5;
+            gl_PointSize = uSize * 3.0;
             gl_Position = projectionMatrix * mv;
           }
         `}
         fragmentShader={`
           uniform vec3 uColor;
+          uniform sampler2D uMap;
+          uniform float useMap;
           void main() {
-            vec2 uv = gl_PointCoord - vec2(0.5);
-            float d = length(uv);
-            if (d > 0.5) discard;
-            float glow = exp(-d * 6.0);
-            gl_FragColor = vec4(uColor, glow * 0.9);
+            if (useMap > 0.5) {
+              vec4 texColor = texture2D(uMap, gl_PointCoord);
+              gl_FragColor = vec4(uColor * texColor.rgb, texColor.a * texColor.r);
+            } else {
+              vec2 uv = gl_PointCoord - vec2(0.5);
+              float d = length(uv);
+              if (d > 0.5) discard;
+              float glow = exp(-d * 6.0);
+              gl_FragColor = vec4(uColor, glow * 0.9);
+            }
+          }
+        `}
+      />
+    </points>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// 5.5 Particle Engine (Unity Shuriken Style GPU Emitter)
+// ─────────────────────────────────────────────────────────────
+function ParticleEmitter({ params, isOverlay }: { params: any, isOverlay: boolean }) {
+  const pointsRef = useRef<THREE.Points>(null);
+  const count = params.count || 500;
+  const speed = params.speed || 2.0;
+  const spread = params.spread || 1.0;
+  const followMouse = params.followMouse || false;
+  
+  const timeRef = useRef(0);
+  const { viewport } = useThree();
+
+  const [positions, velocities, lifetimes, startTimes] = useMemo(() => {
+    const pos = new Float32Array(count * 3);
+    const vel = new Float32Array(count * 3);
+    const life = new Float32Array(count);
+    const start = new Float32Array(count);
+
+    for (let i = 0; i < count; i++) {
+      // Base positions are all [0,0,0] relative to the emitter. 
+      // The offset is determined in the shader using the uOffset uniform.
+      pos[i * 3] = (Math.random() - 0.5) * 10;
+      pos[i * 3 + 1] = (Math.random() - 0.5) * 10;
+      pos[i * 3 + 2] = 0;
+
+      // Cone/Spread velocity upwards
+      vel[i * 3] = (Math.random() - 0.5) * 100 * spread;
+      vel[i * 3 + 1] = 100 * speed + Math.random() * 50;
+      vel[i * 3 + 2] = (Math.random() - 0.5) * 20;
+
+      life[i] = 1.0 + Math.random() * 2.0; // 1 to 3 seconds
+      start[i] = Math.random() * 5.0; // random start time for continuous flow
+    }
+    return [pos, vel, life, start];
+  }, [count, speed, spread]);
+
+  // Map Editor % coordinates to WebGL coordinates
+  const emitterX = ((params.x || 50) - 50) * (viewport.width / 100);
+  const emitterY = -((params.y || 50) - 50) * (viewport.height / 100);
+
+  const particleTex = useMemo(() => {
+    if (!params.texture) return null;
+    try {
+      return new THREE.TextureLoader().load(params.texture);
+    } catch(e) { return null; }
+  }, [params.texture]);
+
+  const colStart = useMemo(() => new THREE.Color(params.colorStart || "#ff5a00"), [params.colorStart]);
+  const colEnd = useMemo(() => new THREE.Color(params.colorEnd || "#000000"), [params.colorEnd]);
+
+  const globalMousePos = useRef<{x: number, y: number} | null>(null);
+  const particleIdx = useRef(0);
+  const emissionAccumulator = useRef(0);
+  const lastMousePos = useRef<{x: number, y: number} | null>(null);
+
+  useEffect(() => {
+    if (!followMouse) return;
+    let isMounted = true;
+    let unlistenFunctions: Array<() => void> = [];
+
+    const setupIPC = async () => {
+      if (!isOverlay) {
+        const handleMove = (e: PointerEvent) => {
+          const w = window.innerWidth;
+          const h = window.innerHeight;
+          globalMousePos.current = {
+            x: e.clientX - w/2,
+            y: -e.clientY + h/2
+          };
+        };
+        window.addEventListener("pointermove", handleMove);
+        unlistenFunctions.push(() => window.removeEventListener("pointermove", handleMove));
+        return;
+      }
+
+      try {
+        const { listen } = await import("@tauri-apps/api/event");
+        if (!isMounted) return;
+        const unCursor = await listen<{x: number, y: number}>("cursor-moved", (e) => {
+          let payload = e.payload as any;
+          if (typeof payload === "string") { try { payload = JSON.parse(payload); } catch(e){} }
+          if (!payload || typeof payload.x !== "number") return;
+          const w = window.innerWidth;
+          const h = window.innerHeight;
+          globalMousePos.current = {
+            x: (payload.x / (window.devicePixelRatio || 1)) - w/2,
+            y: -(payload.y / (window.devicePixelRatio || 1)) + h/2
+          };
+        });
+        unlistenFunctions.push(unCursor);
+      } catch (e) {
+        console.log("Tauri IPC not available for particle emitter");
+      }
+    };
+    setupIPC();
+
+    return () => { isMounted = false; unlistenFunctions.forEach(fn => fn()); };
+  }, [followMouse, isOverlay]);
+
+  useFrame((state, delta) => {
+    if (!pointsRef.current) return;
+    timeRef.current += delta;
+    
+    const mat = pointsRef.current.material as THREE.ShaderMaterial;
+    if (mat.uniforms) {
+      mat.uniforms.uTime.value = timeRef.current;
+    }
+
+    const posAttr = pointsRef.current.geometry.attributes.position;
+    const startAttr = pointsRef.current.geometry.attributes.aStartTime;
+    const lifeAttr = pointsRef.current.geometry.attributes.aLife;
+    const velAttr = pointsRef.current.geometry.attributes.aVelocity;
+    
+    const targetX = followMouse && globalMousePos.current ? globalMousePos.current.x : emitterX;
+    const targetY = followMouse && globalMousePos.current ? globalMousePos.current.y : emitterY;
+
+    // We want to emit all `count` particles over roughly 1.5 seconds so it continuously loops.
+    // E.g., if count is 500, we emit ~333 particles per second.
+    const emissionRate = count / 1.5; 
+    emissionAccumulator.current += delta * emissionRate;
+    const numToSpawn = Math.floor(emissionAccumulator.current);
+
+    if (numToSpawn > 0) {
+      emissionAccumulator.current -= numToSpawn;
+      const last = lastMousePos.current || { x: targetX, y: targetY };
+      
+      let didUpdate = false;
+      for (let s = 1; s <= numToSpawn; s++) {
+        const t = s / numToSpawn;
+        const spawnX = last.x + (targetX - last.x) * t;
+        const spawnY = last.y + (targetY - last.y) * t;
+
+        const i = particleIdx.current;
+        
+        posAttr.setX(i, spawnX + (Math.random() - 0.5) * 10);
+        posAttr.setY(i, spawnY + (Math.random() - 0.5) * 10);
+        posAttr.setZ(i, 0);
+        
+        velAttr.setX(i, (Math.random() - 0.5) * 100 * spread);
+        velAttr.setY(i, 100 * speed + Math.random() * 50);
+        velAttr.setZ(i, (Math.random() - 0.5) * 20);
+        
+        startAttr.setX(i, timeRef.current);
+        lifeAttr.setX(i, 1.0 + Math.random() * 1.5); // 1 to 2.5 seconds
+        
+        particleIdx.current = (particleIdx.current + 1) % count;
+        didUpdate = true;
+      }
+      
+      if (didUpdate) {
+        posAttr.needsUpdate = true;
+        startAttr.needsUpdate = true;
+        velAttr.needsUpdate = true;
+        lifeAttr.needsUpdate = true;
+      }
+    }
+    
+    lastMousePos.current = { x: targetX, y: targetY };
+  });
+
+  return (
+    <points ref={pointsRef}>
+      <bufferGeometry>
+        <bufferAttribute attach="attributes-position" args={[positions, 3]} />
+        <bufferAttribute attach="attributes-aVelocity" args={[velocities, 3]} />
+        <bufferAttribute attach="attributes-aLife" args={[lifetimes, 1]} />
+        <bufferAttribute attach="attributes-aStartTime" args={[startTimes, 1]} />
+      </bufferGeometry>
+      <shaderMaterial
+        transparent
+        depthWrite={false}
+        blending={THREE.AdditiveBlending}
+        uniforms={{ 
+          uTime: { value: 0 },
+          uMap: { value: particleTex },
+          useMap: { value: !!particleTex ? 1.0 : 0.0 },
+          uColorStart: { value: colStart },
+          uColorEnd: { value: colEnd },
+        }}
+        vertexShader={`
+          attribute vec3 aVelocity;
+          attribute float aLife;
+          attribute float aStartTime;
+          
+          uniform float uTime;
+          varying float vProgress;
+
+          void main() {
+            float age = uTime - aStartTime;
+            if (uTime < aStartTime || age > aLife) {
+              // Particle is dead or not yet born
+              gl_Position = vec4(2.0, 2.0, 2.0, 1.0); // off-screen
+              gl_PointSize = 0.0;
+              return;
+            }
+            vProgress = age / aLife;
+            
+            vec3 pos = position + aVelocity * age;
+            
+            // Add a little wind/drift sine wave
+            pos.x += sin(age * 3.0 + position.x) * 10.0;
+            
+            vec4 mv = modelViewMatrix * vec4(pos, 1.0);
+            
+            // Size over lifetime (starts small, gets big)
+            float sizeCurve = sin(vProgress * 3.1415);
+            gl_PointSize = 60.0 * sizeCurve;
+            
+            gl_Position = projectionMatrix * mv;
+          }
+        `}
+        fragmentShader={`
+          uniform sampler2D uMap;
+          uniform float useMap;
+          uniform vec3 uColorStart;
+          uniform vec3 uColorEnd;
+          
+          varying float vProgress;
+
+          void main() {
+            if (vProgress <= 0.001 || vProgress >= 0.99) discard;
+            
+            // Interpolate color over lifetime
+            vec3 color = mix(uColorStart, uColorEnd, vProgress);
+            
+            // Fade out opacity near end of life
+            float alphaCurve = sin(vProgress * 3.1415);
+            
+            if (useMap > 0.5) {
+              vec4 texColor = texture2D(uMap, gl_PointCoord);
+              // Multiplicative color tinting with additive blending friendly alpha
+              gl_FragColor = vec4(color * texColor.rgb * alphaCurve, texColor.a * alphaCurve);
+            } else {
+              vec2 uv = gl_PointCoord - vec2(0.5);
+              float d = length(uv);
+              if (d > 0.5) discard;
+              float glow = exp(-d * 6.0);
+              gl_FragColor = vec4(color, glow * alphaCurve);
+            }
           }
         `}
       />
@@ -707,6 +989,12 @@ function FogEffect({ params }: { params: any }) {
   });
 
   const col = useMemo(() => new THREE.Color(color), [color]);
+  
+  const fogTex = useMemo(() => {
+    try {
+      return new THREE.TextureLoader().load("/assets/brackeys_vfx_bundle/particles/alpha/smoke_04_a.png");
+    } catch(e) { return null; }
+  }, []);
 
   return (
     <points ref={pointsRef}>
@@ -716,7 +1004,12 @@ function FogEffect({ params }: { params: any }) {
       <shaderMaterial
         transparent
         depthWrite={false}
-        uniforms={{ uSize: { value: size }, uOpacity: { value: opacity }, uColor: { value: col } }}
+        uniforms={{ 
+          uSize: { value: size }, 
+          uOpacity: { value: opacity }, 
+          uColor: { value: col },
+          uMap: { value: fogTex }
+        }}
         vertexShader={`
           uniform float uSize;
           void main() {
@@ -728,12 +1021,11 @@ function FogEffect({ params }: { params: any }) {
         fragmentShader={`
           uniform float uOpacity;
           uniform vec3 uColor;
+          uniform sampler2D uMap;
           void main() {
-            vec2 uv = gl_PointCoord - vec2(0.5);
-            float d = length(uv);
-            if (d > 0.5) discard;
-            float cloud = exp(-d * 3.0) * uOpacity;
-            gl_FragColor = vec4(uColor, cloud);
+            vec4 texColor = texture2D(uMap, gl_PointCoord);
+            float texAlpha = texColor.a > 0.0 ? texColor.a : texColor.r;
+            gl_FragColor = vec4(uColor * texColor.rgb, texAlpha * uOpacity);
           }
         `}
       />
@@ -834,6 +1126,65 @@ function SpriteLayer({ params }: { params: any }) {
           }
         `}
       />
+    </mesh>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Background Quad — renders background image/video inside the
+// Canvas so post-processing shaders can see it
+// ─────────────────────────────────────────────────────────────
+function BackgroundQuad({ src, isImage }: { src: string; isImage: boolean }) {
+  const { viewport } = useThree();
+  const meshRef = useRef<THREE.Mesh>(null);
+  const textureRef = useRef<THREE.Texture | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  useEffect(() => {
+    if (!src) return;
+
+    if (isImage) {
+      const loader = new THREE.TextureLoader();
+      loader.load(src, (tex) => {
+        tex.colorSpace = THREE.SRGBColorSpace;
+        textureRef.current = tex;
+        if (meshRef.current) {
+          (meshRef.current.material as THREE.MeshBasicMaterial).map = tex;
+          (meshRef.current.material as THREE.MeshBasicMaterial).needsUpdate = true;
+        }
+      });
+    } else {
+      const video = document.createElement("video");
+      video.src = src;
+      video.crossOrigin = "anonymous";
+      video.loop = true;
+      video.muted = true;
+      video.playsInline = true;
+      video.play().catch(() => {});
+      videoRef.current = video;
+
+      const tex = new THREE.VideoTexture(video);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      textureRef.current = tex;
+      if (meshRef.current) {
+        (meshRef.current.material as THREE.MeshBasicMaterial).map = tex;
+        (meshRef.current.material as THREE.MeshBasicMaterial).needsUpdate = true;
+      }
+    }
+
+    return () => {
+      if (textureRef.current) textureRef.current.dispose();
+      if (videoRef.current) {
+        videoRef.current.pause();
+        videoRef.current.src = "";
+      }
+    };
+  }, [src, isImage]);
+
+  return (
+    <mesh ref={meshRef} position={[0, 0, -50]} renderOrder={-1000}>
+      <planeGeometry args={[viewport.width, viewport.height]} />
+      <meshBasicMaterial transparent={false} depthWrite={false} />
     </mesh>
   );
 }
@@ -960,6 +1311,7 @@ export function WebGLEffectRenderer({ videoSrc, effects, isOverlay = false, sele
   const bloomEffect = currentEffects.find(e => e.type === "bloom" && e.enabled);
   const glitchEffect = currentEffects.find(e => e.type === "glitch" && e.enabled);
   const fireflies = currentEffects.find(e => e.type === "fireflies" && e.enabled);
+  const particleEmitter = currentEffects.find(e => e.type === "particle-emitter" && e.enabled);
   const stars = currentEffects.find(e => e.type === "stars" && e.enabled);
   const fog = currentEffects.find(e => e.type === "fog" && e.enabled);
   const clock = currentEffects.find(e => e.type === "clock" && e.enabled);
@@ -969,9 +1321,18 @@ export function WebGLEffectRenderer({ videoSrc, effects, isOverlay = false, sele
   const blowingLeaves = currentEffects.find(e => e.type === "blowing-leaves" && e.enabled);
   const appLauncher = currentEffects.find(e => e.type === "app-launcher" && e.enabled);
   const sprites = currentEffects.filter(e => e.type === "sprite" && e.enabled);
+  
+  const godRays = currentEffects.find(e => e.type === "god-rays" && e.enabled);
+  const vhs = currentEffects.find(e => e.type === "vhs" && e.enabled);
+  const liquidRipple = currentEffects.find(e => e.type === "liquid-ripple" && e.enabled);
+  const rainOnGlass = currentEffects.find(e => e.type === "rain-on-glass" && e.enabled);
+  const desktopPet = currentEffects.find(e => e.type === "desktop-pet" && e.enabled);
+
+  // Post-processing effects need the background rendered inside the Canvas
+  const hasPostProcessing = !!(godRays || vhs || liquidRipple || rainOnGlass);
 
   // Check if any WebGL effect is active — skip Canvas entirely if none
-  const hasWebGLEffects = sprites.length > 0 || snow || rain || audioVis || trail || ripple || ribbonTrail || vignette || bloomEffect || glitchEffect || parallax || fireflies || stars || fog || waterCaustics || blowingLeaves;
+  const hasWebGLEffects = desktopPet || sprites.length > 0 || snow || rain || audioVis || trail || ripple || ribbonTrail || vignette || bloomEffect || glitchEffect || parallax || fireflies || particleEmitter || stars || fog || waterCaustics || blowingLeaves || godRays || vhs || liquidRipple || rainOnGlass;
 
   const resolveParams = (p: any) => {
     if (!p) return p;
@@ -982,7 +1343,7 @@ export function WebGLEffectRenderer({ videoSrc, effects, isOverlay = false, sele
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (isOverlay || !selectedLayerId || !onUpdateParam) return;
     const layer = currentEffects.find(l => l.id === selectedLayerId);
-    if (!layer || (layer.type !== "clock" && layer.type !== "audio-visualizer" && layer.type !== "blur-region" && layer.type !== "music-player" && layer.type !== "app-launcher" && layer.type !== "sprite")) return;
+    if (!layer || (layer.type !== "clock" && layer.type !== "audio-visualizer" && layer.type !== "blur-region" && layer.type !== "music-player" && layer.type !== "app-launcher" && layer.type !== "sprite" && layer.type !== "particle-emitter" && layer.type !== "god-rays")) return;
     
     dragState.current = {
       isDragging: true,
@@ -1029,12 +1390,12 @@ export function WebGLEffectRenderer({ videoSrc, effects, isOverlay = false, sele
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
     >
-      {/* Background Media */}
+      {/* Background Media — hidden when post-processing renders it inside Canvas */}
       {src && (
         isImage ? (
-          <img ref={mediaRef} src={src} className="editor-bg-video" style={{ objectFit: "cover", position: "absolute", inset: 0, width: "100%", height: "100%", display: isOverlay ? "none" : "block" }} alt="" />
+          <img ref={mediaRef} src={src} className="editor-bg-video" style={{ objectFit: "cover", position: "absolute", inset: 0, width: "100%", height: "100%", display: (isOverlay || hasPostProcessing) ? "none" : "block" }} alt="" />
         ) : (
-          <video ref={mediaRef} src={src} className="editor-bg-video" autoPlay loop muted playsInline style={{ objectFit: "cover", position: "absolute", inset: 0, width: "100%", height: "100%", display: isOverlay ? "none" : "block" }} />
+          <video ref={mediaRef} src={src} className="editor-bg-video" autoPlay loop muted playsInline style={{ objectFit: "cover", position: "absolute", inset: 0, width: "100%", height: "100%", display: (isOverlay || hasPostProcessing) ? "none" : "block" }} />
         )
       )}
 
@@ -1071,27 +1432,40 @@ export function WebGLEffectRenderer({ videoSrc, effects, isOverlay = false, sele
         <AppLauncherWidget params={appLauncher.params} isOverlay={isOverlay} />
       )}
 
+      {/* Screen Cracks from Desktop Pet */}
+      <ScreenCracks color={autoColor || "#ffffff"} />
+
       {/* WebGL Canvas — only mounted when effects are active */}
       {hasWebGLEffects && (
         <div style={{ position: "absolute", inset: 0, zIndex: 10, pointerEvents: "none" }}>
           <Canvas
             orthographic
             camera={{ position: [0, 0, 100], zoom: 1 }}
-            gl={{ alpha: true, antialias: false, powerPreference: "high-performance" }}
+            gl={{ alpha: !hasPostProcessing, antialias: false, powerPreference: "high-performance" }}
             onCreated={({ gl }) => {
               return () => { gl.dispose(); };
             }}
             style={{ width: "100%", height: "100%", pointerEvents: "none" }}
           >
+            {/* When post-processing is active, render background inside Canvas */}
+            {hasPostProcessing && src && <BackgroundQuad src={src} isImage={isImage} />}
             {parallax && <ParallaxShift intensity={parallax.params.intensity || 1.0} />}
             {snow && <FallingParticles type="snow" params={resolveParams(snow.params)} />}
             {rain && <FallingParticles type="rain" params={resolveParams(rain.params)} />}
             {fireflies && <Fireflies params={resolveParams(fireflies.params)} />}
+            {particleEmitter && <ParticleEmitter params={resolveParams(particleEmitter.params)} isOverlay={isOverlay} />}
             {stars && <Starfield params={resolveParams(stars.params)} />}
             {fog && <FogEffect params={resolveParams(fog.params)} />}
             {audioVis && <AudioVisualizer params={resolveParams(audioVis.params)} />}
             {waterCaustics && <WaterCaustics params={resolveParams(waterCaustics.params)} />}
             {blowingLeaves && <BlowingLeaves params={resolveParams(blowingLeaves.params)} />}
+            {desktopPet && (
+              <DesktopPet 
+                params={resolveParams(desktopPet.params)} 
+                isOverlay={isOverlay} 
+                widgets={[clock, musicPlayer, appLauncher, audioVis].filter(Boolean)} 
+              />
+            )}
             <InteractiveParticles
               trailEnabled={!!trail}
               rippleEnabled={!!ripple}
@@ -1111,11 +1485,43 @@ export function WebGLEffectRenderer({ videoSrc, effects, isOverlay = false, sele
             {sprites.map(s => <SpriteLayer key={s.id} params={s.params} />)}
 
             {/* Post Processing Shaders */}
-            {(vignette || bloomEffect || glitchEffect) && (
+            {(vignette || bloomEffect || glitchEffect || godRays || vhs || liquidRipple || rainOnGlass) && (
               <EffectComposer>
+                {godRays ? <ScreenSpaceGodRays params={resolveParams(godRays.params)} /> : null as any}
+                {liquidRipple ? <LiquidRipple
+                  isOverlay={isOverlay}
+                  intensity={liquidRipple.params.intensity}
+                  waveMode={liquidRipple.params.waveMode || "off"}
+                  waveZoneX={liquidRipple.params.waveZoneX}
+                  waveZoneY={liquidRipple.params.waveZoneY}
+                  waveZoneW={liquidRipple.params.waveZoneW}
+                  waveZoneH={liquidRipple.params.waveZoneH}
+                  waveSpeed={liquidRipple.params.waveSpeed}
+                  waveScale={liquidRipple.params.waveScale}
+                  waveStrength={liquidRipple.params.waveStrength}
+                  autoRipple={liquidRipple.params.autoRipple}
+                  autoInterval={liquidRipple.params.autoInterval}
+                  autoZoneX={liquidRipple.params.autoZoneX}
+                  autoZoneY={liquidRipple.params.autoZoneY}
+                  autoZoneW={liquidRipple.params.autoZoneW}
+                  autoZoneH={liquidRipple.params.autoZoneH}
+                  raindrops={liquidRipple.params.raindrops}
+                  rainIntensity={liquidRipple.params.rainIntensity}
+                /> : null as any}
+                {rainOnGlass ? <RainOnGlass params={resolveParams(rainOnGlass.params)} /> : null as any}
                 {vignette ? <Vignette eskil={false} offset={vignette.params.offset || 0.1} darkness={vignette.params.intensity || 0.6} /> : null as any}
                 {bloomEffect ? <Bloom luminanceThreshold={bloomEffect.params.threshold || 0.5} luminanceSmoothing={bloomEffect.params.smoothing || 0.9} intensity={bloomEffect.params.intensity || 1.0} height={bloomEffect.params.height || 300} /> : null as any}
                 {glitchEffect ? <Glitch delay={new THREE.Vector2(glitchEffect.params.delayMin || 1.5, glitchEffect.params.delayMax || 3.5)} duration={new THREE.Vector2(0.1, 0.3)} strength={new THREE.Vector2(glitchEffect.params.strength || 0.1, (glitchEffect.params.strength || 0.1) * 2)} mode={GlitchMode.SPORADIC} active /> : null as any}
+                {vhs ? (
+                  <>
+                    <ChromaticAberration
+                      blendFunction={BlendFunction.NORMAL}
+                      offset={new THREE.Vector2(vhs.params.rgbShift || 0.02, vhs.params.rgbShift || 0.02)}
+                    />
+                    <Noise opacity={vhs.params.noise || 0.3} blendFunction={BlendFunction.OVERLAY} />
+                    <Scanline density={vhs.params.scanlines || 1.0} opacity={0.5} blendFunction={BlendFunction.OVERLAY} />
+                  </>
+                ) : null as any}
               </EffectComposer>
             )}
           </Canvas>

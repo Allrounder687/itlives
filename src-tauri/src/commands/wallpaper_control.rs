@@ -416,28 +416,8 @@ pub fn start_mouse_tracking(app_handle: tauri::AppHandle) {
                     let is_down = (lbtn_state as u16 & 0x8000) != 0;
                     
                     if is_down && !was_down {
-                        let mut cursor_on_desktop = false;
-                        let hwnd = windows::Win32::UI::WindowsAndMessaging::WindowFromPoint(pt);
-                        if hwnd.0 != 0 as _ {
-                            let mut current_hwnd = hwnd;
-                            while current_hwnd.0 != 0 as _ {
-                                let mut class_name = [0u16; 256];
-                                let len = windows::Win32::UI::WindowsAndMessaging::GetClassNameW(current_hwnd, &mut class_name);
-                                let c_name = String::from_utf16_lossy(&class_name[..len as usize]);
-                                if c_name == "WorkerW" || c_name == "Progman" || c_name == "SysListView32" || c_name == "SHELLDLL_DefView" || c_name == "mpv" {
-                                    cursor_on_desktop = true;
-                                    break;
-                                }
-                                current_hwnd = windows::Win32::UI::WindowsAndMessaging::GetParent(current_hwnd).unwrap_or(windows::Win32::Foundation::HWND(0 as _));
-                            }
-                        }
-
-                        if cursor_on_desktop {
-                            log::info!("[Overlay] Click captured on desktop window class, emitting cursor-click");
-                            let _ = app_handle.emit("cursor-click", payload);
-                        } else {
-                            log::debug!("[Overlay] Ignored click directed at non-desktop active window");
-                        }
+                        log::info!("[Overlay] Global Click captured, emitting cursor-click");
+                        let _ = app_handle.emit("cursor-click", payload);
                     }
                     was_down = is_down;
                 }

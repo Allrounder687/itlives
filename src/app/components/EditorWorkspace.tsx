@@ -4,11 +4,13 @@ import { useState, useEffect } from "react";
 import { EffectLayer } from "./CanvasEffectRenderer";
 import { WebGLEffectRenderer } from "./WebGLEffectRenderer";
 import { VideoResult } from "@/hooks/useWallpaper";
+import { DESKTOP_PET_ANIMATIONS } from "./DesktopPetAnimations";
 import "./editor.css";
 
 
 interface EditorWorkspaceProps {
   currentVideo: VideoResult | null;
+  onSelectVideo?: (video: VideoResult) => void;
   onApplyPreset?: (preset: any) => void;
   onApplyWallpaper?: (video: VideoResult) => Promise<void>;
   onUploadMedia?: () => Promise<void>;
@@ -17,7 +19,8 @@ interface EditorWorkspaceProps {
 const EFFECT_TEMPLATES: Record<string, Omit<EffectLayer, "id">> = {
   snow: { type: "snow", name: "Snowfall", enabled: true, params: { count: 200, speed: 1.5, wind: 0.3, size: 6.0 } },
   rain: { type: "rain", name: "Raindrops", enabled: true, params: { count: 300, speed: 1.2, wind: 0.1, size: 4.0 } },
-  fireflies: { type: "fireflies", name: "Fireflies", enabled: true, params: { count: 80, speed: 0.5, size: 5.0, color: "#aaff44" } },
+  fireflies: { type: "fireflies", name: "Fireflies", enabled: true, params: { count: 80, speed: 0.5, size: 5.0, color: "#aaff44", texture: "/assets/brackeys_vfx_bundle/particles/alpha/star_05_a.png" } },
+  "particle-emitter": { type: "particle-emitter", name: "Particle Engine", enabled: true, params: { preset: "fire", texture: "/assets/brackeys_vfx_bundle/particles/alpha/fire_01_a.png", count: 100, colorStart: "#ff5a00", colorEnd: "#000000", speed: 2.0, spread: 1.0, followMouse: false } },
   stars: { type: "stars", name: "Starfield", enabled: true, params: { count: 400, speed: 0.1, size: 3.0, twinkle: 0.8 } },
   fog: { type: "fog", name: "Fog / Mist", enabled: true, params: { count: 60, speed: 0.3, size: 40.0, opacity: 0.4 } },
   "water-caustics": { type: "water-caustics", name: "Water Reflection", enabled: true, params: { speed: 1.0, scale: 3.0, intensity: 1.0, color: "#00ffff", yOffset: -400, width: 2000, height: 800 } },
@@ -36,6 +39,11 @@ const EFFECT_TEMPLATES: Record<string, Omit<EffectLayer, "id">> = {
   "music-player": { type: "music-player", name: "Music Player", enabled: true, params: { x: 50, y: 80, scale: 1.0, theme: "glass", opacity: 0.9, shape: "standard", color: "auto" } },
   "app-launcher": { type: "app-launcher", name: "App Launcher", enabled: true, params: { x: 50, y: 90, scale: 1.0, apps: [], layout: "dock" } },
   sprite: { type: "sprite", name: "Image Sprite", enabled: true, params: { image: "", x: 50, y: 50, width: 300, height: 300, rotation: 0, opacity: 1.0, sway: 0.0 } },
+  "god-rays": { type: "god-rays", name: "God Rays", enabled: true, params: { exposure: 0.6, decay: 0.95, density: 1.0, weight: 0.4, x: 50, y: 50 } },
+  vhs: { type: "vhs", name: "Retro VHS", enabled: true, params: { rgbShift: 0.02, noise: 0.3, scanlines: 0.5 } },
+  "liquid-ripple": { type: "liquid-ripple", name: "Screen Ripple", enabled: true, params: { intensity: 1.0, waveMode: "off", waveZoneX: 20, waveZoneY: 60, waveZoneW: 60, waveZoneH: 30, waveSpeed: 1.0, waveScale: 5.0, waveStrength: 1.0, autoRipple: false, autoInterval: 1.5, autoZoneX: 20, autoZoneY: 20, autoZoneW: 60, autoZoneH: 60, raindrops: false, rainIntensity: 1.0 } },
+  "rain-on-glass": { type: "rain-on-glass", name: "Rain on Glass", enabled: true, params: { intensity: 1.0, dropSpeed: 1.0, streakCount: 15, dropletDensity: 20 } },
+  "desktop-pet": { type: "desktop-pet", name: "Desktop Pet", enabled: true, params: { color: "#00aaff", scale: 50.0, speed: 1.0, behavior: "wander", enableCracks: true, name: "Bot", muted: false } },
 };
 
 const EFFECT_DROPDOWN: { group: string, items: { key: string, icon: string, label: string }[] }[] = [
@@ -43,6 +51,7 @@ const EFFECT_DROPDOWN: { group: string, items: { key: string, icon: string, labe
     { key: "sprite", icon: "🖼️", label: "Image Sprite" },
   ]},
   { group: "⛅ Particles", items: [
+    { key: "particle-emitter", icon: "✨", label: "Particle Engine" },
     { key: "snow", icon: "❄️", label: "Snowfall" },
     { key: "rain", icon: "🌧️", label: "Raindrops" },
     { key: "fireflies", icon: "🪲", label: "Fireflies" },
@@ -50,9 +59,12 @@ const EFFECT_DROPDOWN: { group: string, items: { key: string, icon: string, labe
     { key: "fog", icon: "🌫️", label: "Fog / Mist" },
   ]},
   { group: "🎬 Post Processing", items: [
+    { key: "god-rays", icon: "🌤️", label: "God Rays" },
     { key: "vignette", icon: "🖼️", label: "Vignette" },
     { key: "bloom", icon: "✨", label: "Bloom Glow" },
     { key: "glitch", icon: "⚡", label: "Cyber Glitch" },
+    { key: "vhs", icon: "📼", label: "Retro VHS" },
+    { key: "rain-on-glass", icon: "🌧️", label: "Rain on Glass" },
   ]},
   { group: "🎮 Interactive", items: [
     { key: "audio-visualizer", icon: "🎵", label: "Audio Visualizer" },
@@ -60,6 +72,7 @@ const EFFECT_DROPDOWN: { group: string, items: { key: string, icon: string, labe
     { key: "cursor-trail", icon: "🌟", label: "Sparkle Trail" },
     { key: "ribbon-trail", icon: "🖌️", label: "Fluid Ribbon" },
     { key: "click-ripple", icon: "💥", label: "Click Ripple" },
+    { key: "liquid-ripple", icon: "💧", label: "Screen Ripple" },
   ]},
   { group: "🎨 Overlays & Widgets", items: [
     { key: "color-grade", icon: "🎨", label: "Color Tint" },
@@ -67,6 +80,9 @@ const EFFECT_DROPDOWN: { group: string, items: { key: string, icon: string, labe
     { key: "clock", icon: "🕐", label: "Clock Widget" },
     { key: "music-player", icon: "🎧", label: "Music Player" },
     { key: "app-launcher", icon: "🚀", label: "App Launcher" },
+  ]},
+  { group: "🤖 Companions", items: [
+    { key: "desktop-pet", icon: "🐾", label: "Desktop Pet" },
   ]},
 ];
 
@@ -106,7 +122,39 @@ const TIME_PRESETS: { key: string, name: string, layers: Omit<EffectLayer, "id">
   ]},
 ];
 
-export function EditorWorkspace({ currentVideo, onApplyWallpaper, onUploadMedia }: EditorWorkspaceProps) {
+const DEMO_PRESETS: { key: string, name: string, thumbnail: string, path: string, layers: Omit<EffectLayer, "id">[] }[] = [
+  { 
+    key: "lake-sunset", name: "Lake Sunset", thumbnail: "/assets/wallpapers/lake_sunset.png", path: "/assets/wallpapers/lake_sunset.png", 
+    layers: [
+      { type: "liquid-ripple", name: "Lake Water", enabled: true, params: { intensity: 1.0, waveMode: "zone", waveZoneX: 0, waveZoneY: 65, waveZoneW: 100, waveZoneH: 35, waveSpeed: 0.8, waveScale: 6.0, waveStrength: 1.5, autoRipple: false, raindrops: false } }
+    ] 
+  },
+  { 
+    key: "rainy-city", name: "Rainy Cyberpunk City", thumbnail: "/assets/wallpapers/rainy_city.png", path: "/assets/wallpapers/rainy_city.png", 
+    layers: [
+      { type: "rain-on-glass", name: "Window Rain", enabled: true, params: { intensity: 1.5, dropSpeed: 1.2, streakCount: 20, dropletDensity: 30 } },
+      { type: "bloom", name: "Neon Glow", enabled: true, params: { intensity: 1.2, threshold: 0.5, smoothing: 0.8 } }
+    ] 
+  },
+  { 
+    key: "ocean-storm", name: "Stormy Ocean", thumbnail: "/assets/wallpapers/ocean_storm.png", path: "/assets/wallpapers/ocean_storm.png", 
+    layers: [
+      { type: "liquid-ripple", name: "Turbulent Water", enabled: true, params: { intensity: 1.5, waveMode: "fullscreen", waveSpeed: 2.0, waveScale: 8.0, waveStrength: 2.5, raindrops: true, rainIntensity: 2.0 } },
+      { type: "rain", name: "Heavy Rain", enabled: true, params: { count: 800, speed: 2.5, wind: 1.5, size: 5.0 } },
+      { type: "fog", name: "Storm Clouds", enabled: true, params: { count: 40, speed: 0.6, size: 80.0, opacity: 0.4 } }
+    ] 
+  },
+  { 
+    key: "forest-godrays", name: "Enchanted Forest", thumbnail: "/assets/wallpapers/forest_godrays.png", path: "/assets/wallpapers/forest_godrays.png", 
+    layers: [
+      { type: "god-rays", name: "Sunlight Shafts", enabled: true, params: { exposure: 0.8, decay: 0.93, density: 1.2, weight: 0.5, x: 50, y: 30 } },
+      { type: "fireflies", name: "Forest Pixies", enabled: true, params: { count: 100, speed: 0.3, size: 4.0, color: "#e8ffb3" } },
+      { type: "fog", name: "Morning Mist", enabled: true, params: { count: 30, speed: 0.2, size: 60.0, opacity: 0.2 } }
+    ] 
+  }
+];
+
+export function EditorWorkspace({ currentVideo, onSelectVideo, onApplyWallpaper, onUploadMedia }: EditorWorkspaceProps) {
   const [layers, setLayers] = useState<EffectLayer[]>([
     { id: "vignette-1", type: "vignette", name: "Vignette Frame", enabled: true, params: { intensity: 0.5 } }
   ]);
@@ -270,12 +318,73 @@ export function EditorWorkspace({ currentVideo, onApplyWallpaper, onUploadMedia 
 
   const selectedLayer = layers.find(l => l.id === selectedLayerId);
 
+  const handleSelectDemo = (preset: typeof DEMO_PRESETS[0]) => {
+    if (onSelectVideo) {
+      onSelectVideo({
+        id: `demo-${preset.key}`,
+        thumbnail_url: preset.thumbnail,
+        video_url: preset.path,
+        source: "local",
+        local_path: preset.path,
+        duration: 0,
+        width: 1920,
+        height: 1080
+      });
+      // Give the video a moment to load, then apply effects
+      setTimeout(() => {
+        const generatedLayers = preset.layers.map((l, i) => ({ ...l, id: `${l.type}-${Date.now()}-${i}` }));
+        setLayers(generatedLayers);
+        if (generatedLayers.length > 0) {
+          setSelectedLayerId(generatedLayers[0].id);
+        }
+      }, 100);
+    }
+  };
+
   if (!currentVideo) {
     return (
-      <div className="editor-empty panel" style={{ gridColumn: "span 3", padding: "40px" }}>
-        <span className="eyebrow">Visual Effects Editor</span>
-        <h3>No Wallpaper Loaded</h3>
-        <p>Go to the **Discover** tab and fetch a wallpaper first to add effects to it.</p>
+      <div className="editor-empty panel" style={{ gridColumn: "span 3", padding: "40px", display: "flex", flexDirection: "column", gap: "32px", alignItems: "center" }}>
+        <div style={{ textAlign: "center" }}>
+          <span className="eyebrow">Visual Effects Editor</span>
+          <h3>No Wallpaper Loaded</h3>
+          <p>Go to the **Discover** tab and fetch a wallpaper first to add effects to it.</p>
+        </div>
+        
+        <div style={{ width: "100%", maxWidth: "800px" }}>
+          <div className="section-head" style={{ marginBottom: "16px" }}>
+            <span className="eyebrow">Quick Start</span>
+            <h4 style={{ margin: 0, fontSize: "16px", fontWeight: 600 }}>Try a Demo Preset</h4>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: "16px" }}>
+            {DEMO_PRESETS.map(preset => (
+              <div 
+                key={preset.key} 
+                onClick={() => handleSelectDemo(preset)}
+                style={{ 
+                  background: "var(--panel-bg)", border: "1px solid var(--panel-stroke)", borderRadius: "12px", 
+                  overflow: "hidden", cursor: "pointer", transition: "all 0.2s ease",
+                  boxShadow: "0 4px 12px rgba(0,0,0,0.1)"
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = "var(--accent)";
+                  e.currentTarget.style.transform = "translateY(-2px)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = "var(--panel-stroke)";
+                  e.currentTarget.style.transform = "none";
+                }}
+              >
+                <div style={{ width: "100%", aspectRatio: "16/9", background: "#000", position: "relative" }}>
+                  <img src={preset.thumbnail} alt={preset.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                </div>
+                <div style={{ padding: "12px" }}>
+                  <h5 style={{ margin: 0, fontSize: "13px", fontWeight: 600 }}>{preset.name}</h5>
+                  <p style={{ margin: "4px 0 0 0", fontSize: "11px", color: "var(--text-dim)" }}>{preset.layers.length} pre-applied effects</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     );
   }
@@ -382,6 +491,24 @@ export function EditorWorkspace({ currentVideo, onApplyWallpaper, onUploadMedia 
             ))}
           </div>
         </div>
+
+        {/* Built-in Demos */}
+        <div style={{ borderTop: "1px solid var(--panel-stroke)", paddingTop: "12px", marginTop: "8px" }}>
+          <span className="eyebrow" style={{ fontSize: "10px", marginBottom: "6px", display: "block" }}>🌟 Demo Presets</span>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "6px" }}>
+            {DEMO_PRESETS.map(preset => (
+              <div
+                key={preset.key}
+                className="action-btn action-btn--secondary"
+                style={{ display: "flex", alignItems: "center", gap: "8px", padding: "6px", borderRadius: "10px", cursor: "pointer", textAlign: "left" }}
+                onClick={() => handleSelectDemo(preset)}
+              >
+                <img src={preset.thumbnail} alt="" style={{ width: "40px", height: "24px", objectFit: "cover", borderRadius: "4px" }} />
+                <span style={{ fontSize: "11px", fontWeight: "600", flex: 1 }}>{preset.name}</span>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
 
 
@@ -482,23 +609,167 @@ export function EditorWorkspace({ currentVideo, onApplyWallpaper, onUploadMedia 
             {selectedLayer.type === "vignette" && (
               <>
                 <div className="property-group">
-                  <label>Darkness ({selectedLayer.params.intensity})</label>
-                  <input 
-                    type="range" min="0" max="1" step="0.05" 
-                    className="property-control"
-                    value={selectedLayer.params.intensity} 
-                    onChange={(e) => updateParam(selectedLayer.id, "intensity", parseFloat(e.target.value))} 
-                  />
+                  <label>Intensity ({selectedLayer.params.intensity || 0.6})</label>
+                  <input type="range" min="0" max="1" step="0.05" className="property-control" value={selectedLayer.params.intensity || 0.6} onChange={(e) => updateParam(selectedLayer.id, "intensity", parseFloat(e.target.value))} />
                 </div>
                 <div className="property-group">
                   <label>Offset ({selectedLayer.params.offset || 0.1})</label>
-                  <input 
-                    type="range" min="0" max="1" step="0.05" 
-                    className="property-control"
-                    value={selectedLayer.params.offset || 0.1} 
-                    onChange={(e) => updateParam(selectedLayer.id, "offset", parseFloat(e.target.value))} 
-                  />
+                  <input type="range" min="0" max="1" step="0.05" className="property-control" value={selectedLayer.params.offset || 0.1} onChange={(e) => updateParam(selectedLayer.id, "offset", parseFloat(e.target.value))} />
                 </div>
+              </>
+            )}
+
+            {selectedLayer.type === "god-rays" && (
+              <>
+                <div className="property-group" style={{ marginBottom: "16px" }}>
+                  <label>Origin X ({selectedLayer.params.x || 50}%)</label>
+                  <input type="range" min="0" max="100" step="1" className="property-control" value={selectedLayer.params.x || 50} onChange={(e) => updateParam(selectedLayer.id, "x", parseInt(e.target.value))} />
+                  <div style={{ display: "flex", justifyContent: "space-between", marginTop: "4px" }}>
+                    <span style={{ fontSize: "10px", color: "var(--text-dim)" }}>Left</span>
+                    <span style={{ fontSize: "10px", color: "var(--text-dim)" }}>Right</span>
+                  </div>
+                </div>
+                <div className="property-group" style={{ marginBottom: "16px" }}>
+                  <label>Origin Y ({selectedLayer.params.y || 50}%)</label>
+                  <input type="range" min="0" max="100" step="1" className="property-control" value={selectedLayer.params.y || 50} onChange={(e) => updateParam(selectedLayer.id, "y", parseInt(e.target.value))} />
+                </div>
+                <div className="property-group">
+                  <label>Exposure ({selectedLayer.params.exposure || 0.6})</label>
+                  <input type="range" min="0.1" max="2" step="0.1" className="property-control" value={selectedLayer.params.exposure || 0.6} onChange={(e) => updateParam(selectedLayer.id, "exposure", parseFloat(e.target.value))} />
+                </div>
+                <div className="property-group">
+                  <label>Decay ({selectedLayer.params.decay || 0.95})</label>
+                  <input type="range" min="0.8" max="0.99" step="0.01" className="property-control" value={selectedLayer.params.decay || 0.95} onChange={(e) => updateParam(selectedLayer.id, "decay", parseFloat(e.target.value))} />
+                </div>
+                <div className="property-group">
+                  <label>Density ({selectedLayer.params.density || 1.0})</label>
+                  <input type="range" min="0.1" max="2" step="0.1" className="property-control" value={selectedLayer.params.density || 1.0} onChange={(e) => updateParam(selectedLayer.id, "density", parseFloat(e.target.value))} />
+                </div>
+              </>
+            )}
+
+            {selectedLayer.type === "vhs" && (
+              <>
+                <div className="property-group">
+                  <label>RGB Shift ({selectedLayer.params.rgbShift || 0.02})</label>
+                  <input type="range" min="0" max="0.1" step="0.005" className="property-control" value={selectedLayer.params.rgbShift || 0.02} onChange={(e) => updateParam(selectedLayer.id, "rgbShift", parseFloat(e.target.value))} />
+                </div>
+                <div className="property-group">
+                  <label>Static Noise ({selectedLayer.params.noise || 0.3})</label>
+                  <input type="range" min="0" max="1" step="0.05" className="property-control" value={selectedLayer.params.noise || 0.3} onChange={(e) => updateParam(selectedLayer.id, "noise", parseFloat(e.target.value))} />
+                </div>
+                <div className="property-group">
+                  <label>Scanlines ({selectedLayer.params.scanlines || 0.5})</label>
+                  <input type="range" min="0" max="2" step="0.1" className="property-control" value={selectedLayer.params.scanlines || 0.5} onChange={(e) => updateParam(selectedLayer.id, "scanlines", parseFloat(e.target.value))} />
+                </div>
+              </>
+            )}
+
+            {selectedLayer.type === "liquid-ripple" && (
+              <>
+                <div className="property-group">
+                  <label>Ripple Intensity ({selectedLayer.params.intensity || 1.0})</label>
+                  <input type="range" min="0.1" max="5.0" step="0.1" className="property-control" value={selectedLayer.params.intensity || 1.0} onChange={(e) => updateParam(selectedLayer.id, "intensity", parseFloat(e.target.value))} />
+                  <p style={{ fontSize: "11px", color: "var(--text-dim)", marginTop: "4px" }}>Click anywhere to trigger ripples.</p>
+                </div>
+
+                <div style={{ borderTop: "1px solid var(--panel-stroke)", paddingTop: "12px", marginTop: "12px" }}>
+                  <span className="eyebrow" style={{ fontSize: "10px", marginBottom: "8px", display: "block" }}>🌊 Continuous Water Surface</span>
+                  <div className="property-group">
+                    <label>Wave Mode</label>
+                    <select className="input" value={selectedLayer.params.waveMode || "off"} onChange={(e) => updateParam(selectedLayer.id, "waveMode", e.target.value)} style={{ width: "100%", padding: "6px 8px", borderRadius: "8px", fontSize: "12px" }}>
+                      <option value="off">Off</option>
+                      <option value="fullscreen">Full Screen</option>
+                      <option value="zone">Zone Only</option>
+                    </select>
+                  </div>
+                  {(selectedLayer.params.waveMode === "fullscreen" || selectedLayer.params.waveMode === "zone") && (
+                    <>
+                      <div className="property-group">
+                        <label>Wave Speed ({selectedLayer.params.waveSpeed || 1.0})</label>
+                        <input type="range" min="0.1" max="5.0" step="0.1" className="property-control" value={selectedLayer.params.waveSpeed || 1.0} onChange={(e) => updateParam(selectedLayer.id, "waveSpeed", parseFloat(e.target.value))} />
+                      </div>
+                      <div className="property-group">
+                        <label>Wave Scale ({selectedLayer.params.waveScale || 5.0})</label>
+                        <input type="range" min="1" max="20" step="1" className="property-control" value={selectedLayer.params.waveScale || 5.0} onChange={(e) => updateParam(selectedLayer.id, "waveScale", parseFloat(e.target.value))} />
+                      </div>
+                      <div className="property-group">
+                        <label>Wave Strength ({selectedLayer.params.waveStrength || 1.0})</label>
+                        <input type="range" min="0.1" max="5.0" step="0.1" className="property-control" value={selectedLayer.params.waveStrength || 1.0} onChange={(e) => updateParam(selectedLayer.id, "waveStrength", parseFloat(e.target.value))} />
+                      </div>
+                    </>
+                  )}
+                  {selectedLayer.params.waveMode === "zone" && (
+                    <>
+                      <div className="property-group">
+                        <label>Zone X ({selectedLayer.params.waveZoneX || 20}%)</label>
+                        <input type="range" min="0" max="100" step="1" className="property-control" value={selectedLayer.params.waveZoneX || 20} onChange={(e) => updateParam(selectedLayer.id, "waveZoneX", parseInt(e.target.value))} />
+                      </div>
+                      <div className="property-group">
+                        <label>Zone Y ({selectedLayer.params.waveZoneY || 60}%)</label>
+                        <input type="range" min="0" max="100" step="1" className="property-control" value={selectedLayer.params.waveZoneY || 60} onChange={(e) => updateParam(selectedLayer.id, "waveZoneY", parseInt(e.target.value))} />
+                      </div>
+                      <div className="property-group">
+                        <label>Zone Width ({selectedLayer.params.waveZoneW || 60}%)</label>
+                        <input type="range" min="5" max="100" step="5" className="property-control" value={selectedLayer.params.waveZoneW || 60} onChange={(e) => updateParam(selectedLayer.id, "waveZoneW", parseInt(e.target.value))} />
+                      </div>
+                      <div className="property-group">
+                        <label>Zone Height ({selectedLayer.params.waveZoneH || 30}%)</label>
+                        <input type="range" min="5" max="100" step="5" className="property-control" value={selectedLayer.params.waveZoneH || 30} onChange={(e) => updateParam(selectedLayer.id, "waveZoneH", parseInt(e.target.value))} />
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                <div style={{ borderTop: "1px solid var(--panel-stroke)", paddingTop: "12px", marginTop: "12px" }}>
+                  <span className="eyebrow" style={{ fontSize: "10px", marginBottom: "8px", display: "block" }}>🔄 Auto Ripple Emitter</span>
+                  <div className="property-group" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <input type="checkbox" checked={selectedLayer.params.autoRipple || false} onChange={(e) => updateParam(selectedLayer.id, "autoRipple", e.target.checked)} style={{ width: "16px", height: "16px" }} />
+                    <label style={{ margin: 0 }}>Enable Auto Ripples</label>
+                  </div>
+                  {selectedLayer.params.autoRipple && (
+                    <div className="property-group">
+                      <label>Interval ({selectedLayer.params.autoInterval || 1.5}s)</label>
+                      <input type="range" min="0.3" max="5.0" step="0.1" className="property-control" value={selectedLayer.params.autoInterval || 1.5} onChange={(e) => updateParam(selectedLayer.id, "autoInterval", parseFloat(e.target.value))} />
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ borderTop: "1px solid var(--panel-stroke)", paddingTop: "12px", marginTop: "12px" }}>
+                  <span className="eyebrow" style={{ fontSize: "10px", marginBottom: "8px", display: "block" }}>🌧️ Raindrop Surface</span>
+                  <div className="property-group" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <input type="checkbox" checked={selectedLayer.params.raindrops || false} onChange={(e) => updateParam(selectedLayer.id, "raindrops", e.target.checked)} style={{ width: "16px", height: "16px" }} />
+                    <label style={{ margin: 0 }}>Enable Raindrop Impacts</label>
+                  </div>
+                  {selectedLayer.params.raindrops && (
+                    <div className="property-group">
+                      <label>Rain Intensity ({selectedLayer.params.rainIntensity || 1.0})</label>
+                      <input type="range" min="0.1" max="3.0" step="0.1" className="property-control" value={selectedLayer.params.rainIntensity || 1.0} onChange={(e) => updateParam(selectedLayer.id, "rainIntensity", parseFloat(e.target.value))} />
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+
+            {selectedLayer.type === "rain-on-glass" && (
+              <>
+                <div className="property-group">
+                  <label>Intensity ({selectedLayer.params.intensity || 1.0})</label>
+                  <input type="range" min="0.1" max="3.0" step="0.1" className="property-control" value={selectedLayer.params.intensity || 1.0} onChange={(e) => updateParam(selectedLayer.id, "intensity", parseFloat(e.target.value))} />
+                </div>
+                <div className="property-group">
+                  <label>Drop Speed ({selectedLayer.params.dropSpeed || 1.0})</label>
+                  <input type="range" min="0.1" max="5.0" step="0.1" className="property-control" value={selectedLayer.params.dropSpeed || 1.0} onChange={(e) => updateParam(selectedLayer.id, "dropSpeed", parseFloat(e.target.value))} />
+                </div>
+                <div className="property-group">
+                  <label>Streak Count ({selectedLayer.params.streakCount || 15})</label>
+                  <input type="range" min="1" max="30" step="1" className="property-control" value={selectedLayer.params.streakCount || 15} onChange={(e) => updateParam(selectedLayer.id, "streakCount", parseInt(e.target.value))} />
+                </div>
+                <div className="property-group">
+                  <label>Droplet Density ({selectedLayer.params.dropletDensity || 20})</label>
+                  <input type="range" min="5" max="50" step="1" className="property-control" value={selectedLayer.params.dropletDensity || 20} onChange={(e) => updateParam(selectedLayer.id, "dropletDensity", parseInt(e.target.value))} />
+                </div>
+                <p style={{ fontSize: "11px", color: "var(--text-dim)", marginTop: "8px" }}>Simulates rain streaks and micro-droplets sliding down a glass surface with realistic refraction.</p>
               </>
             )}
 
@@ -909,6 +1180,74 @@ export function EditorWorkspace({ currentVideo, onApplyWallpaper, onUploadMedia 
 
             {selectedLayer.type === "fireflies" && (
               <>
+                <div className="property-group" style={{ marginBottom: "16px" }}>
+                  <label>Particle Texture</label>
+                  
+                  {/* Quick Presets Gallery */}
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: "4px", marginBottom: "8px" }}>
+                    {[
+                      { name: "Default", path: "" },
+                      { name: "Magic", path: "/assets/particles/magic_05.png" },
+                      { name: "Soft Glow", path: "/assets/particles/light_02.png" },
+                      { name: "Spark", path: "/assets/particles/spark_01.png" },
+                      { name: "Star", path: "/assets/particles/star_04.png" },
+                      { name: "Smoke", path: "/assets/particles/smoke_04.png" },
+                    ].map(preset => (
+                      <button
+                        key={preset.name}
+                        title={preset.name}
+                        onClick={() => updateParam(selectedLayer.id, "texture", preset.path)}
+                        style={{
+                          height: "36px",
+                          background: selectedLayer.params.texture === preset.path ? "rgba(164, 255, 68, 0.2)" : "#222",
+                          border: selectedLayer.params.texture === preset.path ? "1px solid #a4ff44" : "1px solid #333",
+                          borderRadius: "4px",
+                          cursor: "pointer",
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          overflow: "hidden", position: "relative"
+                        }}
+                      >
+                        {preset.path ? (
+                          <img src={preset.path} style={{ width: "24px", height: "24px", objectFit: "contain", filter: "invert(1)" }} />
+                        ) : (
+                          <span style={{ fontSize: "10px", color: "#888" }}>None</span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+
+                  {selectedLayer.params.texture && !selectedLayer.params.texture.startsWith("/assets/particles/") ? (
+                    <div style={{ position: "relative", width: "100%", height: "80px", background: "#1a1a1a", borderRadius: "8px", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <img src={selectedLayer.params.texture} style={{ width: "100%", height: "100%", objectFit: "contain" }} alt="Particle Preview" />
+                      <button 
+                        onClick={() => updateParam(selectedLayer.id, "texture", "")} 
+                        style={{ position: "absolute", top: 4, right: 4, background: "rgba(0,0,0,0.6)", color: "#fff", border: "none", borderRadius: "4px", padding: "4px 8px", cursor: "pointer", fontSize: "12px" }}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ) : (
+                    <label style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%", height: "36px", border: "1px dashed #444", borderRadius: "6px", cursor: "pointer", background: "#1a1a1a", color: "#aaa", fontSize: "11px" }}>
+                      <span>+ Upload Custom PNG</span>
+                      <input 
+                        type="file" 
+                        accept="image/png, image/jpeg, image/webp" 
+                        style={{ display: "none" }} 
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          const reader = new FileReader();
+                          reader.onload = (ev) => {
+                            if (ev.target?.result) {
+                              updateParam(selectedLayer.id, "texture", ev.target.result);
+                            }
+                          };
+                          reader.readAsDataURL(file);
+                        }}
+                      />
+                    </label>
+                  )}
+                </div>
                 <div className="property-group">
                   <label>Count ({selectedLayer.params.count})</label>
                   <input type="range" min="10" max="500" step="10" className="property-control" value={selectedLayer.params.count} onChange={(e) => updateParam(selectedLayer.id, "count", parseInt(e.target.value))} />
@@ -924,6 +1263,79 @@ export function EditorWorkspace({ currentVideo, onApplyWallpaper, onUploadMedia 
                 <div className="property-group">
                   <label>Color</label>
                   <input type="color" value={selectedLayer.params.color || "#aaff44"} onChange={(e) => updateParam(selectedLayer.id, "color", e.target.value)} style={{ width: "100%", height: "36px", border: "none", borderRadius: "8px", cursor: "pointer" }} />
+                </div>
+              </>
+            )}
+
+            {selectedLayer.type === "particle-emitter" && (
+              <>
+                <div className="property-group" style={{ marginBottom: "16px" }}>
+                  <label>Preset Shape</label>
+                  <select 
+                    className="input" 
+                    value={selectedLayer.params.preset || "fire"}
+                    onChange={(e) => {
+                      const preset = e.target.value;
+                      let tex = "";
+                      let cStart = "#ff5a00";
+                      let cEnd = "#000000";
+                      if (preset === "fire") { tex = "/assets/particles/fire_01.png"; cStart = "#ff5a00"; cEnd = "#000000"; }
+                      if (preset === "smoke") { tex = "/assets/particles/smoke_04.png"; cStart = "#555555"; cEnd = "#000000"; }
+                      if (preset === "magic") { tex = "/assets/particles/magic_05.png"; cStart = "#00ffcc"; cEnd = "#0000ff"; }
+                      if (preset === "flare") { tex = "/assets/particles/light_02.png"; cStart = "#ffffff"; cEnd = "#ffaa00"; }
+                      
+                      updateParam(selectedLayer.id, "preset", preset);
+                      updateParam(selectedLayer.id, "texture", tex);
+                      updateParam(selectedLayer.id, "colorStart", cStart);
+                      updateParam(selectedLayer.id, "colorEnd", cEnd);
+                    }}
+                  >
+                    <option value="fire">Fire</option>
+                    <option value="smoke">Smoke</option>
+                    <option value="magic">Magic</option>
+                    <option value="flare">Flare</option>
+                  </select>
+                </div>
+
+                <div className="property-group">
+                  <label>Position X ({selectedLayer.params.x || 50}%)</label>
+                  <input type="range" min="0" max="100" className="property-control" value={selectedLayer.params.x || 50} onChange={(e) => updateParam(selectedLayer.id, "x", parseInt(e.target.value))} />
+                </div>
+                <div className="property-group">
+                  <label>Position Y ({selectedLayer.params.y || 50}%)</label>
+                  <input type="range" min="0" max="100" className="property-control" value={selectedLayer.params.y || 50} onChange={(e) => updateParam(selectedLayer.id, "y", parseInt(e.target.value))} />
+                </div>
+
+                <div className="property-group">
+                  <label>Follow Mouse</label>
+                  <input 
+                    type="checkbox" 
+                    checked={selectedLayer.params.followMouse || false} 
+                    onChange={(e) => updateParam(selectedLayer.id, "followMouse", e.target.checked)} 
+                  />
+                </div>
+
+                <div className="property-group">
+                  <label>Emission Rate ({selectedLayer.params.count})</label>
+                  <input type="range" min="10" max="1000" step="10" className="property-control" value={selectedLayer.params.count} onChange={(e) => updateParam(selectedLayer.id, "count", parseInt(e.target.value))} />
+                </div>
+                <div className="property-group">
+                  <label>Speed ({selectedLayer.params.speed})</label>
+                  <input type="range" min="0.1" max="10" step="0.1" className="property-control" value={selectedLayer.params.speed} onChange={(e) => updateParam(selectedLayer.id, "speed", parseFloat(e.target.value))} />
+                </div>
+                <div className="property-group">
+                  <label>Spread ({selectedLayer.params.spread})</label>
+                  <input type="range" min="0.0" max="5.0" step="0.1" className="property-control" value={selectedLayer.params.spread} onChange={(e) => updateParam(selectedLayer.id, "spread", parseFloat(e.target.value))} />
+                </div>
+                <div className="property-group" style={{ display: "flex", gap: "8px" }}>
+                  <div style={{ flex: 1 }}>
+                    <label>Start Color</label>
+                    <input type="color" value={selectedLayer.params.colorStart || "#ffffff"} onChange={(e) => updateParam(selectedLayer.id, "colorStart", e.target.value)} style={{ width: "100%", height: "36px", border: "none", borderRadius: "8px", cursor: "pointer" }} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label>End Color</label>
+                    <input type="color" value={selectedLayer.params.colorEnd || "#000000"} onChange={(e) => updateParam(selectedLayer.id, "colorEnd", e.target.value)} style={{ width: "100%", height: "36px", border: "none", borderRadius: "8px", cursor: "pointer" }} />
+                  </div>
                 </div>
               </>
             )}
@@ -974,6 +1386,54 @@ export function EditorWorkspace({ currentVideo, onApplyWallpaper, onUploadMedia 
                 <div className="property-group">
                   <label>Color</label>
                   <input type="color" value={selectedLayer.params.color || "#d9e0eb"} onChange={(e) => updateParam(selectedLayer.id, "color", e.target.value)} style={{ width: "100%", height: "36px", border: "none", borderRadius: "8px", cursor: "pointer" }} />
+                </div>
+              </>
+            )}
+            
+            {selectedLayer.type === "desktop-pet" && (
+              <>
+                <div className="property-group">
+                  <label>Behavior</label>
+                  <select className="input" value={selectedLayer.params.behavior || "wander"} onChange={(e) => updateParam(selectedLayer.id, "behavior", e.target.value)}>
+                    <optgroup label="AI Behaviors">
+                      <option value="wander">Wander Automatically</option>
+                      <option value="follow-cursor">Follow Mouse</option>
+                      <option value="idle-only">Just Sleep/Idle</option>
+                    </optgroup>
+                    <optgroup label="Static Animations (Looping)">
+                      {DESKTOP_PET_ANIMATIONS.map(anim => (
+                        <option key={anim} value={anim}>{anim}</option>
+                      ))}
+                    </optgroup>
+                  </select>
+                </div>
+                <div className="property-group">
+                  <label className="checkbox-label">
+                    <input type="checkbox" checked={selectedLayer.params.enableCracks !== false} onChange={(e) => updateParam(selectedLayer.id, "enableCracks", e.target.checked)} />
+                    Enable Screen Cracks
+                  </label>
+                </div>
+                <div className="property-group">
+                  <label className="checkbox-label">
+                    <input type="checkbox" checked={selectedLayer.params.muted === true} onChange={(e) => updateParam(selectedLayer.id, "muted", e.target.checked)} />
+                    Mute Voice Lines
+                  </label>
+                </div>
+                <div className="property-group">
+                  <label>Pet Name</label>
+                  <input type="text" className="input" value={selectedLayer.params.name || ""} onChange={(e) => updateParam(selectedLayer.id, "name", e.target.value)} placeholder="Bot" />
+                </div>
+                <div className="property-group">
+                  <label>Speed ({selectedLayer.params.speed || 1.0})</label>
+                  <input type="range" min="0.2" max="3" step="0.1" className="property-control" value={selectedLayer.params.speed || 1.0} onChange={(e) => updateParam(selectedLayer.id, "speed", parseFloat(e.target.value))} />
+                </div>
+                <div className="property-group">
+                  <label>Size / Scale ({selectedLayer.params.scale || 50})</label>
+                  <input type="range" min="10" max="150" step="5" className="property-control" value={selectedLayer.params.scale || 50} onChange={(e) => updateParam(selectedLayer.id, "scale", parseFloat(e.target.value))} />
+                </div>
+                <div className="property-group">
+                  <label>Pet Color</label>
+                  <input type="color" value={selectedLayer.params.color || "#00aaff"} onChange={(e) => updateParam(selectedLayer.id, "color", e.target.value)} style={{ width: "100%", height: "36px", border: "none", borderRadius: "8px", cursor: "pointer" }} />
                 </div>
               </>
             )}

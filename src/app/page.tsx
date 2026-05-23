@@ -469,6 +469,7 @@ function Home() {
           {activeTab === "editor" && (
             <EditorWorkspace 
               currentVideo={wallpaper.currentVideo} 
+              onSelectVideo={(video) => wallpaper.selectVideo(video)}
               onApplyWallpaper={async (v) => { await wallpaper.applyWallpaper(v); }} 
               onUploadMedia={wallpaper.browseLocalVideo}
             />

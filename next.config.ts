@@ -12,6 +12,16 @@ const nextConfig: NextConfig = {
     unoptimized: true,
   },
   transpilePackages: ["@tauri-apps/api"],
+  webpack: (config) => {
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      "onnxruntime-node": false,
+      "fs": false,
+      "path": false,
+      "crypto": false,
+    };
+    return config;
+  },
 };
 
 export default nextConfig;
