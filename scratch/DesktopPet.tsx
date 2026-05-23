@@ -40,11 +40,11 @@ useGLTF.preload(ANIM_RANGED_PATH);
 useGLTF.preload(ANIM_SPECIAL_PATH);
 useGLTF.preload(ANIM_TOOLS_PATH);
 
-function PetEntity({ params, isOverlay, widgets, onUpdateParam, isPrimary, myPosRef, myStateRef, friendPosRef, friendStateRef }: DesktopPetProps & { isPrimary: boolean, myPosRef: any, myStateRef: any, friendPosRef: any, friendStateRef: any }) {
+export function DesktopPet({ params, isOverlay, widgets, onUpdateParam }: DesktopPetProps) {
   const outerGroup = useRef<THREE.Group>(null);
   const animGroup = useRef<THREE.Group>(null);
   
-  const skinName = isPrimary ? (params.skin || "Knight") : (params.companionSkin || "Mage");
+  const skinName = params.skin || "Knight";
   const skinPath = SKINS[skinName] || SKINS["Knight"];
 
   const clonedScene = useMemo(() => {
@@ -79,9 +79,9 @@ function PetEntity({ params, isOverlay, widgets, onUpdateParam, isPrimary, myPos
   const speedScale = params.speed || 1.0;
 
   // AI State
-  const aiState = myStateRef;
+  const aiState = useRef<"IDLE" | "WALK" | "RUN" | "CLICK_MOVE" | "PUNCH" | "CUSTOM" | "WIDGET_MOVE" | "WIDGET_INTERACT" | "DANCE" | "WIDGET_PICKUP" | "WIDGET_HOLD" | "WIDGET_THROW" | "WIDGET_AIRBORNE" | "ICON_MOVE" | "ICON_THROW">("IDLE");
   const targetPos = useRef(new THREE.Vector3(0, 0, 0));
-  const currentPos = myPosRef;
+  const currentPos = useRef(new THREE.Vector3(0, -300, 0)); // Start somewhat bottom-center
   const cursorTarget = useRef<{ x: number, y: number } | null>(null);
   const timer = useRef(0);
   const audioVolume = useRef(0);
@@ -314,20 +314,6 @@ function PetEntity({ params, isOverlay, widgets, onUpdateParam, isPrimary, myPos
   }, [actions]);
 
   // Change animation helper
-  const getAttackAnimForSkin = (skin: string) => {
-    const attacks: Record<string, string[]> = {
-      "Knight": ["Melee_1H_Attack_Chop", "Melee_1H_Attack_Slice_Diagonal", "Melee_Block_Attack"],
-      "Barbarian": ["Melee_2H_Attack_Chop", "Melee_2H_Attack_Spin", "Melee_2H_Attack_Slice"],
-      "Mage": ["Ranged_Magic_Shoot", "Ranged_Magic_Spellcasting", "Ranged_Magic_Summon"],
-      "Rogue": ["Melee_Dualwield_Attack_Chop", "Melee_Dualwield_Attack_Slice", "Melee_Dualwield_Attack_Stab"],
-      "Rogue Hooded": ["Melee_Dualwield_Attack_Chop", "Melee_Dualwield_Attack_Slice", "Melee_Dualwield_Attack_Stab"]
-    };
-    const list = attacks[skin] || ["Melee_Unarmed_Attack_Punch_A", "Melee_Unarmed_Attack_Kick"];
-    const available = list.filter(a => actions[a]);
-    if (available.length > 0) return available[Math.floor(Math.random() * available.length)];
-    return "Melee_Unarmed_Attack_Punch_A"; // Fallback
-  };
-
   const playAnim = (name: string, duration = 0.3) => {
     if (!actions[name]) return;
     // Fade out others
@@ -449,41 +435,6 @@ function PetEntity({ params, isOverlay, widgets, onUpdateParam, isPrimary, myPos
             playAnim("Walking_A");
           }
         }
-      } else if (aiState.current === "FOLLOW_FRIEND") {
-        if (friendPosRef && friendPosRef.current) {
-          targetPos.current.copy(friendPosRef.current);
-          const dist = currentPos.current.distanceTo(targetPos.current);
-          if (dist < 80 || timer.current <= 0) {
-            aiState.current = "IDLE";
-            playAnim("Idle_A");
-            timer.current = 1.0 + Math.random() * 2.0;
-            if (dist < 80 && Math.random() > 0.7) {
-              playAnim("Cheering");
-              playVoiceLine("Hello friend!");
-            }
-          } else {
-            isMoving = true;
-          }
-        } else {
-          aiState.current = "IDLE";
-        }
-      } else if (aiState.current === "BATTLE_ATTACK") {
-        if (timer.current <= 0) {
-          aiState.current = "IDLE";
-        }
-      } else if (aiState.current === "BATTLE_HIT_INIT") {
-        aiState.current = "BATTLE_HIT";
-        timer.current = 0.5;
-        playAnim("Hit_A");
-        playVoiceLine(Math.random() > 0.5 ? "Ouch!" : "Hey!");
-      } else if (aiState.current === "BATTLE_HIT") {
-        if (timer.current <= 0) {
-          aiState.current = "BATTLE_ATTACK"; // Retaliate!
-          timer.current = 1.0;
-          playAnim(getAttackAnimForSkin(skinName));
-          playVoiceLine("My turn!");
-          if (friendStateRef) friendStateRef.current = "BATTLE_HIT_INIT";
-        }
       } else if (aiState.current === "WALK") {
         const dist = currentPos.current.distanceTo(targetVec);
         if (dist < 10) {
@@ -546,11 +497,6 @@ function PetEntity({ params, isOverlay, widgets, onUpdateParam, isPrimary, myPos
           const h = window.innerHeight;
           let bestSpot = new THREE.Vector3(0, 0, 0);
           let maxDist = -1;
-
-          if (params.mayhemMode && friendPosRef && friendPosRef.current) {
-            bestSpot.copy(friendPosRef.current);
-            maxDist = 9999;
-          } else {
           
           for (let i = 0; i < 20; i++) {
              const tx = (Math.random() - 0.5) * (w - 200);
@@ -569,7 +515,6 @@ function PetEntity({ params, isOverlay, widgets, onUpdateParam, isPrimary, myPos
                 bestSpot.set(tx, ty, 0);
              }
           }
-          } // End of mayhem check
           targetPos.current.copy(bestSpot);
           playVoiceLine("I'm moving this!");
         }
@@ -595,12 +540,8 @@ function PetEntity({ params, isOverlay, widgets, onUpdateParam, isPrimary, myPos
           const anims = names.filter(n => n.includes("Throw") || n.includes("Punch"));
           playAnim(anims.length > 0 ? anims[0] : "Interact");
           timer.current = 0.5;
-          if (params.mayhemMode && friendPosRef && friendPosRef.current) {
-            const dir = new THREE.Vector3().subVectors(friendPosRef.current, currentPos.current).normalize();
-            throwVelocity.current.set(dir.x * 20, -dir.y * 20, 0); // Invert Y because of screen coords
-          } else {
-            throwVelocity.current.set((Math.random() - 0.5) * 15, (Math.random() - 0.5) * 15, 0);
-          }
+          // Short toss velocity!
+          throwVelocity.current.set((Math.random() - 0.5) * 15, (Math.random() - 0.5) * 15, 0);
           playVoiceLine("Yeet!");
         } else {
           isMoving = true;
@@ -755,24 +696,25 @@ function PetEntity({ params, isOverlay, widgets, onUpdateParam, isPrimary, myPos
       currentPos.current.add(dir.multiplyScalar(currentSpeed * delta));
 
       // Rotation: Face the movement direction
+      // We want +Z to be forward, but typically GLTF models face +Z.
+      // We use atan2 to find the angle in the XY plane (since it's a 2D desktop).
+      // We rotate around the X axis to stand up, then around Z to face the direction?
+      // No, standard 3D in React Three Fiber has Y as UP, and X/Z as floor.
+      // But we are in a 2D orthographic/perspective camera where Z is depth.
+      // So UP is +Y, RIGHT is +X.
+      // To walk across the screen, the character needs to rotate around the Y axis.
       const angle = Math.atan2(dir.x, dir.y);
+
+      // Smoothly rotate
       const targetRot = angle;
+      // Lerp rotation
       let r = animGroup.current.rotation.y;
+      // Shortest path angle lerp
       let diff = targetRot - r;
       while (diff < -Math.PI) diff += Math.PI * 2;
       while (diff > Math.PI) diff -= Math.PI * 2;
+
       animGroup.current.rotation.y += diff * 10 * delta;
-    } else if (friendPosRef && friendPosRef.current && (aiState.current === "BATTLE_ATTACK" || aiState.current === "BATTLE_HIT" || aiState.current === "BATTLE_HIT_INIT")) {
-      // Face the friend during battle even if not moving
-      const dir = new THREE.Vector3().subVectors(friendPosRef.current, currentPos.current).normalize();
-      if (dir.lengthSq() > 0.001) {
-        const angle = Math.atan2(dir.x, dir.y);
-        let r = animGroup.current.rotation.y;
-        let diff = angle - r;
-        while (diff < -Math.PI) diff += Math.PI * 2;
-        while (diff > Math.PI) diff -= Math.PI * 2;
-        animGroup.current.rotation.y += diff * 15 * delta;
-      }
     }
 
     outerGroup.current.position.copy(currentPos.current);
@@ -830,37 +772,5 @@ function PetEntity({ params, isOverlay, widgets, onUpdateParam, isPrimary, myPos
         ) */}
       </group>
     </group>
-  );
-}
-
-
-export function DesktopPet(props: DesktopPetProps) {
-  const primaryPosRef = useRef(new THREE.Vector3(0, -300, 0));
-  const primaryStateRef = useRef<any>("IDLE");
-
-  const companionPosRef = useRef(new THREE.Vector3(150, -300, 0));
-  const companionStateRef = useRef<any>("IDLE");
-
-  return (
-    <>
-       <PetEntity 
-          isPrimary={true} 
-          myPosRef={primaryPosRef}
-          myStateRef={primaryStateRef}
-          friendPosRef={props.params.enableCompanion ? companionPosRef : null}
-          friendStateRef={props.params.enableCompanion ? companionStateRef : null}
-          {...props} 
-       />
-       {props.params.enableCompanion && (
-          <PetEntity 
-            isPrimary={false} 
-            myPosRef={companionPosRef}
-            myStateRef={companionStateRef}
-            friendPosRef={primaryPosRef}
-            friendStateRef={primaryStateRef}
-            {...props} 
-          />
-       )}
-    </>
   );
 }

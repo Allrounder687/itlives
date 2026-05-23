@@ -1393,6 +1393,42 @@ export function EditorWorkspace({ currentVideo, onSelectVideo, onApplyWallpaper,
             {selectedLayer.type === "desktop-pet" && (
               <>
                 <div className="property-group">
+                  <label>Primary Skin</label>
+                  <select className="input" value={selectedLayer.params.skin || "Knight"} onChange={(e) => updateParam(selectedLayer.id, "skin", e.target.value)}>
+                    <option value="Knight">Knight</option>
+                    <option value="Barbarian">Barbarian</option>
+                    <option value="Mage">Mage</option>
+                    <option value="Rogue">Rogue</option>
+                    <option value="Rogue Hooded">Rogue Hooded</option>
+                  </select>
+                </div>
+                <div className="property-group">
+                  <label className="checkbox-label">
+                    <input type="checkbox" checked={selectedLayer.params.enableCompanion === true} onChange={(e) => updateParam(selectedLayer.id, "enableCompanion", e.target.checked)} />
+                    Enable Companion Pet
+                  </label>
+                </div>
+                {selectedLayer.params.enableCompanion && (
+                  <>
+                    <div className="property-group">
+                      <label>Companion Skin</label>
+                      <select className="input" value={selectedLayer.params.companionSkin || "Mage"} onChange={(e) => updateParam(selectedLayer.id, "companionSkin", e.target.value)}>
+                        <option value="Knight">Knight</option>
+                        <option value="Barbarian">Barbarian</option>
+                        <option value="Mage">Mage</option>
+                        <option value="Rogue">Rogue</option>
+                        <option value="Rogue Hooded">Rogue Hooded</option>
+                      </select>
+                    </div>
+                    <div className="property-group">
+                      <label className="checkbox-label">
+                        <input type="checkbox" checked={selectedLayer.params.mayhemMode === true} onChange={(e) => updateParam(selectedLayer.id, "mayhemMode", e.target.checked)} />
+                        Enable Mayhem (Battles & Throwing)
+                      </label>
+                    </div>
+                  </>
+                )}
+                <div className="property-group">
                   <label>Behavior</label>
                   <select className="input" value={selectedLayer.params.behavior || "wander"} onChange={(e) => updateParam(selectedLayer.id, "behavior", e.target.value)}>
                     <optgroup label="AI Behaviors">
@@ -1432,7 +1468,7 @@ export function EditorWorkspace({ currentVideo, onSelectVideo, onApplyWallpaper,
                   <input type="range" min="10" max="150" step="5" className="property-control" value={selectedLayer.params.scale || 50} onChange={(e) => updateParam(selectedLayer.id, "scale", parseFloat(e.target.value))} />
                 </div>
                 <div className="property-group">
-                  <label>Pet Color</label>
+                  <label>Pet Color (Fallback)</label>
                   <input type="color" value={selectedLayer.params.color || "#00aaff"} onChange={(e) => updateParam(selectedLayer.id, "color", e.target.value)} style={{ width: "100%", height: "36px", border: "none", borderRadius: "8px", cursor: "pointer" }} />
                 </div>
               </>
