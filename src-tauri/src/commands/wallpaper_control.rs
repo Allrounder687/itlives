@@ -387,10 +387,12 @@ pub fn start_mouse_tracking(app_handle: tauri::AppHandle) {
 
     std::thread::spawn(move || {
         use windows::Win32::UI::WindowsAndMessaging::{GetCursorPos, GetSystemMetrics, SM_XVIRTUALSCREEN, SM_YVIRTUALSCREEN};
-        use windows::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_LBUTTON};
+        use windows::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_LBUTTON, VK_RBUTTON, VK_MBUTTON};
         use windows::Win32::Foundation::POINT;
 
-        let mut was_down = false;
+        let mut was_l_down = false;
+        let mut was_r_down = false;
+        let mut was_m_down = false;
 
         loop {
             let mut pt = POINT::default();
@@ -400,6 +402,7 @@ pub fn start_mouse_tracking(app_handle: tauri::AppHandle) {
                     struct CursorPayload {
                         x: i32,
                         y: i32,
+                        button: Option<String>,
                     }
                     
                     let vx = GetSystemMetrics(SM_XVIRTUALSCREEN);
@@ -407,19 +410,43 @@ pub fn start_mouse_tracking(app_handle: tauri::AppHandle) {
                     let payload = CursorPayload {
                         x: pt.x - vx,
                         y: pt.y - vy,
+                        button: None,
                     };
                     
                     let _ = app_handle.emit("cursor-moved", payload.clone());
 
                     // Track left mouse button clicks
                     let lbtn_state = GetAsyncKeyState(VK_LBUTTON.0 as i32);
-                    let is_down = (lbtn_state as u16 & 0x8000) != 0;
+                    let is_l_down = (lbtn_state as u16 & 0x8000) != 0;
                     
-                    if is_down && !was_down {
-                        log::info!("[Overlay] Global Click captured, emitting cursor-click");
-                        let _ = app_handle.emit("cursor-click", payload);
+                    if is_l_down && !was_l_down {
+                        let mut click_payload = payload.clone();
+                        click_payload.button = Some("left".to_string());
+                        let _ = app_handle.emit("cursor-click", click_payload);
                     }
-                    was_down = is_down;
+                    was_l_down = is_l_down;
+
+                    // Track right mouse button clicks
+                    let rbtn_state = GetAsyncKeyState(VK_RBUTTON.0 as i32);
+                    let is_r_down = (rbtn_state as u16 & 0x8000) != 0;
+                    
+                    if is_r_down && !was_r_down {
+                        let mut click_payload = payload.clone();
+                        click_payload.button = Some("right".to_string());
+                        let _ = app_handle.emit("cursor-click", click_payload);
+                    }
+                    was_r_down = is_r_down;
+
+                    // Track middle mouse button clicks (Food)
+                    let mbtn_state = GetAsyncKeyState(VK_MBUTTON.0 as i32);
+                    let is_m_down = (mbtn_state as u16 & 0x8000) != 0;
+                    
+                    if is_m_down && !was_m_down {
+                        let mut click_payload = payload.clone();
+                        click_payload.button = Some("food".to_string());
+                        let _ = app_handle.emit("cursor-click", click_payload);
+                    }
+                    was_m_down = is_m_down;
                 }
             }
             std::thread::sleep(std::time::Duration::from_millis(32)); // ~30fps for smoother balance between perf and response

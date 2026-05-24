@@ -1,4 +1,5 @@
 import { useCallback, useRef } from "react";
+import { cacheAudio, getCachedAudio } from "./audioCache";
 
 export function useKokoroTTS(muted: boolean) {
   const isInitializing = useRef(false);
@@ -34,10 +35,25 @@ export function useKokoroTTS(muted: boolean) {
         }
 
         if ((window as any).kokoroTTS) {
-          const audioData = await (window as any).kokoroTTS.generate(text, { voice: "af_heart" });
+          // Check cache first
+          let float32Data = await getCachedAudio(text);
+          let sampleRate = 24000; // Kokoro default
+
+          if (!float32Data) {
+            console.log("Generating fresh audio for:", text);
+            const audioData = await (window as any).kokoroTTS.generate(text, { voice: "af_heart" });
+            float32Data = audioData.audio;
+            sampleRate = audioData.sampling_rate;
+            
+            // Save to cache asynchronously
+            cacheAudio(text, float32Data).catch(e => console.error("Cache error", e));
+          } else {
+            console.log("Playing cached audio for:", text);
+          }
+
           const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-          const audioBuffer = audioContext.createBuffer(1, audioData.audio.length, audioData.sampling_rate);
-          audioBuffer.getChannelData(0).set(audioData.audio);
+          const audioBuffer = audioContext.createBuffer(1, float32Data.length, sampleRate);
+          audioBuffer.getChannelData(0).set(float32Data);
 
           const source = audioContext.createBufferSource();
           source.buffer = audioBuffer;

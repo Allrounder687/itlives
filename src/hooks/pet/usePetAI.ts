@@ -28,7 +28,14 @@ export interface PetAIParams {
   widgets?: any[];
   triggerPower?: (vfxId: string) => void;
   generateResponse?: (prompt: string, context?: number[]) => Promise<{ text: string, sentiment: string, context: number[] } | null>;
+  popPrefetchedResponse?: (category: "wandering" | "widget" | "throwing" | "battle") => { text: string, sentiment: string, context: number[] } | null;
   aiVoiceOnly?: boolean;
+  needs?: any;
+  feed?: (amount?: number) => void;
+  play?: () => void;
+  sleep?: () => void;
+  foodPos?: THREE.Vector3 | null;
+  setFoodPos?: (pos: THREE.Vector3 | null) => void;
 }
 
 export function usePetAI() {
@@ -36,6 +43,64 @@ export function usePetAI() {
     let isMoving = false;
     let targetVec = p.targetPos.current;
     p.timer.current -= delta;
+
+    // Needs override: low hunger searches for food widget
+    if (p.timer.current <= 0 && p.needs && p.needs.hunger < 30 && p.aiState.current !== "SLEEP" && !p.foodPos) {
+      if (p.widgets) {
+        const foodBowl = p.widgets.find((w: any) => ["food-bowl", "food-pizza", "food-meat"].includes(w.type));
+        if (foodBowl) {
+          const w = window.innerWidth;
+          const h = window.innerHeight;
+          const fx = (foodBowl.params.x / 100) * w - w / 2;
+          const fy = -(foodBowl.params.y / 100) * h + h / 2;
+          if (p.setFoodPos) p.setFoodPos(new THREE.Vector3(fx, fy, 0));
+        }
+      }
+    }
+
+    // Needs override: low energy forces sleep
+    if (p.needs && p.needs.energy < 20 && p.aiState.current !== "SLEEP" && p.aiState.current !== "WIDGET_SLEEP" && !p.foodPos) {
+      if (Math.random() > 0.95) {
+        p.aiState.current = "SLEEP";
+        p.playAnim("Rest"); // or sleep
+        p.timer.current = 5.0; // sleep for 5 seconds per cycle
+        if (p.sleep) p.sleep(); // replenish energy slightly
+        return { isMoving: false, targetVec: null };
+      }
+    }
+
+    // Check for Food
+    if (p.foodPos && p.setFoodPos) {
+      const distToFood = p.currentPos.current.distanceTo(p.foodPos);
+      if (distToFood > 150) {
+        p.aiState.current = "CLICK_MOVE"; // use click move to run to it
+        p.targetPos.current.copy(p.foodPos);
+        p.playAnim("Running_A");
+        return { isMoving: true, targetVec: p.foodPos.clone() };
+      } else {
+        // Reached food
+        p.aiState.current = "CUSTOM";
+        p.playAnim("Interact"); // Eat animation
+        p.timer.current = 3.0;
+        if (p.needs && p.needs.moody) {
+           if (p.feed) p.feed(15); // Slightly feed it so it stops looping over the same food widget while refusing
+           if (p.generateResponse) {
+             p.generateResponse("I am very moody right now. Refuse to eat the food in front of me with a short sentence.").then(res => {
+               if (res && res.text) p.playVoiceLine(res.text);
+             });
+           }
+        } else {
+           if (p.feed) p.feed();
+           if (p.generateResponse) {
+             p.generateResponse("I just ate some yummy food! Say a quick, happy reaction out loud.").then(res => {
+               if (res && res.text) p.playVoiceLine(res.text);
+             });
+           }
+        }
+        p.setFoodPos(null);
+        return { isMoving: false, targetVec: null };
+      }
+    }
 
     const vol = p.audioVolume.current;
 
@@ -84,77 +149,101 @@ export function usePetAI() {
     } else if (p.behavior === "wander") {
       if (p.aiState.current === "IDLE") {
         if (p.timer.current <= 0) {
-          const roll = Math.random();
-          if (roll > 0.95 && !p.isOverlay) {
-            // 5% chance: throw a desktop icon
-            p.aiState.current = "ICON_MOVE";
-            const w = window.innerWidth;
-            const h = window.innerHeight;
-            p.targetPos.current.set((Math.random() - 0.5) * (w - 100), (Math.random() - 0.5) * (h - 100), 0);
-            p.playAnim("Running_A");
-          } else if (p.widgets && p.widgets.length > 0 && roll > 0.55) {
-            // 40% chance: go interact with a widget
-            const wTarget = p.widgets[Math.floor(Math.random() * p.widgets.length)];
-            p.targetWidgetRef.current = wTarget;
-            const sw = window.innerWidth;
-            const sh = window.innerHeight;
-            const px = wTarget.params.x || 50;
-            const py = wTarget.params.y || 50;
-            const pw = wTarget.params.w || 20;
-            const screenX = (px / 100) * sw;
-            const screenY = (py / 100) * sh;
-            const screenW = (pw / 100) * sw;
+          const currentHour = new Date().getHours();
+          const isSleepTime = currentHour >= 8 && currentHour < 15;
+          const isWorkTime = currentHour >= 15 && currentHour < 20;
 
-            const targetX = screenX + screenW / 2 - sw / 2;
-            const targetY = -(screenY - sh / 2) + 15; // 15px above top edge
-
-            let clampedX = targetX;
-            if (clampedX < -sw / 2 + 50) clampedX = -sw / 2 + 50;
-            if (clampedX > sw / 2 - 50) clampedX = sw / 2 - 50;
-
-            p.targetPos.current.set(clampedX, targetY, 0);
-            p.aiState.current = "WIDGET_MOVE";
-            p.playAnim("Running_A");
-          } else if (roll > 0.85 && p.triggerPower) {
-            // 10% chance: Cast a magical power VFX!
-            p.aiState.current = "POWER";
-            const spellAnims = p.names.filter(n => n.includes("Spellcast") || n.includes("Attack") || n.includes("Summon"));
-            const randomSpell = spellAnims.length > 0 ? spellAnims[Math.floor(Math.random() * spellAnims.length)] : "Cheering";
-            p.playAnim(randomSpell);
-            p.timer.current = p.actions[randomSpell]?.getClip().duration || 2.0;
-            if (!p.aiVoiceOnly) p.playVoiceLine("Feel my power!");
-            
-            // Randomly pick between Dark VFX 1 and 2
-            const vfxId = Math.random() > 0.5 ? "dark_vfx_1" : "dark_vfx_2";
-            setTimeout(() => {
-              p.triggerPower!(vfxId);
-            }, 500); // Trigger VFX halfway through the animation
-
-          } else if (roll > 0.3) {
-            // 25% chance: do a fun animation in-place
-            p.aiState.current = "FUN_ANIM"; // FIX: actually update state so it waits properly
-            const skip = ["Walk", "Run", "Idle", "Jump", "Dodge", "Death", "Hit", "Defeat", "Spawn"];
-            const availableAnims = p.names.filter((n) => !skip.some((s) => n.includes(s)));
-            const randomAnim = availableAnims.length > 0 ? availableAnims[Math.floor(Math.random() * availableAnims.length)] : "Cheering";
-            p.playAnim(randomAnim);
-            p.timer.current = p.actions[randomAnim]?.getClip().duration || 2.0;
-
-            // Fun voice lines for idle animations
-            const idleLines = ["Hmm...", "What's over here?", "La la la!", "Bored!", "Stretching time!"];
-            if (p.generateResponse && Math.random() > 0.4) {
-              p.generateResponse("You are bored and wandering around my desktop screen. Say a random, very short, funny thought out loud.").then(res => {
-                if (res && res.text) p.playVoiceLine(res.text);
-              });
-            } else if (!p.aiVoiceOnly && Math.random() > 0.6) {
-              p.playVoiceLine(idleLines[Math.floor(Math.random() * idleLines.length)]);
+          if (isSleepTime) {
+            // Go to sleep!
+            if (p.widgets && p.widgets.length > 0) {
+              const wTarget = p.widgets[Math.floor(Math.random() * p.widgets.length)];
+              p.targetWidgetRef.current = wTarget;
+              const sw = window.innerWidth;
+              const sh = window.innerHeight;
+              const px = wTarget.params.x || 50;
+              const py = wTarget.params.y || 50;
+              p.targetPos.current.set((px / 100) * sw - sw / 2, -((py / 100) * sh - sh / 2), 0);
+              p.aiState.current = "WIDGET_SLEEP_MOVE";
+              p.playAnim("Running_A");
+            } else {
+              p.aiState.current = "SLEEP";
+              p.playAnim("Rest");
+              p.timer.current = 15.0;
             }
           } else {
-            // 30% chance: walk somewhere new
-            const w = window.innerWidth;
-            const h = window.innerHeight;
-            p.targetPos.current.set((Math.random() - 0.5) * (w - 100), (Math.random() - 0.5) * (h - 100), 0);
-            p.aiState.current = "WALK";
-            p.playAnim("Walking_A");
+            // Work or Play time
+            const roll = Math.random();
+            const throwChance = isWorkTime ? 0.98 : 0.90;
+            const fightChance = isWorkTime ? 0.95 : 0.70;
+            const widgetChance = isWorkTime ? 0.70 : 0.40;
+
+            if (roll > throwChance && !p.isOverlay) {
+              // Throw a desktop icon
+              p.aiState.current = "ICON_MOVE";
+              const w = window.innerWidth;
+              const h = window.innerHeight;
+              p.targetPos.current.set((Math.random() - 0.5) * (w - 100), (Math.random() - 0.5) * (h - 100), 0);
+              p.playAnim("Running_A");
+            } else if (roll > fightChance && p.triggerPower) {
+              // 10% chance (Play) or 5% (Work): Cast a magical power VFX!
+              p.aiState.current = "POWER";
+              const spellAnims = p.names.filter(n => n.includes("Spellcast") || n.includes("Attack") || n.includes("Summon"));
+              const randomSpell = spellAnims.length > 0 ? spellAnims[Math.floor(Math.random() * spellAnims.length)] : "Cheering";
+              p.playAnim(randomSpell);
+              p.timer.current = p.actions[randomSpell]?.getClip().duration || 2.0;
+              if (!p.aiVoiceOnly) p.playVoiceLine("Feel my power!");
+              
+              const vfxId = Math.random() > 0.5 ? "dark_vfx_1" : "dark_vfx_2";
+              setTimeout(() => { p.triggerPower!(vfxId); }, 500); 
+
+            } else if (p.widgets && p.widgets.length > 0 && roll > widgetChance) {
+              // Interact with a widget
+              const wTarget = p.widgets[Math.floor(Math.random() * p.widgets.length)];
+              p.targetWidgetRef.current = wTarget;
+              const sw = window.innerWidth;
+              const sh = window.innerHeight;
+              const px = wTarget.params.x || 50;
+              const py = wTarget.params.y || 50;
+              const pw = wTarget.params.w || 20;
+              const screenX = (px / 100) * sw;
+              const screenY = (py / 100) * sh;
+              const screenW = (pw / 100) * sw;
+
+              const targetX = screenX + screenW / 2 - sw / 2;
+              const targetY = -(screenY - sh / 2) + 15;
+
+              let clampedX = targetX;
+              if (clampedX < -sw / 2 + 50) clampedX = -sw / 2 + 50;
+              if (clampedX > sw / 2 - 50) clampedX = sw / 2 - 50;
+
+              p.targetPos.current.set(clampedX, targetY, 0);
+              p.aiState.current = "WIDGET_MOVE";
+              p.playAnim("Running_A");
+            } else if (roll > 0.3) {
+              // Fun animation in-place
+              p.aiState.current = "FUN_ANIM";
+              const skip = ["Walk", "Run", "Idle", "Jump", "Dodge", "Death", "Hit", "Defeat", "Spawn"];
+              const availableAnims = p.names.filter((n) => !skip.some((s) => n.includes(s)));
+              const randomAnim = availableAnims.length > 0 ? availableAnims[Math.floor(Math.random() * availableAnims.length)] : "Cheering";
+              p.playAnim(randomAnim);
+              p.timer.current = p.actions[randomAnim]?.getClip().duration || 2.0;
+
+              const idleLines = ["Hmm...", "What's over here?", "La la la!", "Bored!", "Stretching time!"];
+              const prefetch = p.popPrefetchedResponse ? p.popPrefetchedResponse("wandering") : null;
+              
+              if (prefetch && prefetch.text) {
+                p.playVoiceLine(prefetch.text);
+              } else if (!p.aiVoiceOnly && Math.random() > 0.6) {
+                p.playVoiceLine(idleLines[Math.floor(Math.random() * idleLines.length)]);
+              }
+            } else {
+              // Walk somewhere new
+              const w = window.innerWidth;
+              const h = window.innerHeight;
+              p.targetPos.current.set((Math.random() - 0.5) * (w - 100), (Math.random() - 0.5) * (h - 100), 0);
+              p.aiState.current = "WALK";
+              p.playAnim("Walking_A");
+            }
           }
         }
       } else if (p.aiState.current === "FOLLOW_FRIEND") {
@@ -255,10 +344,10 @@ export function usePetAI() {
 
             // Contextual voice lines for widget interactions
             const interactLines = ["Cozy!", "This is my spot now!", "Nap time!", "Working out!", "Mine!", "Let me try this!"];
-            if (p.generateResponse && Math.random() > 0.5) {
-              p.generateResponse("You just found a desktop widget and you're interacting with it. Say a quick, funny reaction.").then(res => {
-                if (res && res.text) p.playVoiceLine(res.text);
-              });
+            const prefetch = p.popPrefetchedResponse ? p.popPrefetchedResponse("widget") : null;
+
+            if (prefetch && prefetch.text) {
+              p.playVoiceLine(prefetch.text);
             } else if (!p.aiVoiceOnly) {
               p.playVoiceLine(interactLines[Math.floor(Math.random() * interactLines.length)]);
             }
@@ -390,10 +479,10 @@ export function usePetAI() {
           const anims = p.names.filter((n) => n.includes("Spellcast") || n.includes("Throw") || n.includes("Interact"));
           p.playAnim(anims.length > 0 ? anims[Math.floor(Math.random() * anims.length)] : "Interact");
           p.timer.current = 1.0;
-          if (p.generateResponse && Math.random() > 0.5) {
-            p.generateResponse("You are about to pick up one of my desktop icons and throw it across the screen! Say a mischievous 1-sentence warning.").then(res => {
-              if (res && res.text) p.playVoiceLine(res.text);
-            });
+          
+          const prefetch = p.popPrefetchedResponse ? p.popPrefetchedResponse("throwing") : null;
+          if (prefetch && prefetch.text) {
+            p.playVoiceLine(prefetch.text);
           } else if (!p.aiVoiceOnly) {
             p.playVoiceLine("Incoming!");
           }
@@ -412,8 +501,34 @@ export function usePetAI() {
       } else if (p.aiState.current === "WIDGET_INTERACT") {
         if (p.timer.current <= 0) {
           p.aiState.current = "IDLE";
+        }
+      } else if (p.aiState.current === "WIDGET_SLEEP_MOVE") {
+        const dist = p.currentPos.current.distanceTo(p.targetPos.current);
+        if (dist < 10) {
+          p.aiState.current = "WIDGET_SLEEP";
+          p.playAnim("Rest");
+          p.timer.current = 15.0; // Sleep timer cycle
+        } else {
+          isMoving = true;
+        }
+      } else if (p.aiState.current === "WIDGET_SLEEP" || p.aiState.current === "SLEEP") {
+        const currentHour = new Date().getHours();
+        const isSleepTime = currentHour >= 8 && currentHour < 15;
+        
+        if (!isSleepTime && p.timer.current <= 0) {
+          // Wake up!
+          p.aiState.current = "IDLE";
           p.playAnim("Idle_A");
-            p.timer.current = 1 + Math.random() * 2;
+          if (!p.aiVoiceOnly) p.playVoiceLine("Yawn... Good morning!");
+        } else if (p.timer.current <= 0) {
+          // Keep sleeping, occasionally mumble
+          if (Math.random() > 0.7 && p.generateResponse) {
+             p.generateResponse("I am deeply asleep. Say a very short, cute sleep-talking mumble with Zzz.").then(res => {
+               if (res && res.text) p.playVoiceLine(res.text);
+             });
+          }
+          p.timer.current = 20.0;
+          p.playAnim("Rest");
         }
       } else if (p.aiState.current === "CLICK_MOVE") {
         const dist = p.currentPos.current.distanceTo(targetVec);

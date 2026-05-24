@@ -13,6 +13,8 @@ import { useKokoroTTS } from "../../hooks/pet/useKokoroTTS";
 import { usePetAI, PetAIParams } from "../../hooks/pet/usePetAI";
 import { useTauriClick } from "../../hooks/pet/useTauriClick";
 import { useOllama } from "../../hooks/pet/useOllama";
+import { useOllamaPrefetch } from "../../hooks/pet/useOllamaPrefetch";
+import { usePetNeeds } from "../../hooks/pet/usePetNeeds";
 
 export type PetBehavior = "wander" | "follow-cursor" | "idle-only";
 
@@ -21,6 +23,7 @@ export interface DesktopPetProps {
   isOverlay: boolean;
   widgets?: any[];
   onUpdateParam?: (layerId: string, paramName: string, value: any) => void;
+  isPaused?: boolean;
 }
 
 const SKINS: Record<string, string> = {
@@ -56,7 +59,7 @@ useTexture.preload("/assets/Dark VFX 2/Dark VFX 2 (48x64).png");
 
 const tempDir = new THREE.Vector3();
 
-function PetEntity({ params, isOverlay, widgets, onUpdateParam, isPrimary, myPosRef, myStateRef, friendPosRef, friendStateRef }: DesktopPetProps & { isPrimary: boolean, myPosRef: any, myStateRef: any, friendPosRef: any, friendStateRef: any }) {
+function PetEntity({ params, isOverlay, widgets, onUpdateParam, isPaused, isPrimary, myPosRef, myStateRef, friendPosRef, friendStateRef }: DesktopPetProps & { isPrimary: boolean, myPosRef: any, myStateRef: any, friendPosRef: any, friendStateRef: any }) {
   const outerGroup = useRef<THREE.Group>(null);
   const animGroup = useRef<THREE.Group>(null);
 
@@ -110,7 +113,11 @@ function PetEntity({ params, isOverlay, widgets, onUpdateParam, isPrimary, myPos
 
   const [headBone, setHeadBone] = useState<THREE.Object3D | null>(null);
 
+  const { needs, feed, play, sleep } = usePetNeeds();
   const { generateResponse } = useOllama();
+  const { popPrefetchedResponse } = useOllamaPrefetch(needs);
+  
+  const [foodPos, setFoodPos] = useState<THREE.Vector3 | null>(null);
 
   useEffect(() => {
     const head = clonedScene.getObjectByName('head');
@@ -154,6 +161,10 @@ function PetEntity({ params, isOverlay, widgets, onUpdateParam, isPrimary, myPos
     Object.values(actions).forEach(action => {
       if (action && action.isRunning() && action !== actions[name]) {
         action.fadeOut(duration);
+        // Explicitly stop the animation after it fades out so it doesn't linger invisibly
+        setTimeout(() => {
+          action.stop();
+        }, duration * 1000);
       }
     });
     const action = actions[name]!;
@@ -206,26 +217,50 @@ function PetEntity({ params, isOverlay, widgets, onUpdateParam, isPrimary, myPos
   }, [playVoiceLine, playAnim, isPrimary, aiState]);
 
   // Handle global click
-  useTauriClick(behaviorRef, isOverlay, (clampedX, clampedY) => {
-    if (behaviorRef.current === "wander") return;
-    if (aiState.current === "PUNCH" || aiState.current === "CUSTOM") return;
+  useTauriClick(behaviorRef, !!params.isOverlay, (x, y, button) => {
+    if (button === "food") {
+      setFoodPos(new THREE.Vector3(x, y, 0));
+      if (!params.aiVoiceOnly && Math.random() > 0.5) playVoiceLine("Yummy!");
+      return;
+    }
+    
+    if (button === "dance" || button === "right") {
+      danceTimer.current = 3.0;
+      playAnim("Dance", 0.3);
+      if (!params.aiVoiceOnly) playVoiceLine("Yay!");
+      return;
+    }
 
-    const lines = ["Target acquired!", "On my way!", "Initiating punch sequence!", "Destroy!"];
-    playVoiceLine(lines[Math.floor(Math.random() * lines.length)]);
+    if (button === "left") {
+      if (behaviorRef.current === "follow-cursor") {
+        cursorTarget.current = new THREE.Vector3(x, y, 0);
+      } else if (behaviorRef.current === "wander") {
+        return;
+      } else {
+        if (aiState.current === "PUNCH" || aiState.current === "CUSTOM") return;
 
-    targetPos.current.set(clampedX, clampedY, 0);
-    const dist = currentPos.current.distanceTo(targetPos.current);
-    aiState.current = "CLICK_MOVE";
-    if (dist > 200) {
-      playAnim("Running_A");
-    } else {
-      playAnim("Walking_A");
+        const lines = ["Target acquired!", "On my way!", "Initiating punch sequence!", "Destroy!"];
+        if (!params.aiVoiceOnly) playVoiceLine(lines[Math.floor(Math.random() * lines.length)]);
+
+        targetPos.current.set(x, y, 0);
+        const dist = currentPos.current.distanceTo(targetPos.current);
+        aiState.current = "CLICK_MOVE";
+        if (dist > 200) {
+          playAnim("Running_A");
+        } else {
+          playAnim("Walking_A");
+        }
+      }
     }
   });
 
 
   useFrame((state, delta) => {
+    if (isPaused) return;
     if (!animGroup.current || !outerGroup.current) return;
+
+    // Cap delta to prevent massive teleportations when frameloop="demand" triggers after a long delay
+    const clampedDelta = Math.min(delta, 0.1);
 
     let anyRunning = false;
     Object.values(actions).forEach(a => {
@@ -239,16 +274,17 @@ function PetEntity({ params, isOverlay, widgets, onUpdateParam, isPrimary, myPos
       behavior, aiState, timer, danceTimer, singTimer, targetPos, currentPos, cursorTarget,
       audioVolume, heldWidgetRef, targetWidgetRef, throwVelocity, friendPosRef, friendStateRef,
       playAnim, playVoiceLine, getAttackAnimForSkin, skinName, names, actions, params, isOverlay, widgets,
-      triggerPower, generateResponse, aiVoiceOnly: params.aiVoiceOnly === true
+      triggerPower, generateResponse, popPrefetchedResponse, aiVoiceOnly: params.aiVoiceOnly === true,
+      needs, feed, play, sleep, foodPos, setFoodPos
     };
 
-    const { isMoving, targetVec } = updateAI(delta, aiParams);
+    const { isMoving, targetVec } = updateAI(clampedDelta, aiParams);
 
     const speedWalk = 100 * speedScale;
     const speedRun = 250 * speedScale;
 
     // Movement logic
-    if (isMoving) {
+    if (isMoving && targetVec) {
       tempDir.subVectors(targetVec, currentPos.current).normalize();
       let currentSpeed = speedWalk;
       if (aiState.current === "RUN" || aiState.current === "WIDGET_MOVE" || aiState.current === "ICON_MOVE") currentSpeed = speedRun;
@@ -257,7 +293,7 @@ function PetEntity({ params, isOverlay, widgets, onUpdateParam, isPrimary, myPos
         currentSpeed = dist > 200 ? speedRun : speedWalk;
       }
 
-      currentPos.current.add(tempDir.multiplyScalar(currentSpeed * delta));
+      currentPos.current.add(tempDir.multiplyScalar(currentSpeed * clampedDelta));
 
       // Rotation (Correct mapping: invert Y for proper Up/Down facing)
       const angle = Math.atan2(tempDir.x, -tempDir.y);
@@ -269,7 +305,7 @@ function PetEntity({ params, isOverlay, widgets, onUpdateParam, isPrimary, myPos
       let diff = angle - r;
       if (diff < -Math.PI) diff += Math.PI * 2;
       if (diff > Math.PI) diff -= Math.PI * 2;
-      animGroup.current.rotation.y += diff * 10 * delta;
+      animGroup.current.rotation.y += diff * 10 * clampedDelta;
     } else if (friendPosRef && friendPosRef.current && (aiState.current === "BATTLE_ATTACK" || aiState.current === "BATTLE_HIT" || aiState.current === "BATTLE_HIT_INIT")) {
       tempDir.subVectors(friendPosRef.current, currentPos.current).normalize();
       if (tempDir.lengthSq() > 0.001) {
@@ -282,7 +318,7 @@ function PetEntity({ params, isOverlay, widgets, onUpdateParam, isPrimary, myPos
         let diff = angle - r;
         if (diff < -Math.PI) diff += Math.PI * 2;
         if (diff > Math.PI) diff -= Math.PI * 2;
-        animGroup.current.rotation.y += diff * 15 * delta;
+        animGroup.current.rotation.y += diff * 15 * clampedDelta;
       }
     }
 
@@ -310,6 +346,13 @@ function PetEntity({ params, isOverlay, widgets, onUpdateParam, isPrimary, myPos
             />
           </Billboard>
         </Suspense>
+      )}
+
+      {foodPos && (
+        <mesh position={[foodPos.x, foodPos.y, foodPos.z]}>
+          <sphereGeometry args={[15, 16, 16]} />
+          <meshStandardMaterial color="#8B4513" roughness={0.8} />
+        </mesh>
       )}
     </group>
   );

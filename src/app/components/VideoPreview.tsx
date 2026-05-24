@@ -24,6 +24,7 @@ interface VideoPreviewProps {
   isLoading?: boolean;
   isHidden?: boolean;
   onToggleHide?: () => void;
+  onEditEffects?: () => void;
 }
 
 export function VideoPreview({
@@ -42,6 +43,7 @@ export function VideoPreview({
   isLoading = false,
   isHidden = false,
   onToggleHide,
+  onEditEffects,
 }: VideoPreviewProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [startTime, setStartTime] = useState(0);
@@ -348,6 +350,11 @@ export function VideoPreview({
           <button className="action-btn action-btn--secondary" onClick={onToggleQueue} disabled={isLoading}>
             {isQueued ? "Remove From Queue" : "Add To Queue"}
           </button>
+          {onEditEffects && (
+            <button className="action-btn action-btn--secondary" onClick={onEditEffects} disabled={isLoading}>
+              Open in Editor
+            </button>
+          )}
           <button className="action-btn action-btn--primary" onClick={() => onApply(startTime, endTime)} disabled={isLoading}>
             {isLoading ? "Applying..." : "Apply To Desktop"}
           </button>

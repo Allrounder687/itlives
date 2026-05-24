@@ -1037,6 +1037,31 @@ import { useDominantColor } from "@/hooks/useDominantColor";
 // ─────────────────────────────────────────────────────────────
 // Sprite Layer (Phase 4: Assets & Textures)
 // ─────────────────────────────────────────────────────────────
+function FoodWidgetLayer({ type, params }: { type: string, params: any }) {
+  const { viewport } = useThree();
+  const imagePath = `/assets/${type.replace('-', '_')}.png`;
+
+  const texture = useMemo(() => {
+    try {
+      return new THREE.TextureLoader().load(imagePath);
+    } catch (e) {
+      return null;
+    }
+  }, [imagePath]);
+
+  if (!texture) return null;
+
+  const posX = (params.x / 100) * viewport.width - viewport.width / 2;
+  const posY = -(params.y / 100) * viewport.height + viewport.height / 2;
+
+  return (
+    <mesh position={[posX, posY, 5]}>
+      <planeGeometry args={[100 * (params.scale || 1.0), 100 * (params.scale || 1.0)]} />
+      <meshBasicMaterial map={texture} transparent={true} />
+    </mesh>
+  );
+}
+
 function SpriteLayer({ params }: { params: any }) {
   const { viewport } = useThree();
   
@@ -1192,7 +1217,16 @@ function BackgroundQuad({ src, isImage }: { src: string; isImage: boolean }) {
 // ─────────────────────────────────────────────────────────────
 // 5. Main Renderer
 // ─────────────────────────────────────────────────────────────
-export function WebGLEffectRenderer({ videoSrc, effects, isOverlay = false, selectedLayerId, onUpdateParam }: { videoSrc: string, effects: EffectLayer[], isOverlay?: boolean, selectedLayerId?: string | null, onUpdateParam?: (id: string, key: string, val: any) => void }) {
+interface WebGLEffectRendererProps {
+  videoSrc: string;
+  effects: EffectLayer[];
+  selectedLayerId?: string | null;
+  onUpdateParam?: (id: string, key: string, value: any) => void;
+  isOverlay?: boolean;
+  isPaused?: boolean;
+}
+
+export function WebGLEffectRenderer({ videoSrc, effects, selectedLayerId, onUpdateParam, isOverlay = false, isPaused = false }: WebGLEffectRendererProps) {
   const [liveEffects, setLiveEffects] = useState<EffectLayer[]>(effects);
   const [src, setSrc] = useState<string>("");
   const isImage = videoSrc.match(/\.(jpeg|jpg|gif|png|webp)$/i) != null;
@@ -1315,12 +1349,14 @@ export function WebGLEffectRenderer({ videoSrc, effects, isOverlay = false, sele
   const stars = currentEffects.find(e => e.type === "stars" && e.enabled);
   const fog = currentEffects.find(e => e.type === "fog" && e.enabled);
   const clock = currentEffects.find(e => e.type === "clock" && e.enabled);
+  const timetable = currentEffects.find(e => e.type === "timetable" && e.enabled);
   const musicPlayer = currentEffects.find(e => e.type === "music-player" && e.enabled);
   const ribbonTrail = currentEffects.find(e => e.type === "ribbon-trail" && e.enabled);
   const waterCaustics = currentEffects.find(e => e.type === "water-caustics" && e.enabled);
   const blowingLeaves = currentEffects.find(e => e.type === "blowing-leaves" && e.enabled);
   const appLauncher = currentEffects.find(e => e.type === "app-launcher" && e.enabled);
   const sprites = currentEffects.filter(e => e.type === "sprite" && e.enabled);
+  const foodWidgets = currentEffects.filter(e => (e.type === "food-bowl" || e.type === "food-pizza" || e.type === "food-meat") && e.enabled);
   
   const godRays = currentEffects.find(e => e.type === "god-rays" && e.enabled);
   const vhs = currentEffects.find(e => e.type === "vhs" && e.enabled);
@@ -1332,7 +1368,7 @@ export function WebGLEffectRenderer({ videoSrc, effects, isOverlay = false, sele
   const hasPostProcessing = !!(godRays || vhs || liquidRipple || rainOnGlass);
 
   // Check if any WebGL effect is active — skip Canvas entirely if none
-  const hasWebGLEffects = desktopPet || sprites.length > 0 || snow || rain || audioVis || trail || ripple || ribbonTrail || vignette || bloomEffect || glitchEffect || parallax || fireflies || particleEmitter || stars || fog || waterCaustics || blowingLeaves || godRays || vhs || liquidRipple || rainOnGlass;
+  const hasWebGLEffects = desktopPet || foodWidgets.length > 0 || sprites.length > 0 || snow || rain || audioVis || trail || ripple || ribbonTrail || vignette || bloomEffect || glitchEffect || parallax || fireflies || particleEmitter || stars || fog || waterCaustics || blowingLeaves || godRays || vhs || liquidRipple || rainOnGlass;
 
   const resolveParams = (p: any) => {
     if (!p) return p;
@@ -1343,7 +1379,7 @@ export function WebGLEffectRenderer({ videoSrc, effects, isOverlay = false, sele
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (isOverlay || !selectedLayerId || !onUpdateParam) return;
     const layer = currentEffects.find(l => l.id === selectedLayerId);
-    if (!layer || (layer.type !== "clock" && layer.type !== "audio-visualizer" && layer.type !== "blur-region" && layer.type !== "music-player" && layer.type !== "app-launcher" && layer.type !== "sprite" && layer.type !== "particle-emitter" && layer.type !== "god-rays")) return;
+    if (!layer || (!["clock", "timetable", "audio-visualizer", "blur-region", "music-player", "app-launcher", "sprite", "particle-emitter", "god-rays", "food-bowl", "food-pizza", "food-meat"].includes(layer.type))) return;
     
     dragState.current = {
       isDragging: true,
@@ -1422,6 +1458,11 @@ export function WebGLEffectRenderer({ videoSrc, effects, isOverlay = false, sele
         <ClockWidget params={clock.params} layerId={clock.id} autoColor={autoColor} />
       )}
 
+      {/* Timetable Widget */}
+      {timetable && (
+        <TimetableWidget params={timetable.params} layerId={timetable.id} autoColor={autoColor} />
+      )}
+
       {/* Music Player Widget */}
       {musicPlayer && (
         <MusicPlayerWidget params={musicPlayer.params} layerId={musicPlayer.id} isOverlay={isOverlay} />
@@ -1441,6 +1482,7 @@ export function WebGLEffectRenderer({ videoSrc, effects, isOverlay = false, sele
           <Canvas
             orthographic
             dpr={[1, 1.5]}
+            frameloop={isPaused ? "demand" : "always"}
             camera={{ position: [0, 0, 100], zoom: 1 }}
             gl={{ alpha: !hasPostProcessing, antialias: false, powerPreference: "high-performance" }}
             onCreated={({ gl }) => {
@@ -1464,8 +1506,9 @@ export function WebGLEffectRenderer({ videoSrc, effects, isOverlay = false, sele
               <DesktopPet 
                 params={resolveParams(desktopPet.params)} 
                 isOverlay={isOverlay} 
-                widgets={[clock, musicPlayer, appLauncher, audioVis].filter(Boolean)} 
+                widgets={[clock, musicPlayer, appLauncher, audioVis, ...foodWidgets].filter(Boolean)} 
                 onUpdateParam={onUpdateParam}
+                isPaused={isPaused}
               />
             )}
             <InteractiveParticles
@@ -1485,8 +1528,9 @@ export function WebGLEffectRenderer({ videoSrc, effects, isOverlay = false, sele
             )}
 
             {sprites.map(s => <SpriteLayer key={s.id} params={s.params} />)}
-
-            {/* Post Processing Shaders */}
+            {foodWidgets.map(f => <FoodWidgetLayer key={f.id} type={f.type} params={f.params} />)}
+            
+            {/* Phase 5: Complex 3D Models / Simulations */}
             {(() => {
               const passes: React.ReactElement[] = [];
               if (godRays) passes.push(<ScreenSpaceGodRays key="godrays" params={resolveParams(godRays.params)} />);
@@ -1540,6 +1584,88 @@ export function WebGLEffectRenderer({ videoSrc, effects, isOverlay = false, sele
 }
 
 // ─────────────────────────────────────────────────────────────
+// Timetable Widget
+// ─────────────────────────────────────────────────────────────
+function TimetableWidget({ params, layerId, autoColor }: { params: any; layerId?: string; autoColor?: string }) {
+  const [currentHour, setCurrentHour] = useState(new Date().getHours());
+  
+  const rawColor = params.color || "#ffffff";
+  const color = rawColor === "auto" ? (autoColor || "#ffffff") : rawColor;
+  const opacity = params.opacity || 0.9;
+  const x = params.x || 80;
+  const y = params.y || 30;
+
+  useEffect(() => {
+    const update = () => setCurrentHour(new Date().getHours());
+    const interval = setInterval(update, 60000); // Check every minute
+    return () => clearInterval(interval);
+  }, []);
+
+  // Determine current active block
+  // Schedule: 08:00 - 15:00 SLEEP | 15:00 - 08:00 WORK/PLAY
+  let activeBlock = "";
+  if (currentHour >= 8 && currentHour < 15) {
+    activeBlock = "SLEEP";
+  } else if (currentHour >= 15 && currentHour < 20) {
+    activeBlock = "WORK";
+  } else {
+    activeBlock = "PLAY";
+  }
+
+  const baseStyle: React.CSSProperties = {
+    position: "absolute",
+    left: `${x}%`,
+    top: `${y}%`,
+    transform: "translate(-50%, -50%)",
+    color,
+    opacity,
+    pointerEvents: "none",
+    zIndex: 8,
+    fontFamily: "Inter, sans-serif",
+    display: "flex",
+    flexDirection: "column",
+    gap: "8px",
+    padding: "16px",
+    borderRadius: "16px",
+    backgroundColor: "rgba(0, 0, 0, 0.4)",
+    backdropFilter: "blur(12px)",
+    border: "1px solid rgba(255,255,255,0.1)",
+    boxShadow: "0 8px 32px rgba(0,0,0,0.3)",
+    minWidth: "200px"
+  };
+
+  const getRowStyle = (type: string) => ({
+    display: "flex",
+    justifyContent: "space-between",
+    padding: "8px 12px",
+    borderRadius: "8px",
+    backgroundColor: activeBlock === type ? "rgba(255,255,255,0.15)" : "transparent",
+    fontWeight: activeBlock === type ? "bold" as const : "normal" as const,
+    borderLeft: activeBlock === type ? `3px solid ${color}` : "3px solid transparent",
+    transition: "all 0.3s ease"
+  });
+
+  return (
+    <div style={baseStyle}>
+      <h3 style={{ margin: "0 0 8px 0", fontSize: "0.9rem", textTransform: "uppercase", letterSpacing: "1px", opacity: 0.7, borderBottom: "1px solid rgba(255,255,255,0.1)", paddingBottom: "8px" }}>
+        Daily Routine
+      </h3>
+      <div style={getRowStyle("SLEEP")}>
+        <span>💤 Sleep</span>
+        <span style={{ opacity: 0.7 }}>08:00 - 15:00</span>
+      </div>
+      <div style={getRowStyle("WORK")}>
+        <span>💻 Work</span>
+        <span style={{ opacity: 0.7 }}>15:00 - 20:00</span>
+      </div>
+      <div style={getRowStyle("PLAY")}>
+        <span>🎮 Play & Battle</span>
+        <span style={{ opacity: 0.7 }}>20:00 - 08:00</span>
+      </div>
+    </div>
+  );
+}
+
 // Clock Widget (CSS-based, not WebGL)
 // ─────────────────────────────────────────────────────────────
 function ClockWidget({ params, layerId, autoColor }: { params: any; layerId?: string; autoColor?: string }) {

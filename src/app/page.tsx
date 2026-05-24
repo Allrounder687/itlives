@@ -452,6 +452,10 @@ function Home() {
                   onSetBlur={wallpaper.setBlurStrength}
                   isHidden={wallpaper.hiddenVideos.includes(wallpaper.currentVideo.id)}
                   onToggleHide={() => wallpaper.toggleHideVideo(wallpaper.currentVideo!.id)}
+                  onEditEffects={() => {
+                    setActiveTab("editor");
+                    setTimeout(() => window.dispatchEvent(new CustomEvent('load-profile', {detail: wallpaper.currentVideo!.id})), 100);
+                  }}
                 />
               ) : !wallpaper.isLoading ? (
                 <div className="preview-empty">
@@ -473,6 +477,7 @@ function Home() {
               onApplyWallpaper={async (v) => { await wallpaper.applyWallpaper(v); }} 
               onUploadMedia={wallpaper.browseLocalVideo}
               onStopWallpaper={wallpaper.stopWallpaper}
+              recentWallpapers={wallpaper.recents}
             />
           )}
 
@@ -502,6 +507,10 @@ function Home() {
           isLoading={wallpaper.isLoading}
           isHidden={wallpaper.hiddenVideos.includes(wallpaper.currentVideo.id)}
           onToggleHide={() => wallpaper.toggleHideVideo(wallpaper.currentVideo!.id)}
+          onEditEffects={() => {
+            setActiveTab("editor");
+            setTimeout(() => window.dispatchEvent(new CustomEvent('load-profile', {detail: wallpaper.currentVideo!.id})), 100);
+          }}
         />
       )}
 

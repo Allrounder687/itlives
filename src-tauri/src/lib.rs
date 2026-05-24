@@ -273,6 +273,7 @@ pub fn run() {
             commands::package::import_itl_package,
             commands::package::scan_wallpaper_engine_directory,
             windows_theme::sync_windows_accent_color,
+            commands::window_info::get_active_window,
         ])
         .run(tauri::generate_context!())
 

@@ -21,6 +21,7 @@ interface FloatingPreviewProps {
   isLoading?: boolean;
   isHidden?: boolean;
   onToggleHide?: () => void;
+  onEditEffects?: () => void;
 }
 
 export function FloatingPreview(props: FloatingPreviewProps) {

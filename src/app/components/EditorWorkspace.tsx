@@ -6,6 +6,7 @@ import { WebGLEffectRenderer } from "./WebGLEffectRenderer";
 import { VideoResult } from "@/hooks/useWallpaper";
 import { DESKTOP_PET_ANIMATIONS } from "./DesktopPetAnimations";
 import { useOllama } from "../../hooks/pet/useOllama";
+import { LibraryItem } from "@/utils/wallpaperTypes";
 import "./editor.css";
 
 
@@ -16,6 +17,7 @@ interface EditorWorkspaceProps {
   onApplyWallpaper?: (video: VideoResult) => Promise<void>;
   onUploadMedia?: () => Promise<void>;
   onStopWallpaper?: () => void;
+  recentWallpapers?: LibraryItem[];
 }
 
 const EFFECT_TEMPLATES: Record<string, Omit<EffectLayer, "id">> = {
@@ -38,6 +40,10 @@ const EFFECT_TEMPLATES: Record<string, Omit<EffectLayer, "id">> = {
   "color-grade": { type: "color-grade", name: "Color Tint", enabled: true, params: { color: "rgba(255, 100, 50, 0.15)", intensity: 0.3, blendMode: "overlay" } },
   "blur-region": { type: "blur-region", name: "Blur Region", enabled: true, params: { x: 10, y: 10, w: 30, h: 20, blur: 15 } },
   clock: { type: "clock", name: "Clock Widget", enabled: true, params: { format: "24h", style: "minimal", color: "#ffffff", opacity: 0.8, x: 50, y: 50 } },
+  timetable: { type: "timetable", name: "Timetable Widget", enabled: true, params: { x: 80, y: 30, scale: 1.0, opacity: 0.9, style: "card" } },
+  "food-bowl": { type: "food-bowl", name: "Food Bowl", enabled: true, params: { x: 50, y: 80, scale: 1.0 } },
+  "food-pizza": { type: "food-pizza", name: "Pizza Slice", enabled: true, params: { x: 40, y: 80, scale: 1.0 } },
+  "food-meat": { type: "food-meat", name: "Big Meat", enabled: true, params: { x: 60, y: 80, scale: 1.0 } },
   "music-player": { type: "music-player", name: "Music Player", enabled: true, params: { x: 50, y: 80, scale: 1.0, theme: "glass", opacity: 0.9, shape: "standard", color: "auto" } },
   "app-launcher": { type: "app-launcher", name: "App Launcher", enabled: true, params: { x: 50, y: 90, scale: 1.0, apps: [], layout: "dock" } },
   sprite: { type: "sprite", name: "Image Sprite", enabled: true, params: { image: "", x: 50, y: 50, width: 300, height: 300, rotation: 0, opacity: 1.0, sway: 0.0 } },
@@ -80,6 +86,9 @@ const EFFECT_DROPDOWN: { group: string, items: { key: string, icon: string, labe
     { key: "color-grade", icon: "🎨", label: "Color Tint" },
     { key: "blur-region", icon: "🔲", label: "Blur Region" },
     { key: "clock", icon: "🕐", label: "Clock Widget" },
+    { key: "food-bowl", icon: "🥣", label: "Food Bowl" },
+    { key: "food-pizza", icon: "🍕", label: "Pizza Slice" },
+    { key: "food-meat", icon: "🥩", label: "Big Meat" },
     { key: "music-player", icon: "🎧", label: "Music Player" },
     { key: "app-launcher", icon: "🚀", label: "App Launcher" },
   ]},
@@ -156,11 +165,20 @@ const DEMO_PRESETS: { key: string, name: string, thumbnail: string, path: string
   }
 ];
 
-export function EditorWorkspace({ currentVideo, onSelectVideo, onApplyWallpaper, onUploadMedia, onStopWallpaper }: EditorWorkspaceProps) {
-  const [layers, setLayers] = useState<EffectLayer[]>([
-    { id: "vignette-1", type: "vignette", name: "Vignette Frame", enabled: true, params: { intensity: 0.5 } }
-  ]);
-  const [selectedLayerId, setSelectedLayerId] = useState<string | null>("vignette-1");
+export function EditorWorkspace({ currentVideo, onSelectVideo, onApplyWallpaper, onUploadMedia, onStopWallpaper, recentWallpapers }: EditorWorkspaceProps) {
+  const [layers, setLayers] = useState<EffectLayer[]>(() => {
+    let petParams = { ...EFFECT_TEMPLATES["desktop-pet"].params };
+    try {
+      const savedParams = localStorage.getItem("default-pet-params");
+      if (savedParams) petParams = { ...petParams, ...JSON.parse(savedParams) };
+    } catch(e) {}
+    
+    return [
+      { id: "desktop-pet-1", type: "desktop-pet", name: "Desktop Pet", enabled: true, params: petParams }
+    ];
+  });
+  const [selectedLayerId, setSelectedLayerId] = useState<string | null>("desktop-pet-1");
+  const [isPreviewPaused, setIsPreviewPaused] = useState(true);
 
   const { generateResponse, isThinking } = useOllama();
   const [chatMessage, setChatMessage] = useState("");
@@ -569,15 +587,13 @@ export function EditorWorkspace({ currentVideo, onSelectVideo, onApplyWallpaper,
             style={{ padding: "10px 16px", borderRadius: "12px", fontWeight: "600", boxShadow: "0 4px 12px rgba(0,0,0,0.2)" }}
             onClick={async () => {
               if (typeof window !== "undefined") {
-                const emptyConfig = { videoSrc: "", layers: [] };
+                const emptyConfig = { videoSrc: currentVideo?.local_path || currentVideo?.video_url || "", layers: [] };
                 localStorage.setItem("desktop_effects", JSON.stringify(emptyConfig));
                 setLayers([]);
                 try {
                   const { invoke } = await import("@tauri-apps/api/core");
                   await invoke("apply_desktop_effects", { layersJson: JSON.stringify(emptyConfig) });
-                  if (onStopWallpaper) {
-                    onStopWallpaper();
-                  }
+                  // We removed onStopWallpaper so we don't clear the background video!
                 } catch (err) {
                   console.error("[Editor] Invoke failed:", err);
                 }
@@ -596,6 +612,22 @@ export function EditorWorkspace({ currentVideo, onSelectVideo, onApplyWallpaper,
             >
               Upload Media
             </button>
+          )}
+
+          {recentWallpapers && recentWallpapers.length > 0 && onSelectVideo && (
+            <div style={{ display: "flex", gap: "8px", alignItems: "center", marginLeft: "12px", paddingLeft: "12px", borderLeft: "1px solid rgba(255,255,255,0.1)" }}>
+              <span style={{ fontSize: "11px", color: "rgba(255,255,255,0.5)" }}>Recent:</span>
+              {recentWallpapers.slice(0, 3).map((item, i) => (
+                <div 
+                  key={i} 
+                  style={{ width: "32px", height: "32px", borderRadius: "6px", overflow: "hidden", cursor: "pointer", border: "1px solid rgba(255,255,255,0.2)" }}
+                  title={item.video.id}
+                  onClick={() => onSelectVideo(item.video)}
+                >
+                  <img src={item.video.thumbnail_url || item.video.preview_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                </div>
+              ))}
+            </div>
           )}
           
           <button 
@@ -633,12 +665,34 @@ export function EditorWorkspace({ currentVideo, onSelectVideo, onApplyWallpaper,
             Apply to Desktop
           </button>
         </div>
+        
+        {/* Play/Pause Overlay */}
+        {isPreviewPaused && (
+          <div 
+            style={{ position: "absolute", inset: 0, zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "rgba(0,0,0,0.4)", backdropFilter: "blur(2px)", cursor: "pointer" }}
+            onClick={() => setIsPreviewPaused(false)}
+          >
+            <div style={{ padding: "20px 40px", backgroundColor: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.3)", borderRadius: "20px", display: "flex", alignItems: "center", gap: "10px", color: "white", fontSize: "1.2rem", fontWeight: "bold" }}>
+              ▶️ Preview Paused
+            </div>
+          </div>
+        )}
+        
+        {!isPreviewPaused && (
+           <button
+             style={{ position: "absolute", bottom: "16px", left: "16px", zIndex: 60, padding: "8px 16px", borderRadius: "8px", backgroundColor: "rgba(0,0,0,0.6)", color: "white", border: "1px solid rgba(255,255,255,0.2)", cursor: "pointer" }}
+             onClick={() => setIsPreviewPaused(true)}
+           >
+             ⏸ Pause Preview
+           </button>
+        )}
 
         <WebGLEffectRenderer 
           videoSrc={currentVideo ? (currentVideo.local_path || currentVideo.video_url) : ""} 
           effects={layers} 
           selectedLayerId={selectedLayerId}
           onUpdateParam={updateParam}
+          isPaused={isPreviewPaused}
         />
 
       </div>
