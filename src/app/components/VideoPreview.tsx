@@ -175,6 +175,12 @@ export function VideoPreview({
             src={videoSrc}
             alt={video.id}
             style={{ filter: previewFilter, objectFit: "contain", width: "100%", height: "100%" }}
+            onError={(e) => {
+              const target = e.target as HTMLImageElement;
+              if (target.src !== video.thumbnail_url && video.thumbnail_url) {
+                target.src = video.thumbnail_url;
+              }
+            }}
           />
         ) : isHtml ? (
           <iframe 

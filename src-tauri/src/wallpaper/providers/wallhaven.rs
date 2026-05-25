@@ -61,6 +61,10 @@ impl VideoProvider for WallhavenProvider {
             page
         );
 
+        if config.order == "random" {
+            url.push_str("&sorting=random");
+        }
+
         if !query.is_empty() && query != "all" {
             if query.starts_with("https://wallhaven.cc/user/") {
                 let parts: Vec<&str> = query.split('/').collect();

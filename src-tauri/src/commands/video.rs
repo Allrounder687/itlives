@@ -127,11 +127,17 @@ pub async fn fetch_videos_list(
             return Ok(Vec::new());
         }
 
+        let mut fetch_page = page;
+        if fetch_page <= 1 && (cleaned_query.is_empty() || cleaned_query == "all" || cleaned_query == "wallpaper") {
+            use rand::Rng;
+            fetch_page = rand::thread_rng().gen_range(1..=15);
+        }
+
         let config = SearchConfig {
-            query: cleaned_query,
-            order,
+            query: cleaned_query.clone(),
+            order: order.clone(),
             count: 20, // Fetch fewer per provider to keep weight low
-            page,
+            page: fetch_page,
             api_key: api_key.clone(),
             resolutions: resolutions.clone(),
             ratios: ratios.clone(),
@@ -183,11 +189,18 @@ pub async fn fetch_videos_list(
     }
 
     let provider = providers::get_provider(&source)?;
+    
+    let mut fetch_page = page;
+    if fetch_page <= 1 && (cleaned_query.is_empty() || cleaned_query == "all" || cleaned_query == "wallpaper") {
+        use rand::Rng;
+        fetch_page = rand::thread_rng().gen_range(1..=15);
+    }
+    
     let mut config = SearchConfig {
         query: cleaned_query,
         order,
         count: 40,
-        page,
+        page: fetch_page,
         api_key,
         resolutions,
         ratios,
@@ -210,6 +223,11 @@ pub async fn fetch_videos_list(
     
     // Apply post-fetch filters for all providers
     providers::apply_post_fetch_filters(&mut results, &config);
+
+    // Shuffle the results to guarantee freshness even on specific searches
+    use rand::seq::SliceRandom;
+    let mut rng = rand::thread_rng();
+    results.shuffle(&mut rng);
 
     Ok(results)
 }

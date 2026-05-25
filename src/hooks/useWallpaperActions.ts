@@ -50,7 +50,7 @@ export function useWallpaperActions(state: WallpaperState, setState: React.Dispa
       const results = await invoke<VideoResult[]>("fetch_videos_list", {
         source: state.source,
         query: state.query,
-        order: "trending",
+        order: "random",
         page: state.page,
         resolutions: state.resolutions,
         ratios: state.ratios,
