@@ -28,7 +28,7 @@ impl VideoProvider for AlphaCodersProvider {
         log::info!("[AlphaCoders] Selected Video URL: {}", chosen.video_url);
 
         let local_path =
-            download_to_cache(&chosen.video_url, &chosen.id, "alphacoders", &cache_dir, None).await?;
+            download_to_cache(&chosen.video_url, &chosen.id, "alphacoders", &cache_dir, None, None).await?;
 
         let _ = crate::wallpaper::desktop::cleanup_cache(15);
 
@@ -123,8 +123,8 @@ impl VideoProvider for AlphaCodersProvider {
         Ok(items)
     }
 
-    async fn download_video(&self, video: &VideoResult) -> Result<String, String> {
+    async fn download_video(&self, video: &VideoResult, app_handle: Option<tauri::AppHandle>) -> Result<String, String> {
         let cache_dir = crate::wallpaper::desktop::get_cache_dir();
-        super::download_to_cache(&video.video_url, &video.id, "alphacoders", &cache_dir, None).await
+        super::download_to_cache(&video.video_url, &video.id, "alphacoders", &cache_dir, None, app_handle).await
     }
 }

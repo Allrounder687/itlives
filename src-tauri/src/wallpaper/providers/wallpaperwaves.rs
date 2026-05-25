@@ -131,7 +131,7 @@ impl VideoProvider for WallpaperWavesProvider {
         Ok(results)
     }
 
-    async fn download_video(&self, video: &VideoResult) -> Result<String, String> {
+    async fn download_video(&self, video: &VideoResult, app_handle: Option<tauri::AppHandle>) -> Result<String, String> {
         let client = reqwest::Client::new();
         let detail_url = if video.local_path.starts_with("http") {
             video.local_path.clone()
@@ -170,6 +170,6 @@ impl VideoProvider for WallpaperWavesProvider {
         log::info!("[WallpaperWaves] Resolved download URL: {}", download_url);
 
         let cache_dir = crate::wallpaper::desktop::get_cache_dir();
-        download_to_cache(&download_url, &video.id, "wallpaperwaves", &cache_dir, None).await
+        download_to_cache(&download_url, &video.id, "wallpaperwaves", &cache_dir, None, app_handle).await
     }
 }

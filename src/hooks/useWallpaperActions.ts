@@ -160,6 +160,16 @@ export function useWallpaperActions(state: WallpaperState, setState: React.Dispa
     }
   }, [setState]);
 
+  const setKeepEffectsRunningOnPause = useCallback(async (enabled: boolean) => {
+    try {
+      const { invoke } = await getCoreApi();
+      const persisted = await invoke<PersistedState>("set_keep_effects_running_on_pause", { enabled });
+      setState((s) => applyPersistedState(persisted, s));
+    } catch (error: any) {
+      setState((s) => ({ ...s, error: error.toString() }));
+    }
+  }, [setState]);
+
   const setWallpaperScale = useCallback(async (scalePercent: number) => {
     try {
       const { invoke } = await getCoreApi();
@@ -188,6 +198,7 @@ export function useWallpaperActions(state: WallpaperState, setState: React.Dispa
     setPlaybackSpeed, 
     setBlurStrength,
     setPaused,
+    setKeepEffectsRunningOnPause,
     setWallpaperScale,
     setWallpaperFilter,
     fetchVideoTags

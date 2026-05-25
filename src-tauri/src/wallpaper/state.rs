@@ -42,6 +42,7 @@ pub struct WallpaperState {
     pub disabled_sources: Vec<String>,
     pub pinterest_urls: Vec<String>,
     pub hidden_videos: Vec<String>,
+    pub keep_effects_running_on_pause: bool,
 }
 
 impl Default for WallpaperState {
@@ -73,6 +74,7 @@ impl Default for WallpaperState {
                 "https://www.pinterest.com/search/pins/?q=fantasy%20wallpaper&rs=ac&len=12&source_id=ac_ysOA3Mkj&eq=fantasy%20wall&etslf=5698".to_string()
             ],
             hidden_videos: Vec::new(),
+            keep_effects_running_on_pause: false,
         }
     }
 }
@@ -225,6 +227,13 @@ pub fn set_wallpaper_scale_percent(
 pub fn set_auto_pause(store: &AppStateStore, enabled: bool) -> Result<WallpaperState, String> {
     store.update(|state| {
         state.auto_pause_enabled = enabled;
+        Ok(())
+    })
+}
+
+pub fn set_keep_effects_running_on_pause(store: &AppStateStore, enabled: bool) -> Result<WallpaperState, String> {
+    store.update(|state| {
+        state.keep_effects_running_on_pause = enabled;
         Ok(())
     })
 }

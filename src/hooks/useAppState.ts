@@ -51,6 +51,7 @@ export function useAppState() {
     resolutions: null,
     ratios: null,
     colors: null,
+    keepEffectsRunningOnPause: false,
   });
 
   useEffect(() => {
@@ -81,7 +82,19 @@ export function useAppState() {
     }
 
     hydrate();
-    return () => { active = false; };
+
+    let unlisten: () => void;
+    import("@tauri-apps/api/event").then(({ listen }) => {
+      listen("wallpaper-paused", (e: any) => {
+        if (!active) return;
+        setState((current) => ({ ...current, paused: e.payload.paused }));
+      }).then((u) => { unlisten = u; });
+    });
+
+    return () => { 
+      active = false; 
+      if (unlisten) unlisten();
+    };
   }, []);
 
   return { state, setState };

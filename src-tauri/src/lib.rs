@@ -232,6 +232,7 @@ pub fn run() {
             commands::settings::set_restore_on_launch,
             commands::settings::set_window_behavior,
             commands::settings::set_auto_pause,
+            commands::settings::set_keep_effects_running_on_pause,
             commands::wallpaper_control::set_wallpaper_paused,
             commands::wallpaper_control::set_wallpaper_volume,
             commands::wallpaper_control::set_wallpaper_filter,
@@ -274,6 +275,8 @@ pub fn run() {
             commands::package::scan_wallpaper_engine_directory,
             windows_theme::sync_windows_accent_color,
             commands::window_info::get_active_window,
+            commands::shell_control::toggle_desktop_icons,
+            commands::shell_control::set_taskbar_state,
         ])
         .run(tauri::generate_context!())
 

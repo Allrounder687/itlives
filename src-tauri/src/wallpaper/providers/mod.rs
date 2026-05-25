@@ -71,7 +71,7 @@ pub trait VideoProvider: Send + Sync {
     async fn fetch_videos_list(&self, config: &SearchConfig) -> Result<Vec<VideoResult>, String>;
 
     /// Downloads the given video to cache and returns local path string.
-    async fn download_video(&self, video: &VideoResult) -> Result<String, String>;
+    async fn download_video(&self, video: &VideoResult, app_handle: Option<tauri::AppHandle>) -> Result<String, String>;
 
     /// Fetches tags for a specific video ID. Default returns empty.
     async fn fetch_tags(&self, _id: &str) -> Result<Vec<String>, String> {
@@ -79,17 +79,27 @@ pub trait VideoProvider: Send + Sync {
     }
 }
 
-/// Downloads a video from URL to the cache dir. Shared utility for all providers.
+#[derive(Clone, serde::Serialize)]
+pub struct DownloadProgress {
+    pub id: String,
+    pub progress: u64,
+    pub total: u64,
+}
+
 pub async fn download_to_cache(
     video_url: &str,
     video_id: &str,
     source: &str,
     cache_dir: &PathBuf,
     extra_headers: Option<Vec<(String, String)>>,
+    app_handle: Option<tauri::AppHandle>,
 ) -> Result<String, String> {
     let client = reqwest::Client::builder()
         .connect_timeout(std::time::Duration::from_secs(10))
-        .timeout(std::time::Duration::from_secs(30))
+        .timeout(std::time::Duration::from_secs(300))
+        .no_brotli()
+        .no_gzip()
+        .no_deflate()
         .build()
         .map_err(|e| format!("Failed to build reqwest client: {}", e))?;
     let ext = if video_url.contains(".png") {
@@ -119,31 +129,80 @@ pub async fn download_to_cache(
 
     std::fs::create_dir_all(cache_dir).map_err(|e| e.to_string())?;
 
-    let mut req = client.get(video_url)
-        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-        .header("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
-        .header("Accept-Language", "en-US,en;q=0.9");
+    let mut attempt = 0;
+    let max_attempts = 3;
+    let bytes = loop {
+        attempt += 1;
+        
+        let mut req = client.get(video_url)
+            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+            .header("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
+            .header("Accept-Language", "en-US,en;q=0.9");
 
-    if let Some(headers) = extra_headers {
-        for (key, value) in headers {
-            req = req.header(&key, &value);
+        if let Some(ref headers) = extra_headers {
+            for (key, value) in headers {
+                req = req.header(key, value);
+            }
         }
-    }
 
-    let resp = req
-        .send()
-        .await
-        .map_err(|e| format!("Download failed: {}", e))?;
+        let resp_result = req.send().await;
+        
+        match resp_result {
+            Ok(mut resp) => {
+                let status = resp.status();
+                if !status.is_success() {
+                    if attempt >= max_attempts {
+                        return Err(format!("Download of {} failed with HTTP status: {}", video_url, status));
+                    }
+                    tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+                    continue;
+                }
 
-    let status = resp.status();
-    if !status.is_success() {
-        return Err(format!("Download of {} failed with HTTP status: {}", video_url, status));
-    }
+                let total_size = resp.content_length().unwrap_or(0);
+                let mut downloaded: u64 = 0;
+                let mut bytes_data = Vec::new();
+                let mut failed = false;
 
-    let bytes = resp
-        .bytes()
-        .await
-        .map_err(|e| format!("Download read failed: {}", e))?;
+                // Instead of StreamExt, we use the built-in chunk() method
+                while let Some(chunk_res) = resp.chunk().await.transpose() {
+                    match chunk_res {
+                        Ok(chunk) => {
+                            downloaded += chunk.len() as u64;
+                            bytes_data.extend_from_slice(&chunk);
+                            if let Some(app) = &app_handle {
+                                use tauri::Emitter;
+                                let _ = app.emit("download-progress", DownloadProgress {
+                                    id: video_id.to_string(),
+                                    progress: downloaded,
+                                    total: total_size,
+                                });
+                            }
+                        }
+                        Err(e) => {
+                            failed = true;
+                            if attempt >= max_attempts {
+                                return Err(format!("Download read failed after {} attempts: {}", max_attempts, e));
+                            }
+                            log::warn!("Download read failed (attempt {}): {}. Retrying...", attempt, e);
+                            tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
+                            break;
+                        }
+                    }
+                }
+                
+                if !failed {
+                    break bytes_data;
+                }
+            }
+            Err(e) => {
+                if attempt >= max_attempts {
+                    return Err(format!("Download failed after {} attempts: {}", max_attempts, e));
+                }
+                log::warn!("Download request failed (attempt {}): {}. Retrying...", attempt, e);
+                tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
+            }
+        }
+    };
 
     std::fs::write(&dest, &bytes).map_err(|e| format!("File write failed: {}", e))?;
 

@@ -501,14 +501,40 @@ export function EditorWorkspace({ currentVideo, onSelectVideo, onApplyWallpaper,
                   />
                   <strong style={{ fontSize: "14px" }}>{layer.name}</strong>
                 </div>
-                <button 
-                  type="button" 
-                  className="action-btn action-btn--danger-ghost"
-                  style={{ padding: "4px 8px", fontSize: "11px", minHeight: "26px", borderRadius: "8px" }}
-                  onClick={(e) => { e.stopPropagation(); removeEffect(layer.id); }}
-                >
-                  ✕
-                </button>
+                <div style={{ display: "flex", gap: "4px" }}>
+                  <button 
+                    type="button" 
+                    className="action-btn action-btn--secondary-ghost"
+                    style={{ padding: "4px 8px", fontSize: "11px", minHeight: "26px", borderRadius: "8px" }}
+                    onClick={(e) => { 
+                      e.stopPropagation(); 
+                      setLayers(layers.map(l => ({ ...l, enabled: l.id === layer.id })));
+                    }}
+                    title="Solo this effect (disable all others)"
+                  >
+                    Solo
+                  </button>
+                  <button 
+                    type="button" 
+                    className="action-btn action-btn--secondary-ghost"
+                    style={{ padding: "4px 8px", fontSize: "11px", minHeight: "26px", borderRadius: "8px" }}
+                    onClick={(e) => { 
+                      e.stopPropagation(); 
+                      setLayers(layers.map(l => l.id === layer.id ? { ...l, id: l.id.replace(/-restart-\d+$/, '') + '-restart-' + Date.now() } : l));
+                    }}
+                    title="Restart this effect (fixes stuck animations/state)"
+                  >
+                    ↻
+                  </button>
+                  <button 
+                    type="button" 
+                    className="action-btn action-btn--danger-ghost"
+                    style={{ padding: "4px 8px", fontSize: "11px", minHeight: "26px", borderRadius: "8px" }}
+                    onClick={(e) => { e.stopPropagation(); removeEffect(layer.id); }}
+                  >
+                    ✕
+                  </button>
+                </div>
               </div>
             ))
           )}
@@ -692,6 +718,7 @@ export function EditorWorkspace({ currentVideo, onSelectVideo, onApplyWallpaper,
           effects={layers} 
           selectedLayerId={selectedLayerId}
           onUpdateParam={updateParam}
+          onRemoveLayer={removeEffect}
           isPaused={isPreviewPaused}
         />
 

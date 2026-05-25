@@ -45,7 +45,7 @@ pub async fn advance_rotation(
     if advanced.video.local_path.is_empty() || advanced.video.local_path.starts_with("http") {
         log::info!("[Core] Download on advance triggered for source: {}", advanced.video.source);
         let provider = crate::wallpaper::providers::get_provider(&advanced.video.source)?;
-        let local_path = provider.download_video(&advanced.video).await?;
+        let local_path = provider.download_video(&advanced.video, Some(app.clone())).await?;
         advanced.video.local_path = local_path;
         let _ = crate::wallpaper::desktop::cleanup_cache(15);
     }

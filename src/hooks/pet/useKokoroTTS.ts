@@ -46,10 +46,12 @@ export function useKokoroTTS(muted: boolean) {
             sampleRate = audioData.sampling_rate;
             
             // Save to cache asynchronously
-            cacheAudio(text, float32Data).catch(e => console.error("Cache error", e));
+            cacheAudio(text, float32Data as Float32Array).catch(e => console.error("Cache error", e));
           } else {
             console.log("Playing cached audio for:", text);
           }
+
+          if (!float32Data) throw new Error("Audio data is null");
 
           const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
           const audioBuffer = audioContext.createBuffer(1, float32Data.length, sampleRate);

@@ -22,7 +22,7 @@ pub async fn apply_wallpaper(
     if video.local_path.is_empty() || video.local_path.starts_with("http") {
         log::info!("[Core] Download on apply triggered for source: {}", video.source);
         let provider = crate::wallpaper::providers::get_provider(&video.source)?;
-        let local_path = provider.download_video(&video).await?;
+        let local_path = provider.download_video(&video, Some(app.clone())).await?;
         video.local_path = local_path;
         
         let _ = wallpaper::desktop::cleanup_cache(15);

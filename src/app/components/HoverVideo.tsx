@@ -16,9 +16,13 @@ export function HoverVideo({ video, className, onClick }: HoverVideoProps) {
   const [imgError, setImgError] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const isLocalFile = video.local_path && !video.local_path.startsWith("http");
-  const src = isLocalFile
+  let src = isLocalFile
     ? convertFileSrc(video.local_path)
     : video.video_url;
+
+  if (!isLocalFile && video.source === "motionbgs" && src?.includes("3840x2160")) {
+    src = src.replace("3840x2160", "1920x1080");
+  }
 
   const isStaticImage = isStaticWallpaper(video);
   const isHtml = video.local_path?.toLowerCase().endsWith(".html") || video.video_url?.toLowerCase().endsWith(".html");

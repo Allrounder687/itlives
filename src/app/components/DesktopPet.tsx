@@ -24,6 +24,7 @@ export interface DesktopPetProps {
   widgets?: any[];
   onUpdateParam?: (layerId: string, paramName: string, value: any) => void;
   isPaused?: boolean;
+  onRemoveLayer?: (layerId: string) => void;
 }
 
 const SKINS: Record<string, string> = {
@@ -32,6 +33,14 @@ const SKINS: Record<string, string> = {
   "Mage": "/assets/KayKit_Adventurers/Mage.glb",
   "Rogue": "/assets/KayKit_Adventurers/Rogue.glb",
   "Rogue Hooded": "/assets/KayKit_Adventurers/Rogue_Hooded.glb"
+};
+
+const TEXTURES: Record<string, string> = {
+  "Knight": "/assets/KayKit_Adventurers/knight_texture.png",
+  "Barbarian": "/assets/KayKit_Adventurers/barbarian_texture.png",
+  "Mage": "/assets/KayKit_Adventurers/mage_texture.png",
+  "Rogue": "/assets/KayKit_Adventurers/rogue_texture.png",
+  "Rogue Hooded": "/assets/KayKit_Adventurers/rogue_texture.png"
 };
 
 const ANIM_GENERAL_PATH = "/assets/KayKit_Character_Animations_1.1/Animations/gltf/Rig_Medium/Rig_Medium_General.glb";
@@ -45,6 +54,7 @@ const ANIM_TOOLS_PATH = "/assets/KayKit_Character_Animations_1.1/Animations/gltf
 
 // Preload the assets
 Object.values(SKINS).forEach(path => useGLTF.preload(path));
+Object.values(TEXTURES).forEach(path => useTexture.preload(path));
 useGLTF.preload(ANIM_GENERAL_PATH);
 useGLTF.preload(ANIM_MOVEMENT_PATH);
 useGLTF.preload(ANIM_MELEE_PATH);
@@ -59,7 +69,7 @@ useTexture.preload("/assets/Dark VFX 2/Dark VFX 2 (48x64).png");
 
 const tempDir = new THREE.Vector3();
 
-function PetEntity({ params, isOverlay, widgets, onUpdateParam, isPaused, isPrimary, myPosRef, myStateRef, friendPosRef, friendStateRef }: DesktopPetProps & { isPrimary: boolean, myPosRef: any, myStateRef: any, friendPosRef: any, friendStateRef: any }) {
+function PetEntity({ params, isOverlay, widgets, onUpdateParam, onRemoveLayer, isPaused, isPrimary, myPosRef, myStateRef, friendPosRef, friendStateRef }: DesktopPetProps & { isPrimary: boolean, myPosRef: any, myStateRef: any, friendPosRef: any, friendStateRef: any }) {
   const outerGroup = useRef<THREE.Group>(null);
   const animGroup = useRef<THREE.Group>(null);
 
@@ -68,10 +78,29 @@ function PetEntity({ params, isOverlay, widgets, onUpdateParam, isPaused, isPrim
   const skinPath = SKINS[skinName] || SKINS["Knight"];
 
   const { scene: skinScene } = useGLTF(skinPath);
+  
+  const texturePath = TEXTURES[skinName] || TEXTURES["Knight"];
+  const texture = useTexture(texturePath);
 
   const clonedScene = useMemo(() => {
-    return SkeletonUtils.clone(skinScene);
-  }, [skinScene]);
+    const clone = SkeletonUtils.clone(skinScene);
+    if (texture) {
+      texture.flipY = false;
+      texture.colorSpace = THREE.SRGBColorSpace;
+      clone.traverse((child) => {
+        if ((child as THREE.Mesh).isMesh) {
+          const mesh = child as THREE.Mesh;
+          if (mesh.material) {
+            // Clone the material to avoid shared material issues between instances
+            mesh.material = (mesh.material as THREE.Material).clone();
+            (mesh.material as THREE.MeshStandardMaterial).map = texture;
+            (mesh.material as THREE.MeshStandardMaterial).needsUpdate = true;
+          }
+        }
+      });
+    }
+    return clone;
+  }, [skinScene, texture]);
 
   // Load models
   const { animations: animGeneral } = useGLTF(ANIM_GENERAL_PATH);
@@ -161,10 +190,6 @@ function PetEntity({ params, isOverlay, widgets, onUpdateParam, isPaused, isPrim
     Object.values(actions).forEach(action => {
       if (action && action.isRunning() && action !== actions[name]) {
         action.fadeOut(duration);
-        // Explicitly stop the animation after it fades out so it doesn't linger invisibly
-        setTimeout(() => {
-          action.stop();
-        }, duration * 1000);
       }
     });
     const action = actions[name]!;
@@ -275,7 +300,7 @@ function PetEntity({ params, isOverlay, widgets, onUpdateParam, isPaused, isPrim
       audioVolume, heldWidgetRef, targetWidgetRef, throwVelocity, friendPosRef, friendStateRef,
       playAnim, playVoiceLine, getAttackAnimForSkin, skinName, names, actions, params, isOverlay, widgets,
       triggerPower, generateResponse, popPrefetchedResponse, aiVoiceOnly: params.aiVoiceOnly === true,
-      needs, feed, play, sleep, foodPos, setFoodPos
+      needs, feed, play, sleep, foodPos, setFoodPos, onUpdateParam, onRemoveLayer
     };
 
     const { isMoving, targetVec } = updateAI(clampedDelta, aiParams);

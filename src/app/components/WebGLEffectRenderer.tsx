@@ -1222,11 +1222,12 @@ interface WebGLEffectRendererProps {
   effects: EffectLayer[];
   selectedLayerId?: string | null;
   onUpdateParam?: (id: string, key: string, value: any) => void;
+  onRemoveLayer?: (id: string) => void;
   isOverlay?: boolean;
   isPaused?: boolean;
 }
 
-export function WebGLEffectRenderer({ videoSrc, effects, selectedLayerId, onUpdateParam, isOverlay = false, isPaused = false }: WebGLEffectRendererProps) {
+export function WebGLEffectRenderer({ videoSrc, effects, selectedLayerId, onUpdateParam, onRemoveLayer, isOverlay = false, isPaused = false }: WebGLEffectRendererProps) {
   const [liveEffects, setLiveEffects] = useState<EffectLayer[]>(effects);
   const [src, setSrc] = useState<string>("");
   const isImage = videoSrc.match(/\.(jpeg|jpg|gif|png|webp)$/i) != null;
@@ -1504,10 +1505,12 @@ export function WebGLEffectRenderer({ videoSrc, effects, selectedLayerId, onUpda
             {blowingLeaves && <BlowingLeaves params={resolveParams(blowingLeaves.params)} />}
             {desktopPet && (
               <DesktopPet 
+                key={desktopPet.id}
                 params={resolveParams(desktopPet.params)} 
                 isOverlay={isOverlay} 
                 widgets={[clock, musicPlayer, appLauncher, audioVis, ...foodWidgets].filter(Boolean)} 
                 onUpdateParam={onUpdateParam}
+                onRemoveLayer={onRemoveLayer}
                 isPaused={isPaused}
               />
             )}

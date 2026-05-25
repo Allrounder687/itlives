@@ -1,6 +1,7 @@
 "use client";
 
 import { ChangeEvent, useState, useEffect } from "react";
+import { invoke } from "@tauri-apps/api/core";
 
 interface AutomationPanelProps {
   wallpaper: any; // Type accurately if you have a state hook structure, for now 'any' works well for direct mapping.
@@ -44,7 +45,38 @@ export function AutomationPanel({ wallpaper }: AutomationPanelProps) {
     if (saved !== null) {
       setSyncAccent(saved === "true");
     }
+    
+    // Load Shell settings
+    const savedHideIcons = localStorage.getItem("hideDesktopIcons") === "true";
+    const savedTaskbarBlur = localStorage.getItem("enableTaskbarBlur") === "true";
+    
+    setHideDesktopIcons(savedHideIcons);
+    setEnableTaskbarBlur(savedTaskbarBlur);
+    
+    if (savedHideIcons) {
+      invoke("toggle_desktop_icons", { visible: false }).catch(console.error);
+    }
+    if (savedTaskbarBlur) {
+      invoke("set_taskbar_state", { enableBlur: true, useAcrylic: true }).catch(console.error);
+    }
   }, []);
+
+  const [hideDesktopIcons, setHideDesktopIcons] = useState(false);
+  const [enableTaskbarBlur, setEnableTaskbarBlur] = useState(false);
+
+  const onHideDesktopIconsChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const isChecked = event.target.checked;
+    setHideDesktopIcons(isChecked);
+    localStorage.setItem("hideDesktopIcons", String(isChecked));
+    invoke("toggle_desktop_icons", { visible: !isChecked }).catch(console.error);
+  };
+
+  const onEnableTaskbarBlurChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const isChecked = event.target.checked;
+    setEnableTaskbarBlur(isChecked);
+    localStorage.setItem("enableTaskbarBlur", String(isChecked));
+    invoke("set_taskbar_state", { enableBlur: isChecked, useAcrylic: true }).catch(console.error);
+  };
 
   const onSyncAccentChange = (event: ChangeEvent<HTMLInputElement>) => {
     const isChecked = event.target.checked;
@@ -59,6 +91,28 @@ export function AutomationPanel({ wallpaper }: AutomationPanelProps) {
         <h2>Playback Scheduler</h2>
       </div>
       <div className="automation-grid">
+        <div style={{gridColumn: "1 / -1", marginTop: "10px"}}>
+            <h3 style={{fontSize: "14px", opacity: 0.8, marginBottom: "15px", borderBottom: "1px solid rgba(255,255,255,0.1)", paddingBottom: "5px"}}>Windows Shell Integration</h3>
+        </div>
+        <label className="toggle-row">
+          <span>Hide Desktop Icons</span>
+          <input
+            type="checkbox"
+            checked={hideDesktopIcons}
+            onChange={onHideDesktopIconsChange}
+          />
+        </label>
+        <label className="toggle-row">
+          <span>Enable Taskbar Blur (Acrylic)</span>
+          <input
+            type="checkbox"
+            checked={enableTaskbarBlur}
+            onChange={onEnableTaskbarBlurChange}
+          />
+        </label>
+        <div style={{gridColumn: "1 / -1", marginTop: "10px"}}>
+            <h3 style={{fontSize: "14px", opacity: 0.8, marginBottom: "15px", borderBottom: "1px solid rgba(255,255,255,0.1)", paddingBottom: "5px"}}>General Behaviors</h3>
+        </div>
         <label className="toggle-row">
           <span>Sync Windows Accent Color (Taskbar/Windows) with Wallpaper</span>
           <input
@@ -73,6 +127,14 @@ export function AutomationPanel({ wallpaper }: AutomationPanelProps) {
             type="checkbox"
             checked={wallpaper.paused}
             onChange={(event) => wallpaper.setPaused(event.target.checked)}
+          />
+        </label>
+        <label className="toggle-row">
+          <span>Keep desktop effects (like pets) running while wallpaper is paused</span>
+          <input
+            type="checkbox"
+            checked={wallpaper.keepEffectsRunningOnPause}
+            onChange={(event) => wallpaper.setKeepEffectsRunningOnPause(event.target.checked)}
           />
         </label>
         <label className="toggle-row">

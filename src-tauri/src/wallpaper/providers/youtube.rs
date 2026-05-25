@@ -601,7 +601,7 @@ impl VideoProvider for YouTubeProvider {
         self.fetch_video(config).await.map(|v| vec![v])
     }
 
-    async fn download_video(&self, video: &VideoResult) -> Result<String, String> {
+    async fn download_video(&self, video: &VideoResult, _app_handle: Option<tauri::AppHandle>) -> Result<String, String> {
         // If already downloaded, return
         if !video.local_path.is_empty()
             && std::path::Path::new(&video.local_path).exists()

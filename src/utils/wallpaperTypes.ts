@@ -8,6 +8,7 @@ export interface VideoResult {
   height: number;
   source: string;
   tags?: string[];
+  preview_url?: string;
 }
 
 export interface LibraryItem {
@@ -50,6 +51,7 @@ export interface PersistedState {
   disabled_sources: string[];
   pinterest_urls: string[];
   hidden_videos: string[];
+  keep_effects_running_on_pause: boolean;
 }
 
 export interface WallpaperState {
@@ -84,6 +86,7 @@ export interface WallpaperState {
   disabledSources: string[];
   pinterestUrls: string[];
   hiddenVideos: string[];
+  keepEffectsRunningOnPause: boolean;
   searchResults: VideoResult[];
   page: number;
   category: string;
@@ -126,6 +129,7 @@ export function applyPersistedState(persisted: PersistedState, current: Wallpape
       "https://www.pinterest.com/search/pins/?q=fantasy%20wallpaper&rs=ac&len=12&source_id=ac_ysOA3Mkj&eq=fantasy%20wall&etslf=5698"
     ],
     hiddenVideos: persisted.hidden_videos ?? [],
+    keepEffectsRunningOnPause: persisted.keep_effects_running_on_pause,
     resolutions: current.resolutions ?? null,
     ratios: current.ratios ?? null,
     colors: current.colors ?? null,

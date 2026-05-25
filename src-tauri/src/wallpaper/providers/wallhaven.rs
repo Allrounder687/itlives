@@ -145,7 +145,7 @@ impl VideoProvider for WallhavenProvider {
         Ok(results)
     }
 
-    async fn download_video(&self, video: &VideoResult) -> Result<String, String> {
+    async fn download_video(&self, video: &VideoResult, app_handle: Option<tauri::AppHandle>) -> Result<String, String> {
         let cache_dir = crate::wallpaper::desktop::get_cache_dir();
         super::download_to_cache(
             &video.video_url,
@@ -153,6 +153,7 @@ impl VideoProvider for WallhavenProvider {
             "wallhaven",
             &cache_dir,
             Some(vec![("User-Agent".to_string(), "Mozilla/5.0".to_string())]),
+            app_handle,
         ).await
     }
 

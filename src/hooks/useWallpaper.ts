@@ -21,6 +21,7 @@ export function useWallpaper() {
     setPlaybackSpeed, 
     setBlurStrength,
     setPaused,
+    setKeepEffectsRunningOnPause,
     setWallpaperScale,
     setWallpaperFilter,
     fetchVideoTags
@@ -158,6 +159,7 @@ export function useWallpaper() {
     setPlaybackSpeed,
     setBlurStrength,
     setPaused,
+    setKeepEffectsRunningOnPause,
     setWallpaperScale,
     setWallpaperFilter,
     addToQueue,

@@ -296,7 +296,7 @@ impl VideoProvider for PinterestProvider {
         Ok(results)
     }
 
-    async fn download_video(&self, video: &VideoResult) -> Result<String, String> {
+    async fn download_video(&self, video: &VideoResult, app_handle: Option<tauri::AppHandle>) -> Result<String, String> {
         let cache_dir = crate::wallpaper::desktop::get_cache_dir();
         // Try progressively smaller resolutions: originals → 736x → 474x → 236x
         let sizes = ["originals", "736x", "474x", "236x"];
@@ -307,7 +307,7 @@ impl VideoProvider for PinterestProvider {
             .replace("/236x/", "/{SIZE}/");
         for size in &sizes {
             let url = base_url.replace("{SIZE}", size);
-            match super::download_to_cache(&url, &video.id, "pinterest", &cache_dir, None).await {
+            match super::download_to_cache(&url, &video.id, "pinterest", &cache_dir, None, app_handle.clone()).await {
                 Ok(path) => return Ok(path),
                 Err(e) => {
                     log::warn!("[Pinterest] Download at {} failed: {}", size, e);

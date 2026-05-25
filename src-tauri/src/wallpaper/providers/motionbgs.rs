@@ -101,7 +101,7 @@ impl VideoProvider for MotionBgsProvider {
         };
         
         let cache_dir = crate::wallpaper::desktop::get_cache_dir();
-        let local_path = download_to_cache(&chosen.video_url, &chosen.id, "motionbgs", &cache_dir, None).await?;
+        let local_path = download_to_cache(&chosen.video_url, &chosen.id, "motionbgs", &cache_dir, None, None).await?;
         
         let mut final_video = chosen;
         final_video.local_path = local_path;
@@ -210,8 +210,8 @@ impl VideoProvider for MotionBgsProvider {
         Ok(results)
     }
 
-    async fn download_video(&self, video: &VideoResult) -> Result<String, String> {
+    async fn download_video(&self, video: &VideoResult, app_handle: Option<tauri::AppHandle>) -> Result<String, String> {
         let cache_dir = crate::wallpaper::desktop::get_cache_dir();
-        super::download_to_cache(&video.video_url, &video.id, "motionbgs", &cache_dir, None).await
+        super::download_to_cache(&video.video_url, &video.id, "motionbgs", &cache_dir, None, app_handle).await
     }
 }

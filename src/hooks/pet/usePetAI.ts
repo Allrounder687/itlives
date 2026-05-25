@@ -36,6 +36,8 @@ export interface PetAIParams {
   sleep?: () => void;
   foodPos?: THREE.Vector3 | null;
   setFoodPos?: (pos: THREE.Vector3 | null) => void;
+  onUpdateParam?: (layerId: string, paramName: string, value: any) => void;
+  onRemoveLayer?: (layerId: string) => void;
 }
 
 export function usePetAI() {
@@ -44,16 +46,21 @@ export function usePetAI() {
     let targetVec = p.targetPos.current;
     p.timer.current -= delta;
 
-    // Needs override: low hunger searches for food widget
-    if (p.timer.current <= 0 && p.needs && p.needs.hunger < 30 && p.aiState.current !== "SLEEP" && !p.foodPos) {
+    // Needs override: if a food widget exists, prioritize it!
+    if (p.timer.current <= 0 && p.aiState.current !== "SLEEP" && p.aiState.current !== "EATING_WIDGET" && p.aiState.current !== "FOOD_WIDGET_MOVE" && !p.foodPos) {
       if (p.widgets) {
         const foodBowl = p.widgets.find((w: any) => ["food-bowl", "food-pizza", "food-meat"].includes(w.type));
         if (foodBowl) {
+          p.targetWidgetRef.current = foodBowl;
           const w = window.innerWidth;
           const h = window.innerHeight;
           const fx = (foodBowl.params.x / 100) * w - w / 2;
           const fy = -(foodBowl.params.y / 100) * h + h / 2;
-          if (p.setFoodPos) p.setFoodPos(new THREE.Vector3(fx, fy, 0));
+          
+          p.targetPos.current.set(fx, fy, 0);
+          p.aiState.current = "FOOD_WIDGET_MOVE";
+          p.playAnim("Running_A");
+          // Do not return early, allow the state machine below to process the distance check immediately
         }
       }
     }
@@ -62,15 +69,15 @@ export function usePetAI() {
     if (p.needs && p.needs.energy < 20 && p.aiState.current !== "SLEEP" && p.aiState.current !== "WIDGET_SLEEP" && !p.foodPos) {
       if (Math.random() > 0.95) {
         p.aiState.current = "SLEEP";
-        p.playAnim("Rest"); // or sleep
+        p.playAnim("Sit_Floor_Idle"); // or sleep
         p.timer.current = 5.0; // sleep for 5 seconds per cycle
         if (p.sleep) p.sleep(); // replenish energy slightly
         return { isMoving: false, targetVec: null };
       }
     }
 
-    // Check for Food
-    if (p.foodPos && p.setFoodPos) {
+    // Check for Manual Food (Middle Click Brown Sphere)
+    if (p.foodPos && p.setFoodPos && p.aiState.current !== "EATING_WIDGET" && p.aiState.current !== "FOOD_WIDGET_MOVE") {
       const distToFood = p.currentPos.current.distanceTo(p.foodPos);
       if (distToFood > 150) {
         p.aiState.current = "CLICK_MOVE"; // use click move to run to it
@@ -78,12 +85,12 @@ export function usePetAI() {
         p.playAnim("Running_A");
         return { isMoving: true, targetVec: p.foodPos.clone() };
       } else {
-        // Reached food
+        // Reached food sphere
         p.aiState.current = "CUSTOM";
         p.playAnim("Interact"); // Eat animation
         p.timer.current = 3.0;
         if (p.needs && p.needs.moody) {
-           if (p.feed) p.feed(15); // Slightly feed it so it stops looping over the same food widget while refusing
+           if (p.feed) p.feed(15); 
            if (p.generateResponse) {
              p.generateResponse("I am very moody right now. Refuse to eat the food in front of me with a short sentence.").then(res => {
                if (res && res.text) p.playVoiceLine(res.text);
@@ -100,6 +107,62 @@ export function usePetAI() {
         p.setFoodPos(null);
         return { isMoving: false, targetVec: null };
       }
+    }
+
+    // Handle Food Widget Eating Logic
+    if (p.aiState.current === "FOOD_WIDGET_MOVE") {
+      if (p.targetWidgetRef.current) {
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+        const fx = (p.targetWidgetRef.current.params.x / 100) * w - w / 2;
+        const fy = -(p.targetWidgetRef.current.params.y / 100) * h + h / 2;
+        p.targetPos.current.set(fx, fy, 0);
+      }
+
+      const dist = p.currentPos.current.distanceTo(p.targetPos.current);
+      if (dist > 150) {
+        return { isMoving: true, targetVec: p.targetPos.current.clone() };
+      } else {
+        // Reached widget!
+        p.aiState.current = "EATING_WIDGET";
+        p.playAnim("Interact"); // Eat animation
+        p.timer.current = 3.0;
+        return { isMoving: false, targetVec: null };
+      }
+    } else if (p.aiState.current === "EATING_WIDGET") {
+       if (p.targetWidgetRef.current && p.onUpdateParam) {
+           // Scale down the widget over 3 seconds
+           const baseScale = p.targetWidgetRef.current.params.scale || 1.0;
+           const newScale = Math.max(0, baseScale - (delta * 0.33));
+           p.onUpdateParam(p.targetWidgetRef.current.id, "scale", newScale);
+       }
+
+       if (p.timer.current <= 0) {
+         if (p.needs && p.needs.moody) {
+           if (p.feed) p.feed(15); 
+           if (p.generateResponse) {
+             p.generateResponse("I am very moody right now. Refuse to eat the food in front of me with a short sentence.").then(res => {
+               if (res && res.text) p.playVoiceLine(res.text);
+             });
+           }
+         } else {
+           if (p.feed) p.feed();
+           if (p.generateResponse) {
+             p.generateResponse("I just ate some yummy food! Say a quick, happy reaction out loud.").then(res => {
+               if (res && res.text) p.playVoiceLine(res.text);
+             });
+           }
+         }
+         // Remove the widget permanently!
+         if (p.targetWidgetRef.current && p.onRemoveLayer) {
+           p.onRemoveLayer(p.targetWidgetRef.current.id);
+         }
+         p.targetWidgetRef.current = null;
+         p.aiState.current = "IDLE";
+         p.playAnim("Idle_A");
+         p.timer.current = 1.0;
+       }
+       return { isMoving: false, targetVec: null };
     }
 
     const vol = p.audioVolume.current;
@@ -150,8 +213,8 @@ export function usePetAI() {
       if (p.aiState.current === "IDLE") {
         if (p.timer.current <= 0) {
           const currentHour = new Date().getHours();
-          const isSleepTime = currentHour >= 8 && currentHour < 15;
-          const isWorkTime = currentHour >= 15 && currentHour < 20;
+          const isSleepTime = currentHour >= 22 || currentHour < 7;
+          const isWorkTime = currentHour >= 9 && currentHour < 17;
 
           if (isSleepTime) {
             // Go to sleep!
@@ -167,7 +230,7 @@ export function usePetAI() {
               p.playAnim("Running_A");
             } else {
               p.aiState.current = "SLEEP";
-              p.playAnim("Rest");
+              p.playAnim("Sit_Floor_Idle");
               p.timer.current = 15.0;
             }
           } else {
@@ -506,14 +569,14 @@ export function usePetAI() {
         const dist = p.currentPos.current.distanceTo(p.targetPos.current);
         if (dist < 10) {
           p.aiState.current = "WIDGET_SLEEP";
-          p.playAnim("Rest");
+          p.playAnim("Sit_Floor_Idle");
           p.timer.current = 15.0; // Sleep timer cycle
         } else {
           isMoving = true;
         }
       } else if (p.aiState.current === "WIDGET_SLEEP" || p.aiState.current === "SLEEP") {
         const currentHour = new Date().getHours();
-        const isSleepTime = currentHour >= 8 && currentHour < 15;
+        const isSleepTime = currentHour >= 22 || currentHour < 7;
         
         if (!isSleepTime && p.timer.current <= 0) {
           // Wake up!
@@ -528,7 +591,7 @@ export function usePetAI() {
              });
           }
           p.timer.current = 20.0;
-          p.playAnim("Rest");
+          p.playAnim("Sit_Floor_Idle");
         }
       } else if (p.aiState.current === "CLICK_MOVE") {
         const dist = p.currentPos.current.distanceTo(targetVec);

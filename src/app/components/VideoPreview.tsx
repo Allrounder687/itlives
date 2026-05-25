@@ -83,9 +83,13 @@ export function VideoPreview({
   const isHtml = video.local_path?.toLowerCase().endsWith(".html") || video.video_url?.toLowerCase().endsWith(".html");
 
   const isLocalFile = video.local_path && !video.local_path.startsWith("http");
-  const videoSrc = isLocalFile
+  let videoSrc = isLocalFile
     ? convertFileSrc(video.local_path)
     : video.video_url;
+
+  if (!isLocalFile && video.source === "motionbgs" && videoSrc?.includes("3840x2160")) {
+    videoSrc = videoSrc.replace("3840x2160", "1920x1080");
+  }
 
   function formatTime(seconds: number): string {
     const m = Math.floor(seconds / 60);
@@ -108,21 +112,33 @@ export function VideoPreview({
     return () => element.removeEventListener("timeupdate", handleTimeUpdate);
   }, [startTime, endTime]);
 
+  const isDraggingThumbRef = useRef(false);
+
   // Immediate seek previews on slider drags
   useEffect(() => {
     const element = videoRef.current;
-    if (element && startTime >= 0) {
+    if (element && startTime >= 0 && isDraggingThumbRef.current && activeThumb === "start") {
       element.currentTime = startTime;
     }
-  }, [startTime]);
+  }, [startTime, activeThumb]);
 
   useEffect(() => {
     const element = videoRef.current;
-    if (element && endTime > 0) {
+    if (element && endTime > 0 && isDraggingThumbRef.current && activeThumb === "end") {
       // seek slightly before endTime so they see the end frame context
       element.currentTime = Math.max(0, endTime - 0.2);
     }
-  }, [endTime]);
+  }, [endTime, activeThumb]);
+
+  useEffect(() => {
+    const handleMouseUp = () => { isDraggingThumbRef.current = false; };
+    window.addEventListener("mouseup", handleMouseUp);
+    window.addEventListener("touchend", handleMouseUp);
+    return () => {
+      window.removeEventListener("mouseup", handleMouseUp);
+      window.removeEventListener("touchend", handleMouseUp);
+    };
+  }, []);
 
   useEffect(() => {
     const element = videoRef.current;
@@ -236,8 +252,8 @@ export function VideoPreview({
                 type="range"
                 className="yt-range-input yt-range-start"
                 style={{ zIndex: activeThumb === "start" ? 15 : 10 }}
-                onMouseDown={() => setActiveThumb("start")}
-                onTouchStart={() => setActiveThumb("start")}
+                onMouseDown={() => { setActiveThumb("start"); isDraggingThumbRef.current = true; }}
+                onTouchStart={() => { setActiveThumb("start"); isDraggingThumbRef.current = true; }}
                 min={0}
                 max={totalDuration}
                 step={0.5}
@@ -252,8 +268,8 @@ export function VideoPreview({
                 type="range"
                 className="yt-range-input yt-range-end"
                 style={{ zIndex: activeThumb === "end" ? 15 : 10 }}
-                onMouseDown={() => setActiveThumb("end")}
-                onTouchStart={() => setActiveThumb("end")}
+                onMouseDown={() => { setActiveThumb("end"); isDraggingThumbRef.current = true; }}
+                onTouchStart={() => { setActiveThumb("end"); isDraggingThumbRef.current = true; }}
                 min={0}
                 max={totalDuration}
                 step={0.5}

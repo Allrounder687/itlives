@@ -44,6 +44,14 @@ pub fn set_auto_pause(
 }
 
 #[tauri::command]
+pub fn set_keep_effects_running_on_pause(
+    state: State<'_, AppStateStore>,
+    enabled: bool,
+) -> Result<WallpaperState, String> {
+    wallpaper::state::set_keep_effects_running_on_pause(&state, enabled)
+}
+
+#[tauri::command]
 pub fn import_local_video(
     state: State<'_, AppStateStore>,
     video: VideoResult,

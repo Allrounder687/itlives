@@ -22,6 +22,7 @@ import { ThemeSelector } from "./components/ThemeSelector";
 import { CommunityPanel } from "./components/CommunityPanel";
 import { DependencyChecker } from "./components/DependencyChecker";
 import { WallpaperSourcePanel } from "./components/WallpaperSourcePanel";
+import { DownloadProgressOverlay } from "./components/DownloadProgressOverlay";
 
 function Home() {
   const wallpaper = useWallpaper();
@@ -201,6 +202,13 @@ function Home() {
     });
   }, []);
 
+  const handleOverlayRemoveLayer = useCallback((layerId: string) => {
+    setOverlayConfig(prev => {
+      if (!prev || !prev.layers) return prev;
+      return { ...prev, layers: prev.layers.filter(l => l.id !== layerId) };
+    });
+  }, []);
+
   if (isOverlayMode) {
     return (
       <main className="workspace-overlay" style={{ background: "transparent", width: "100vw", height: "100vh", overflow: "hidden" }}>
@@ -217,6 +225,8 @@ function Home() {
           effects={overlayConfig?.layers || []} 
           isOverlay={true} 
           onUpdateParam={handleOverlayParamUpdate}
+          onRemoveLayer={handleOverlayRemoveLayer}
+          isPaused={wallpaper.paused && !wallpaper.keepEffectsRunningOnPause}
         />
       </main>
     );
@@ -540,6 +550,7 @@ function Home() {
           </button>
         </div>
       )}
+      <DownloadProgressOverlay />
     </div>
   );
 }
