@@ -19,6 +19,7 @@
     "core:window:allow-unminimize",
     "shell:default",
     "dialog:default",
-    "autostart:default"
+    "autostart:default",
+    "http:default"
   ]
 }

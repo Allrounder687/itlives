@@ -2,13 +2,13 @@
 //! Any video source (RedGIFs, TikTok, YouTube, direct URL, local file)
 //! implements the `VideoProvider` trait to become a wallpaper source.
 
+pub mod alphacoders;
 pub mod direct_url;
 pub mod motionbgs;
-pub mod alphacoders;
-pub mod youtube;
-pub mod wallhaven;
 pub mod pinterest;
+pub mod wallhaven;
 pub mod wallpaperwaves;
+pub mod youtube;
 
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -40,6 +40,8 @@ pub struct SearchConfig {
     pub resolutions: Option<String>,
     pub ratios: Option<String>,
     pub colors: Option<String>,
+    pub categories: Option<String>,
+    pub purity: Option<String>,
 }
 
 impl Default for SearchConfig {
@@ -53,6 +55,8 @@ impl Default for SearchConfig {
             resolutions: None,
             ratios: None,
             colors: None,
+            categories: Some("111".to_string()),
+            purity: Some("100".to_string()),
         }
     }
 }
@@ -71,7 +75,11 @@ pub trait VideoProvider: Send + Sync {
     async fn fetch_videos_list(&self, config: &SearchConfig) -> Result<Vec<VideoResult>, String>;
 
     /// Downloads the given video to cache and returns local path string.
-    async fn download_video(&self, video: &VideoResult, app_handle: Option<tauri::AppHandle>) -> Result<String, String>;
+    async fn download_video(
+        &self,
+        video: &VideoResult,
+        app_handle: Option<tauri::AppHandle>,
+    ) -> Result<String, String>;
 
     /// Fetches tags for a specific video ID. Default returns empty.
     async fn fetch_tags(&self, _id: &str) -> Result<Vec<String>, String> {
@@ -133,7 +141,7 @@ pub async fn download_to_cache(
     let max_attempts = 3;
     let bytes = loop {
         attempt += 1;
-        
+
         let mut req = client.get(video_url)
             .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
             .header("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
@@ -146,13 +154,16 @@ pub async fn download_to_cache(
         }
 
         let resp_result = req.send().await;
-        
+
         match resp_result {
             Ok(mut resp) => {
                 let status = resp.status();
                 if !status.is_success() {
                     if attempt >= max_attempts {
-                        return Err(format!("Download of {} failed with HTTP status: {}", video_url, status));
+                        return Err(format!(
+                            "Download of {} failed with HTTP status: {}",
+                            video_url, status
+                        ));
                     }
                     tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
                     continue;
@@ -171,34 +182,51 @@ pub async fn download_to_cache(
                             bytes_data.extend_from_slice(&chunk);
                             if let Some(app) = &app_handle {
                                 use tauri::Emitter;
-                                let _ = app.emit("download-progress", DownloadProgress {
-                                    id: video_id.to_string(),
-                                    progress: downloaded,
-                                    total: total_size,
-                                });
+                                let _ = app.emit(
+                                    "download-progress",
+                                    DownloadProgress {
+                                        id: video_id.to_string(),
+                                        progress: downloaded,
+                                        total: total_size,
+                                    },
+                                );
                             }
                         }
                         Err(e) => {
                             failed = true;
                             if attempt >= max_attempts {
-                                return Err(format!("Download read failed after {} attempts: {}", max_attempts, e));
+                                return Err(format!(
+                                    "Download read failed after {} attempts: {}",
+                                    max_attempts, e
+                                ));
                             }
-                            log::warn!("Download read failed (attempt {}): {}. Retrying...", attempt, e);
+                            log::warn!(
+                                "Download read failed (attempt {}): {}. Retrying...",
+                                attempt,
+                                e
+                            );
                             tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
                             break;
                         }
                     }
                 }
-                
+
                 if !failed {
                     break bytes_data;
                 }
             }
             Err(e) => {
                 if attempt >= max_attempts {
-                    return Err(format!("Download failed after {} attempts: {}", max_attempts, e));
+                    return Err(format!(
+                        "Download failed after {} attempts: {}",
+                        max_attempts, e
+                    ));
                 }
-                log::warn!("Download request failed (attempt {}): {}. Retrying...", attempt, e);
+                log::warn!(
+                    "Download request failed (attempt {}): {}. Retrying...",
+                    attempt,
+                    e
+                );
                 tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
             }
         }
@@ -281,6 +309,55 @@ pub fn apply_post_fetch_filters(results: &mut Vec<VideoResult>, config: &SearchC
                     let item_ratio = item.width as f32 / item.height as f32;
                     if (item_ratio - target_ratio).abs() > 0.05 {
                         return false;
+                    }
+                }
+            }
+        }
+
+        // Apply fallback Purity filter
+        if let Some(ref purity) = config.purity {
+            // purity bits: [0] SFW, [1] Sketchy, [2] NSFW (from left, 100 is SFW)
+            // If NSFW (001) is not allowed, filter out tags.
+            // SFW only (100) -> exclude nsfw, nude, 18+
+            if !purity.ends_with('1') {
+                if let Some(ref tags) = item.tags {
+                    for tag in tags {
+                        let t = tag.to_lowercase();
+                        if t.contains("nsfw") || t.contains("nude") || t.contains("18+") || t.contains("hentai") || t.contains("porn") {
+                            return false;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Apply fallback Categories filter
+        if let Some(ref categories) = config.categories {
+            // categories bits: [0] General, [1] Anime, [2] People (100, 010, 001)
+            let chars: Vec<char> = categories.chars().collect();
+            if chars.len() >= 3 {
+                let allow_anime = chars[1] == '1';
+                let allow_people = chars[2] == '1';
+
+                if !allow_anime {
+                    if let Some(ref tags) = item.tags {
+                        for tag in tags {
+                            let t = tag.to_lowercase();
+                            if t.contains("anime") || t.contains("manga") || t.contains("weeb") || t.contains("vocaloid") {
+                                return false;
+                            }
+                        }
+                    }
+                }
+                
+                if !allow_people {
+                    if let Some(ref tags) = item.tags {
+                        for tag in tags {
+                            let t = tag.to_lowercase();
+                            if t == "people" || t == "person" || t == "girl" || t == "boy" || t == "woman" || t == "man" {
+                                return false;
+                            }
+                        }
                     }
                 }
             }

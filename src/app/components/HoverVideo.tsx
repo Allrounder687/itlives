@@ -8,10 +8,11 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 interface HoverVideoProps {
   video: VideoResult;
   className?: string;
+  gridSize?: "S" | "M" | "L" | "XL" | "XXL";
   onClick?: () => void;
 }
 
-export function HoverVideo({ video, className, onClick }: HoverVideoProps) {
+export function HoverVideo({ video, className, gridSize = "M", onClick }: HoverVideoProps) {
   const [isHovered, setIsHovered] = useState(false);
   const [imgError, setImgError] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -32,9 +33,23 @@ export function HoverVideo({ video, className, onClick }: HoverVideoProps) {
     ? convertFileSrc(video.thumbnail_url)
     : video.thumbnail_url;
 
-  const thumbSrc = isStaticImage && (!video.thumbnail_url || imgError) 
+  let thumbSrc = isStaticImage && (!video.thumbnail_url || imgError) 
     ? src 
     : effectiveThumbUrl;
+
+  if (thumbSrc) {
+    if (video.source === "wallhaven" && thumbSrc.includes("/small/")) {
+      if (gridSize === "L" || gridSize === "XL" || gridSize === "XXL") {
+        thumbSrc = thumbSrc.replace("/small/", "/lg/");
+      }
+    } else if (video.source === "pinterest" && thumbSrc.includes("/236x/")) {
+      if (gridSize === "L") {
+        thumbSrc = thumbSrc.replace("/236x/", "/474x/");
+      } else if (gridSize === "XL" || gridSize === "XXL") {
+        thumbSrc = thumbSrc.replace("/236x/", "/736x/");
+      }
+    }
+  }
 
   const shouldRenderVideo = isHovered && !isStaticRender;
 
@@ -69,6 +84,8 @@ export function HoverVideo({ video, className, onClick }: HoverVideoProps) {
   };
 
   const hasValidThumb = !!effectiveThumbUrl && !imgError;
+  const isPortrait = video.height && video.width && video.height > video.width;
+  const objectPosition = isPortrait ? "center 20%" : "center";
 
   return (
     <div 
@@ -90,6 +107,7 @@ export function HoverVideo({ video, className, onClick }: HoverVideoProps) {
             width: "100%", 
             height: "100%", 
             objectFit: "cover",
+            objectPosition,
             opacity: (!isStaticRender && isHovered && src) ? 0 : 1,
             transform: (isStaticRender && isHovered) ? "scale(1.08)" : "scale(1)",
             transition: "opacity 0.3s ease, transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)"
@@ -134,6 +152,7 @@ export function HoverVideo({ video, className, onClick }: HoverVideoProps) {
             width: "100%", 
             height: "100%", 
             objectFit: "cover",
+            objectPosition,
             opacity: isHovered ? 1 : 0,
             transition: "opacity 0.3s ease"
           }}

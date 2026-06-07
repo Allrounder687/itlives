@@ -1,12 +1,12 @@
-mod wallpaper;
 pub mod commands;
 pub mod integrations;
+mod wallpaper;
 mod windows_theme;
 
 use tauri::{
     menu::{MenuBuilder, MenuItemBuilder},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Manager, Position, PhysicalPosition, Size, LogicalSize
+    LogicalSize, Manager, PhysicalPosition, Position, Size,
 };
 use wallpaper::state::AppStateStore;
 
@@ -15,9 +15,9 @@ fn restore_wallpaper_if_enabled(app: tauri::AppHandle, store: &AppStateStore) {
     if state.restore_on_launch && state.is_playing {
         if let Some(video) = state.current_video.as_ref() {
             let path_lower = video.local_path.to_lowercase();
-            let is_static_image = path_lower.ends_with(".jpg") 
-                || path_lower.ends_with(".jpeg") 
-                || path_lower.ends_with(".png") 
+            let is_static_image = path_lower.ends_with(".jpg")
+                || path_lower.ends_with(".jpeg")
+                || path_lower.ends_with(".png")
                 || path_lower.ends_with(".webp")
                 || video.source == "wallhaven"
                 || video.source == "pinterest";
@@ -42,15 +42,23 @@ fn restore_wallpaper_if_enabled(app: tauri::AppHandle, store: &AppStateStore) {
         }
 
         // Also restore desktop effects if they exist in current_effects.json
-        let data_dir = app.path().app_local_data_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+        let data_dir = app
+            .path()
+            .app_local_data_dir()
+            .unwrap_or_else(|_| std::path::PathBuf::from("."));
         let config_path = data_dir.join("current_effects.json");
         if config_path.exists() {
             if let Ok(layers_json) = std::fs::read_to_string(&config_path) {
-                log::info!("[Startup] Found current_effects.json. Restoring desktop effects overlay...");
+                log::info!(
+                    "[Startup] Found current_effects.json. Restoring desktop effects overlay..."
+                );
                 let app_clone = app.clone();
                 tauri::async_runtime::spawn(async move {
                     tokio::time::sleep(std::time::Duration::from_millis(600)).await;
-                    if let Err(e) = crate::commands::wallpaper_control::apply_desktop_effects(app_clone, layers_json) {
+                    if let Err(e) = crate::commands::wallpaper_control::apply_desktop_effects(
+                        app_clone,
+                        layers_json,
+                    ) {
                         log::error!("[Startup] Failed to restore desktop effects overlay: {}", e);
                     } else {
                         log::info!("[Startup] Desktop effects overlay restored successfully!");
@@ -134,12 +142,14 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
                         let _ = window.hide();
                     } else {
                         if let Ok(Some(m)) = window.current_monitor() {
-                             let size = m.size();
-                             let scale = m.scale_factor();
-                             let _ = window.set_size(Size::Logical(LogicalSize::new(380.0, 480.0)));
-                             let x = size.width as f64 - (380.0 * scale) - (15.0 * scale);
-                             let y = size.height as f64 - (480.0 * scale) - (50.0 * scale);
-                             let _ = window.set_position(Position::Physical(PhysicalPosition::new(x as i32, y as i32)));
+                            let size = m.size();
+                            let scale = m.scale_factor();
+                            let _ = window.set_size(Size::Logical(LogicalSize::new(380.0, 480.0)));
+                            let x = size.width as f64 - (380.0 * scale) - (15.0 * scale);
+                            let y = size.height as f64 - (480.0 * scale) - (50.0 * scale);
+                            let _ = window.set_position(Position::Physical(PhysicalPosition::new(
+                                x as i32, y as i32,
+                            )));
                         }
                         let _ = window.show();
                         let _ = window.set_focus();
@@ -162,8 +172,12 @@ pub fn run() {
     // integrations server is started inside .setup() once the AppHandle is available
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, Some(vec!["--minimized"])))
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            Some(vec!["--minimized"]),
+        ))
         .manage(state_store.clone())
         .on_window_event(move |window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
@@ -260,8 +274,6 @@ pub fn run() {
             commands::settings::set_wallhaven_api_key,
             commands::settings::set_disabled_sources,
             commands::settings::set_pinterest_urls,
-
-
             commands::settings::toggle_hide_video,
             commands::video::fetch_wallhaven_collections,
             commands::batch::start_wallhaven_batch_download,
@@ -279,7 +291,5 @@ pub fn run() {
             commands::shell_control::set_taskbar_state,
         ])
         .run(tauri::generate_context!())
-
-
         .expect("error while running tauri application");
 }

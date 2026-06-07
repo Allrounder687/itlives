@@ -18,6 +18,7 @@ interface UnifiedLibraryProps {
   onToggleQueue: (item: LibraryItem) => void;
   onRemoveRecent?: (item: LibraryItem) => void;
   onRemoveImport?: (item: LibraryItem) => void;
+  onUploadMedia?: () => void;
 }
 
 export function formatSavedAt(timestamp: number) {
@@ -39,6 +40,7 @@ export function UnifiedLibrary({
   onToggleQueue,
   onRemoveRecent,
   onRemoveImport,
+  onUploadMedia,
 }: UnifiedLibraryProps) {
   const [filter, setFilter] = useState<"all" | "favorites" | "recents" | "local">("all");
   const [typeFilter, setTypeFilter] = useState<"all" | "live" | "static">("all");
@@ -95,6 +97,16 @@ export function UnifiedLibrary({
           <span className="eyebrow">User Space</span>
           <h2>Wallpaper Library</h2>
         </div>
+        {onUploadMedia && (
+          <button
+            type="button"
+            className="action-btn action-btn--primary"
+            style={{ padding: "8px 16px", borderRadius: "8px", fontWeight: 600 }}
+            onClick={onUploadMedia}
+          >
+            + Add Local File
+          </button>
+        )}
       </div>
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem", flexWrap: "wrap", gap: "10px" }}>
@@ -153,7 +165,7 @@ export function UnifiedLibrary({
             return (
               <article className="library-card-item" key={key}>
                 <div className="library-card-item__media">
-                  <HoverVideo video={item.video} onClick={() => onPreview(item)} />
+                  <HoverVideo video={item.video} gridSize={gridSize} onClick={() => onPreview(item)} />
 
                   <div className="library-card-item__actions">
                     {onRemoveRecent && item.isRecent && (

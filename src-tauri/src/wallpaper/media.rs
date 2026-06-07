@@ -1,4 +1,7 @@
-use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 use tauri::{AppHandle, Emitter};
 use windows::Media::Control::GlobalSystemMediaTransportControlsSessionManager;
 use windows::Storage::Streams::DataReader;
@@ -26,7 +29,9 @@ pub struct MediaTimeline {
 
 #[tauri::command]
 pub fn media_play_pause() -> Result<(), String> {
-    if let Ok(manager) = GlobalSystemMediaTransportControlsSessionManager::RequestAsync().and_then(|op| op.get()) {
+    if let Ok(manager) =
+        GlobalSystemMediaTransportControlsSessionManager::RequestAsync().and_then(|op| op.get())
+    {
         if let Ok(session) = manager.GetCurrentSession() {
             let _ = session.TryTogglePlayPauseAsync();
         }
@@ -36,7 +41,9 @@ pub fn media_play_pause() -> Result<(), String> {
 
 #[tauri::command]
 pub fn media_next() -> Result<(), String> {
-    if let Ok(manager) = GlobalSystemMediaTransportControlsSessionManager::RequestAsync().and_then(|op| op.get()) {
+    if let Ok(manager) =
+        GlobalSystemMediaTransportControlsSessionManager::RequestAsync().and_then(|op| op.get())
+    {
         if let Ok(session) = manager.GetCurrentSession() {
             let _ = session.TrySkipNextAsync();
         }
@@ -46,7 +53,9 @@ pub fn media_next() -> Result<(), String> {
 
 #[tauri::command]
 pub fn media_prev() -> Result<(), String> {
-    if let Ok(manager) = GlobalSystemMediaTransportControlsSessionManager::RequestAsync().and_then(|op| op.get()) {
+    if let Ok(manager) =
+        GlobalSystemMediaTransportControlsSessionManager::RequestAsync().and_then(|op| op.get())
+    {
         if let Ok(session) = manager.GetCurrentSession() {
             let _ = session.TrySkipPreviousAsync();
         }
@@ -56,7 +65,9 @@ pub fn media_prev() -> Result<(), String> {
 
 #[tauri::command]
 pub fn media_seek(position: f64) -> Result<(), String> {
-    if let Ok(manager) = GlobalSystemMediaTransportControlsSessionManager::RequestAsync().and_then(|op| op.get()) {
+    if let Ok(manager) =
+        GlobalSystemMediaTransportControlsSessionManager::RequestAsync().and_then(|op| op.get())
+    {
         if let Ok(session) = manager.GetCurrentSession() {
             let ticks = (position * 10_000_000.0) as i64;
             let _ = session.TryChangePlaybackPositionAsync(ticks);
@@ -74,22 +85,28 @@ pub fn get_current_media_info() -> Result<MediaInfo, String> {
 pub fn media_get_volume() -> Result<f32, String> {
     #[cfg(windows)]
     {
-        use windows::Win32::System::Com::{CoInitializeEx, CoUninitialize, COINIT_MULTITHREADED};
         use windows::Win32::Media::Audio::Endpoints::IAudioEndpointVolume;
-        use windows::Win32::Media::Audio::{eRender, eConsole, IMMDeviceEnumerator, MMDeviceEnumerator};
+        use windows::Win32::Media::Audio::{
+            eConsole, eRender, IMMDeviceEnumerator, MMDeviceEnumerator,
+        };
         use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_ALL};
+        use windows::Win32::System::Com::{CoInitializeEx, CoUninitialize, COINIT_MULTITHREADED};
 
         unsafe {
             let init_result = CoInitializeEx(None, COINIT_MULTITHREADED);
-            let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)
-                .map_err(|e| format!("CoCreateInstance failed: {}", e))?;
-            let device = enumerator.GetDefaultAudioEndpoint(eRender, eConsole)
+            let enumerator: IMMDeviceEnumerator =
+                CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)
+                    .map_err(|e| format!("CoCreateInstance failed: {}", e))?;
+            let device = enumerator
+                .GetDefaultAudioEndpoint(eRender, eConsole)
                 .map_err(|e| format!("GetDefaultAudioEndpoint failed: {}", e))?;
-            let volume: IAudioEndpointVolume = device.Activate(CLSCTX_ALL, None)
+            let volume: IAudioEndpointVolume = device
+                .Activate(CLSCTX_ALL, None)
                 .map_err(|e| format!("Activate failed: {}", e))?;
-            let level = volume.GetMasterVolumeLevelScalar()
+            let level = volume
+                .GetMasterVolumeLevelScalar()
                 .map_err(|e| format!("GetMasterVolumeLevelScalar failed: {}", e))?;
-            
+
             if init_result.is_ok() {
                 CoUninitialize();
             }
@@ -106,25 +123,31 @@ pub fn media_get_volume() -> Result<f32, String> {
 pub fn media_set_volume(level: f32) -> Result<(), String> {
     #[cfg(windows)]
     {
-        use windows::Win32::System::Com::{CoInitializeEx, CoUninitialize, COINIT_MULTITHREADED};
         use windows::Win32::Media::Audio::Endpoints::IAudioEndpointVolume;
-        use windows::Win32::Media::Audio::{eRender, eConsole, IMMDeviceEnumerator, MMDeviceEnumerator};
+        use windows::Win32::Media::Audio::{
+            eConsole, eRender, IMMDeviceEnumerator, MMDeviceEnumerator,
+        };
         use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_ALL};
+        use windows::Win32::System::Com::{CoInitializeEx, CoUninitialize, COINIT_MULTITHREADED};
 
         unsafe {
             let init_result = CoInitializeEx(None, COINIT_MULTITHREADED);
-            let enumerator: IMMDeviceEnumerator = CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)
-                .map_err(|e| format!("CoCreateInstance failed: {}", e))?;
-            let device = enumerator.GetDefaultAudioEndpoint(eRender, eConsole)
+            let enumerator: IMMDeviceEnumerator =
+                CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)
+                    .map_err(|e| format!("CoCreateInstance failed: {}", e))?;
+            let device = enumerator
+                .GetDefaultAudioEndpoint(eRender, eConsole)
                 .map_err(|e| format!("GetDefaultAudioEndpoint failed: {}", e))?;
-            let volume: IAudioEndpointVolume = device.Activate(CLSCTX_ALL, None)
+            let volume: IAudioEndpointVolume = device
+                .Activate(CLSCTX_ALL, None)
                 .map_err(|e| format!("Activate failed: {}", e))?;
-            
+
             // Constrain level between 0.0 and 1.0
             let safe_level = level.max(0.0).min(1.0);
-            volume.SetMasterVolumeLevelScalar(safe_level, std::ptr::null())
+            volume
+                .SetMasterVolumeLevelScalar(safe_level, std::ptr::null())
                 .map_err(|e| format!("SetMasterVolumeLevelScalar failed: {}", e))?;
-            
+
             if init_result.is_ok() {
                 CoUninitialize();
             }
@@ -142,28 +165,41 @@ pub fn init_media_polling(app_handle: AppHandle) {
         return;
     }
     MEDIA_POLLING.store(true, Ordering::SeqCst);
-    
+
     std::thread::spawn(move || {
         let mut last_info = MediaInfo::default();
         let mut last_timeline = MediaTimeline::default();
 
         loop {
-            if !MEDIA_POLLING.load(Ordering::SeqCst) { break; }
-            
-            if let Ok(manager) = GlobalSystemMediaTransportControlsSessionManager::RequestAsync().and_then(|op| op.get()) {
+            if !MEDIA_POLLING.load(Ordering::SeqCst) {
+                break;
+            }
+
+            if let Ok(manager) = GlobalSystemMediaTransportControlsSessionManager::RequestAsync()
+                .and_then(|op| op.get())
+            {
                 if let Ok(session) = manager.GetCurrentSession() {
                     // Get Timeline
                     if let Ok(timeline) = session.GetTimelineProperties() {
-                        let t_start = timeline.StartTime().map(|t| t.Duration as f64 / 10_000_000.0).unwrap_or(0.0);
-                        let t_end = timeline.EndTime().map(|t| t.Duration as f64 / 10_000_000.0).unwrap_or(0.0);
-                        let t_pos = timeline.Position().map(|t| t.Duration as f64 / 10_000_000.0).unwrap_or(0.0);
-                        
+                        let t_start = timeline
+                            .StartTime()
+                            .map(|t| t.Duration as f64 / 10_000_000.0)
+                            .unwrap_or(0.0);
+                        let t_end = timeline
+                            .EndTime()
+                            .map(|t| t.Duration as f64 / 10_000_000.0)
+                            .unwrap_or(0.0);
+                        let t_pos = timeline
+                            .Position()
+                            .map(|t| t.Duration as f64 / 10_000_000.0)
+                            .unwrap_or(0.0);
+
                         let new_timeline = MediaTimeline {
                             position: t_pos,
                             start_time: t_start,
                             end_time: t_end,
                         };
-                        
+
                         if new_timeline != last_timeline {
                             last_timeline = new_timeline.clone();
                             let _ = app_handle.emit("media-timeline", new_timeline);
@@ -179,11 +215,22 @@ pub fn init_media_polling(app_handle: AppHandle) {
                     }
 
                     // Get Metadata
-                    if let Ok(properties) = session.TryGetMediaPropertiesAsync().and_then(|op| op.get()) {
-                        new_info.title = properties.Title().map(|s| s.to_string()).unwrap_or_default();
-                        new_info.artist = properties.Artist().map(|s| s.to_string()).unwrap_or_default();
-                        new_info.album = properties.AlbumTitle().map(|s| s.to_string()).unwrap_or_default();
-                        
+                    if let Ok(properties) =
+                        session.TryGetMediaPropertiesAsync().and_then(|op| op.get())
+                    {
+                        new_info.title = properties
+                            .Title()
+                            .map(|s| s.to_string())
+                            .unwrap_or_default();
+                        new_info.artist = properties
+                            .Artist()
+                            .map(|s| s.to_string())
+                            .unwrap_or_default();
+                        new_info.album = properties
+                            .AlbumTitle()
+                            .map(|s| s.to_string())
+                            .unwrap_or_default();
+
                         // Try to get thumbnail
                         if let Ok(thumb_ref) = properties.Thumbnail() {
                             if let Ok(stream) = thumb_ref.OpenReadAsync().and_then(|op| op.get()) {
@@ -191,11 +238,15 @@ pub fn init_media_polling(app_handle: AppHandle) {
                                     let size = size as u32;
                                     let mut buf = vec![0u8; size as usize];
                                     if let Ok(reader) = DataReader::CreateDataReader(&stream) {
-                                        if let Ok(_) = reader.LoadAsync(size).and_then(|op| op.get()) {
+                                        if let Ok(_) =
+                                            reader.LoadAsync(size).and_then(|op| op.get())
+                                        {
                                             if let Ok(_) = reader.ReadBytes(&mut buf) {
                                                 use base64::Engine;
-                                                let b64 = base64::engine::general_purpose::STANDARD.encode(&buf);
-                                                new_info.thumbnail_base64 = Some(format!("data:image/jpeg;base64,{}", b64));
+                                                let b64 = base64::engine::general_purpose::STANDARD
+                                                    .encode(&buf);
+                                                new_info.thumbnail_base64 =
+                                                    Some(format!("data:image/jpeg;base64,{}", b64));
                                             }
                                         }
                                     }

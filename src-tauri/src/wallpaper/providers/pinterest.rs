@@ -13,7 +13,10 @@ impl VideoProvider for PinterestProvider {
 
     async fn fetch_video(&self, config: &SearchConfig) -> Result<VideoResult, String> {
         let items = self.fetch_videos_list(config).await?;
-        items.into_iter().next().ok_or("No wallpapers found on Pinterest".to_string())
+        items
+            .into_iter()
+            .next()
+            .ok_or("No wallpapers found on Pinterest".to_string())
     }
 
     async fn fetch_videos_list(&self, config: &SearchConfig) -> Result<Vec<VideoResult>, String> {
@@ -32,7 +35,9 @@ impl VideoProvider for PinterestProvider {
             if let Ok(raw) = std::fs::read_to_string(&state_path) {
                 if let Ok(val) = serde_json::from_str::<serde_json::Value>(&raw) {
                     if let Some(urls_val) = val.get("pinterest_urls") {
-                        if let Ok(custom_urls) = serde_json::from_value::<Vec<String>>(urls_val.clone()) {
+                        if let Ok(custom_urls) =
+                            serde_json::from_value::<Vec<String>>(urls_val.clone())
+                        {
                             let active_custom_urls: Vec<String> = custom_urls
                                 .into_iter()
                                 .map(|u| u.trim().to_string())
@@ -76,7 +81,11 @@ impl VideoProvider for PinterestProvider {
                 " style",
             ];
             let suffix = suffixes[(page - 1) as usize % suffixes.len()];
-            let query_url = format!("https://www.pinterest.com/search/pins/?q={}{}%20wallpaper", urlencoding::encode(&query), urlencoding::encode(suffix));
+            let query_url = format!(
+                "https://www.pinterest.com/search/pins/?q={}{}%20wallpaper",
+                urlencoding::encode(&query),
+                urlencoding::encode(suffix)
+            );
             urls.push(query_url);
         }
 
@@ -97,7 +106,10 @@ impl VideoProvider for PinterestProvider {
                 " style",
             ];
             let suffix = suffixes[(page - 1) as usize % suffixes.len()];
-            let query_url = format!("https://www.pinterest.com/search/pins/?q=wallpapers{}", urlencoding::encode(suffix));
+            let query_url = format!(
+                "https://www.pinterest.com/search/pins/?q=wallpapers{}",
+                urlencoding::encode(suffix)
+            );
             urls.push(query_url);
         }
 
@@ -130,21 +142,29 @@ impl VideoProvider for PinterestProvider {
                 }
             };
 
-            let script_re = Regex::new(r#"<script[^>]*id=["']([^"']+)["'][^>]*>([\s\S]*?)</script>"#).unwrap();
+            let script_re =
+                Regex::new(r#"<script[^>]*id=["']([^"']+)["'][^>]*>([\s\S]*?)</script>"#).unwrap();
             for cap in script_re.captures_iter(&raw_text) {
                 let content = &cap[2];
                 if content.contains("initialReduxState") {
                     if let Ok(v) = serde_json::from_str::<serde_json::Value>(content) {
                         if let Some(initial_redux_state) = v.pointer("/initialReduxState") {
                             let mut feed_pin_ids = Vec::new();
-                            
+
                             // 1. Extract pin IDs from the main feed
-                            if let Some(feeds) = initial_redux_state.get("feeds").and_then(|f| f.as_object()) {
+                            if let Some(feeds) =
+                                initial_redux_state.get("feeds").and_then(|f| f.as_object())
+                            {
                                 for (key, val) in feeds {
-                                    if key.contains("search") || key.contains("board") || key.contains("feed") {
+                                    if key.contains("search")
+                                        || key.contains("board")
+                                        || key.contains("feed")
+                                    {
                                         if let Some(arr) = val.as_array() {
                                             for item in arr {
-                                                if let Some(pid) = item.get("id").and_then(|pid| pid.as_str()) {
+                                                if let Some(pid) =
+                                                    item.get("id").and_then(|pid| pid.as_str())
+                                                {
                                                     feed_pin_ids.push(pid.to_string());
                                                 }
                                             }
@@ -152,14 +172,18 @@ impl VideoProvider for PinterestProvider {
                                     }
                                 }
                             }
-                            
+
                             // Fallback: search for any array in feeds if no key matched
                             if feed_pin_ids.is_empty() {
-                                if let Some(feeds) = initial_redux_state.get("feeds").and_then(|f| f.as_object()) {
+                                if let Some(feeds) =
+                                    initial_redux_state.get("feeds").and_then(|f| f.as_object())
+                                {
                                     for (_, val) in feeds {
                                         if let Some(arr) = val.as_array() {
                                             for item in arr {
-                                                if let Some(pid) = item.get("id").and_then(|pid| pid.as_str()) {
+                                                if let Some(pid) =
+                                                    item.get("id").and_then(|pid| pid.as_str())
+                                                {
                                                     feed_pin_ids.push(pid.to_string());
                                                 }
                                             }
@@ -169,18 +193,30 @@ impl VideoProvider for PinterestProvider {
                             }
 
                             // 2. Fetch details for each pin ID
-                            if let Some(pins) = initial_redux_state.get("pins").and_then(|p| p.as_object()) {
+                            if let Some(pins) =
+                                initial_redux_state.get("pins").and_then(|p| p.as_object())
+                            {
                                 fn find_video_url(val: &serde_json::Value) -> Option<String> {
                                     if let Some(s) = val.as_str() {
-                                        if s.contains(".mp4") || s.contains(".m3u8") || s.contains(".webm") || s.contains(".mov") {
+                                        if s.contains(".mp4")
+                                            || s.contains(".m3u8")
+                                            || s.contains(".webm")
+                                            || s.contains(".mov")
+                                        {
                                             return Some(s.to_string());
                                         }
                                     } else if let Some(obj) = val.as_object() {
                                         if let Some(videos) = obj.get("videos") {
-                                            if let Some(url) = videos.pointer("/video_list/V_HLSV4/url").and_then(|u| u.as_str()) {
+                                            if let Some(url) = videos
+                                                .pointer("/video_list/V_HLSV4/url")
+                                                .and_then(|u| u.as_str())
+                                            {
                                                 return Some(url.to_string());
                                             }
-                                            if let Some(url) = videos.pointer("/video_list/V_720P/url").and_then(|u| u.as_str()) {
+                                            if let Some(url) = videos
+                                                .pointer("/video_list/V_720P/url")
+                                                .and_then(|u| u.as_str())
+                                            {
                                                 return Some(url.to_string());
                                             }
                                         }
@@ -211,10 +247,14 @@ impl VideoProvider for PinterestProvider {
                                     }
                                     if let Some(pin) = pins.get(&pid) {
                                         let mut image_url = None;
-                                        if let Some(images) = pin.get("images").and_then(|i| i.as_object()) {
+                                        if let Some(images) =
+                                            pin.get("images").and_then(|i| i.as_object())
+                                        {
                                             for size in &["originals", "736x", "474x", "236x"] {
                                                 if let Some(img_info) = images.get(*size) {
-                                                    if let Some(url) = img_info.get("url").and_then(|u| u.as_str()) {
+                                                    if let Some(url) =
+                                                        img_info.get("url").and_then(|u| u.as_str())
+                                                    {
                                                         image_url = Some(url.to_string());
                                                         break;
                                                     }
@@ -225,11 +265,17 @@ impl VideoProvider for PinterestProvider {
                                         if let Some(img_url) = image_url {
                                             seen_ids.insert(pid.clone());
                                             // Track image hash for cross-dedup with regex fallback
-                                            if let Some(ih) = img_url.rsplit('/').next().and_then(|f| f.split('.').next()) {
+                                            if let Some(ih) = img_url
+                                                .rsplit('/')
+                                                .next()
+                                                .and_then(|f| f.split('.').next())
+                                            {
                                                 seen_ids.insert(format!("imghash_{}", ih));
                                             }
-                                            let video_url = find_video_url(pin).unwrap_or_else(|| img_url.clone());
-                                            let thumbnail_url = pin.pointer("/images/236x/url")
+                                            let video_url = find_video_url(pin)
+                                                .unwrap_or_else(|| img_url.clone());
+                                            let thumbnail_url = pin
+                                                .pointer("/images/236x/url")
                                                 .and_then(|u| u.as_str())
                                                 .map(|s| s.to_string())
                                                 .unwrap_or_else(|| img_url.clone());
@@ -245,7 +291,7 @@ impl VideoProvider for PinterestProvider {
                                                 source: "pinterest".to_string(),
                                                 start_time: None,
                                                 end_time: None,
-            tags: None,
+                                                tags: None,
                                             });
                                         }
                                     }
@@ -282,7 +328,7 @@ impl VideoProvider for PinterestProvider {
                     source: "pinterest".to_string(),
                     start_time: None,
                     end_time: None,
-            tags: None,
+                    tags: None,
                 });
             }
         }
@@ -292,22 +338,39 @@ impl VideoProvider for PinterestProvider {
         let mut rng = rand::thread_rng();
         results.shuffle(&mut rng);
 
-        log::info!("[Pinterest] Found {} unique wallpapers (live & static)", results.len());
+        log::info!(
+            "[Pinterest] Found {} unique wallpapers (live & static)",
+            results.len()
+        );
         Ok(results)
     }
 
-    async fn download_video(&self, video: &VideoResult, app_handle: Option<tauri::AppHandle>) -> Result<String, String> {
+    async fn download_video(
+        &self,
+        video: &VideoResult,
+        app_handle: Option<tauri::AppHandle>,
+    ) -> Result<String, String> {
         let cache_dir = crate::wallpaper::desktop::get_cache_dir();
         // Try progressively smaller resolutions: originals → 736x → 474x → 236x
         let sizes = ["originals", "736x", "474x", "236x"];
-        let base_url = video.video_url
+        let base_url = video
+            .video_url
             .replace("/originals/", "/{SIZE}/")
             .replace("/736x/", "/{SIZE}/")
             .replace("/474x/", "/{SIZE}/")
             .replace("/236x/", "/{SIZE}/");
         for size in &sizes {
             let url = base_url.replace("{SIZE}", size);
-            match super::download_to_cache(&url, &video.id, "pinterest", &cache_dir, None, app_handle.clone()).await {
+            match super::download_to_cache(
+                &url,
+                &video.id,
+                "pinterest",
+                &cache_dir,
+                None,
+                app_handle.clone(),
+            )
+            .await
+            {
                 Ok(path) => return Ok(path),
                 Err(e) => {
                     log::warn!("[Pinterest] Download at {} failed: {}", size, e);

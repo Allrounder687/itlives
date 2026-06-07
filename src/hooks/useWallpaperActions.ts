@@ -3,6 +3,11 @@
 import { useCallback } from "react";
 import { getCoreApi, getDialogApi } from "@/utils/tauriApis";
 import { VideoResult, PersistedState, WallpaperState, applyPersistedState } from "@/utils/wallpaperTypes";
+import { generateText, LanguageModel } from "ai";
+import { createOpenAI } from "@ai-sdk/openai";
+import { createAnthropic } from "@ai-sdk/anthropic";
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 
 export function useWallpaperActions(state: WallpaperState, setState: React.Dispatch<React.SetStateAction<WallpaperState>>) {
   
@@ -26,10 +31,10 @@ export function useWallpaperActions(state: WallpaperState, setState: React.Dispa
         error: null,
         errorHint: null,
       }));
-    } catch (error: any) {
-      setState((s) => ({ ...s, isLoading: false, error: error.toString() }));
+    } catch (error: unknown) {
+      setState((s) => ({ ...s, isLoading: false, error: String(error) }));
     }
-  }, [state.wallpaperScalePercent, setState]);
+  }, [state.wallpaperScalePercent, state.selectedMonitor?.name, setState]);
 
   const fetchVideoTags = useCallback(async (source: string, id: string): Promise<string[]> => {
     if (source === "redgifs") return []; // Legacy fallback to prevent backend errors for old saved wallpapers
@@ -46,15 +51,89 @@ export function useWallpaperActions(state: WallpaperState, setState: React.Dispa
     if (state.source === "direct") return [];
     setState((s) => ({ ...s, isLoading: true, error: null, duplicateNotice: null }));
     try {
+      let finalQuery = state.query;
+      
+      const aiSearchEnabled = localStorage.getItem("aiSearchEnabled") === "true";
+      if (aiSearchEnabled && state.page === 1 && state.query && state.query.trim().length > 0 && state.query !== "all" && state.query !== "wallpaper") {
+        try {
+          const aiProvider = localStorage.getItem("aiProvider") || "openai";
+          const aiBaseUrl = localStorage.getItem("aiBaseUrl") || "";
+          const aiApiKey = localStorage.getItem(`aiApiKey_${aiProvider}`) || "";
+          const aiModel = localStorage.getItem("aiModel") || "gpt-3.5-turbo";
+
+          if (aiProvider === "antigravity" || aiApiKey || (aiProvider === "ollama" && aiBaseUrl)) {
+            setState((s) => ({ ...s, errorHint: "AI Generating Semantic Tags..." }));
+            
+            let generatedTags = "";
+            
+            if (aiProvider === "antigravity") {
+              // Placeholder for Antigravity OAuth integration
+              console.warn("[itLives] Antigravity OAuth not fully connected. Mocking response.");
+              generatedTags = "cyberpunk, antigravity, space, neon";
+            } else {
+              // Determine the correct language model instance
+              let languageModel: LanguageModel | undefined;
+              
+              if (aiProvider === "openai" || aiProvider === "openrouter" || aiProvider === "ollama" || aiProvider === "perplexity") {
+                const openai = createOpenAI({
+                  apiKey: aiApiKey,
+                  baseURL: aiBaseUrl || undefined,
+                  fetch: tauriFetch,
+                });
+                languageModel = openai(aiModel);
+              } else if (aiProvider === "anthropic") {
+                const anthropic = createAnthropic({
+                  apiKey: aiApiKey,
+                  baseURL: aiBaseUrl || undefined,
+                  fetch: tauriFetch,
+                });
+                languageModel = anthropic(aiModel);
+              } else if (aiProvider === "google") {
+                const google = createGoogleGenerativeAI({
+                  apiKey: aiApiKey,
+                  baseURL: aiBaseUrl || undefined,
+                  fetch: tauriFetch,
+                });
+                languageModel = google(aiModel);
+              }
+
+              if (languageModel) {
+                const { text } = await generateText({
+                  model: languageModel,
+                  system: "You are a search tag generator for a wallpaper engine. Output ONLY 3 to 5 specific, comma-separated keywords, nothing else.",
+                  prompt: `The user wants to search for: '${state.query}'. Generate the keywords.`,
+                  temperature: 0.3,
+                });
+                generatedTags = text.trim();
+              }
+            }
+            
+            if (generatedTags) {
+              // Clean up any quotes the AI might have accidentally added
+              generatedTags = generatedTags.replace(/['"]/g, '');
+              finalQuery = generatedTags;
+              console.log("[itLives] AI SDK expanded query to:", finalQuery);
+            }
+            
+            setState((s) => ({ ...s, errorHint: null }));
+          }
+        } catch (e) {
+          console.warn("[itLives] AI Search exception:", e);
+          setState((s) => ({ ...s, errorHint: null }));
+        }
+      }
+
       const { invoke } = await getCoreApi();
       const results = await invoke<VideoResult[]>("fetch_videos_list", {
         source: state.source,
-        query: state.query,
+        query: finalQuery,
         order: "random",
         page: state.page,
         resolutions: state.resolutions,
         ratios: state.ratios,
         colors: state.colors,
+        categories: state.categoriesFilter,
+        purity: state.purityFilter,
       });
       setState((s) => {
         // If this is page 1, we start clean and don't count existing results as duplicates
@@ -98,7 +177,7 @@ export function useWallpaperActions(state: WallpaperState, setState: React.Dispa
       setState((s) => ({ ...s, isLoading: false, error: error.toString() }));
       return [];
     }
-  }, [state.source, state.query, state.page, state.resolutions, state.ratios, state.colors, setState]);
+  }, [state.source, state.query, state.page, state.resolutions, state.ratios, state.colors, state.categoriesFilter, state.purityFilter, setState]);
 
   const fetchVideo = useCallback(async () => {
     setState((s) => ({ ...s, isLoading: true, error: null }));
@@ -111,6 +190,8 @@ export function useWallpaperActions(state: WallpaperState, setState: React.Dispa
         resolutions: state.resolutions,
         ratios: state.ratios,
         colors: state.colors,
+        categories: state.categoriesFilter,
+        purity: state.purityFilter,
       });
       setState((s) => ({ ...s, isLoading: false }));
       return video;
@@ -118,15 +199,15 @@ export function useWallpaperActions(state: WallpaperState, setState: React.Dispa
       setState((s) => ({ ...s, isLoading: false, error: error.toString() }));
       return null;
     }
-  }, [state.source, state.query, state.resolutions, state.ratios, state.colors, setState]);
+  }, [state.source, state.query, state.resolutions, state.ratios, state.colors, state.categoriesFilter, state.purityFilter, setState]);
 
   const stopWallpaper = useCallback(async () => {
     try {
       const { invoke } = await getCoreApi();
       const persisted = await invoke<PersistedState>("stop_wallpaper");
       setState((s) => ({ ...applyPersistedState(persisted, s), isPlaying: false }));
-    } catch (error: any) {
-      setState((s) => ({ ...s, error: error.toString() }));
+    } catch (error: unknown) {
+      setState((s) => ({ ...s, error: String(error) }));
     }
   }, [setState]);
 
@@ -135,8 +216,8 @@ export function useWallpaperActions(state: WallpaperState, setState: React.Dispa
       const { invoke } = await getCoreApi();
       const persisted = await invoke<PersistedState>("set_wallpaper_speed", { speed });
       setState((s) => applyPersistedState(persisted, s));
-    } catch (error: any) {
-      setState((s) => ({ ...s, error: error.toString() }));
+    } catch (error: unknown) {
+      setState((s) => ({ ...s, error: String(error) }));
     }
   }, [setState]);
 
@@ -145,8 +226,8 @@ export function useWallpaperActions(state: WallpaperState, setState: React.Dispa
       const { invoke } = await getCoreApi();
       const persisted = await invoke<PersistedState>("set_wallpaper_blur", { blur });
       setState((s) => applyPersistedState(persisted, s));
-    } catch (error: any) {
-      setState((s) => ({ ...s, error: error.toString() }));
+    } catch (error: unknown) {
+      setState((s) => ({ ...s, error: String(error) }));
     }
   }, [setState]);
 
@@ -155,8 +236,8 @@ export function useWallpaperActions(state: WallpaperState, setState: React.Dispa
       const { invoke } = await getCoreApi();
       const persisted = await invoke<PersistedState>("set_wallpaper_paused", { paused });
       setState((s) => applyPersistedState(persisted, s));
-    } catch (error: any) {
-      setState((s) => ({ ...s, error: error.toString() }));
+    } catch (error: unknown) {
+      setState((s) => ({ ...s, error: String(error) }));
     }
   }, [setState]);
 
@@ -165,8 +246,8 @@ export function useWallpaperActions(state: WallpaperState, setState: React.Dispa
       const { invoke } = await getCoreApi();
       const persisted = await invoke<PersistedState>("set_keep_effects_running_on_pause", { enabled });
       setState((s) => applyPersistedState(persisted, s));
-    } catch (error: any) {
-      setState((s) => ({ ...s, error: error.toString() }));
+    } catch (error: unknown) {
+      setState((s) => ({ ...s, error: String(error) }));
     }
   }, [setState]);
 
@@ -175,8 +256,8 @@ export function useWallpaperActions(state: WallpaperState, setState: React.Dispa
       const { invoke } = await getCoreApi();
       const persisted = await invoke<PersistedState>("set_wallpaper_scale", { scalePercent });
       setState((s) => applyPersistedState(persisted, s));
-    } catch (error: any) {
-      setState((s) => ({ ...s, error: error.toString() }));
+    } catch (error: unknown) {
+      setState((s) => ({ ...s, error: String(error) }));
     }
   }, [setState]);
 
@@ -185,8 +266,8 @@ export function useWallpaperActions(state: WallpaperState, setState: React.Dispa
       const { invoke } = await getCoreApi();
       const persisted = await invoke<PersistedState>("set_wallpaper_filter", { videoFilter });
       setState((s) => applyPersistedState(persisted, s));
-    } catch (error: any) {
-      setState((s) => ({ ...s, error: error.toString() }));
+    } catch (error: unknown) {
+      setState((s) => ({ ...s, error: String(error) }));
     }
   }, [setState]);
 

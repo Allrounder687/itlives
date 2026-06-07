@@ -1,6 +1,9 @@
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use rustfft::{FftPlanner, num_complex::Complex};
-use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
+use rustfft::{num_complex::Complex, FftPlanner};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 use tauri::{AppHandle, Emitter};
 
 lazy_static::lazy_static! {
@@ -38,7 +41,7 @@ pub fn start_audio_capture(app_handle: AppHandle) -> Result<(), String> {
         let mut planner = FftPlanner::new();
         let fft_size = 1024;
         let fft = planner.plan_fft_forward(fft_size);
-        
+
         let mut sample_buffer: Vec<f32> = Vec::with_capacity(fft_size * channels);
         let running_flag = AUDIO_RUNNING.clone();
 
@@ -54,7 +57,7 @@ pub fn start_audio_capture(app_handle: AppHandle) -> Result<(), String> {
                 for &sample in data {
                     sample_buffer.push(sample);
                 }
-                
+
                 if sample_buffer.len() >= fft_size * channels {
                     let mut mono_samples: Vec<Complex<f32>> = sample_buffer
                         .chunks(channels)
@@ -68,7 +71,10 @@ pub fn start_audio_capture(app_handle: AppHandle) -> Result<(), String> {
 
                     // Apply Hanning Window to reduce spectral leakage
                     for i in 0..fft_size {
-                        let multiplier = 0.5 * (1.0 - (2.0 * std::f32::consts::PI * i as f32 / (fft_size - 1) as f32).cos());
+                        let multiplier = 0.5
+                            * (1.0
+                                - (2.0 * std::f32::consts::PI * i as f32 / (fft_size - 1) as f32)
+                                    .cos());
                         mono_samples[i].re *= multiplier;
                     }
 
@@ -77,12 +83,12 @@ pub fn start_audio_capture(app_handle: AppHandle) -> Result<(), String> {
                     // Compute magnitudes (only first half)
                     let num_bins = 64; // How many bars in visualizer
                     let max_freq_index = fft_size / 2; // Nyquist limit
-                    
+
                     // We want to focus more on lower/mid frequencies, so we use a non-linear scale or just take the lower bins
                     // Let's just evenly space the bins for now over the first 50% of the spectrum (up to ~12kHz)
                     let usable_bins = max_freq_index / 2;
                     let bin_size = (usable_bins / num_bins).max(1);
-                    
+
                     let mut bins = vec![0.0f32; num_bins];
                     for i in 0..num_bins {
                         let mut sum = 0.0;
@@ -105,7 +111,7 @@ pub fn start_audio_capture(app_handle: AppHandle) -> Result<(), String> {
                 }
             },
             |err| log::error!("An error occurred on the audio input stream: {}", err),
-            None
+            None,
         );
 
         match stream_result {

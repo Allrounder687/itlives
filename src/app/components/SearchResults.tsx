@@ -208,7 +208,7 @@ export function SearchResults({
               }}
             >
               <div className="search-card__media" style={{ position: "relative" }}>
-                <HoverVideo video={item} onClick={() => handleCardClick(item)} />
+                <HoverVideo video={item} gridSize={gridSize} onClick={() => handleCardClick(item)} />
                 
                 {isSelectionMode && (
                   <div style={{

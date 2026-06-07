@@ -25,42 +25,55 @@ pub fn start_monitor(state_store: AppStateStore, app_handle: tauri::AppHandle) {
 
     log::info!("Starting performance monitor thread (Initial state: Forced Unpause Request)...");
 
-    thread::spawn(move || {
-        loop {
-            thread::sleep(Duration::from_millis(1500));
+    thread::spawn(move || loop {
+        thread::sleep(Duration::from_millis(1500));
 
-            let state = state_store.snapshot();
-            if !state.is_playing {
-                IS_PAUSED.store(false, Ordering::Relaxed);
-                continue;
-            }
+        let state = state_store.snapshot();
+        if !state.is_playing {
+            IS_PAUSED.store(false, Ordering::Relaxed);
+            continue;
+        }
 
-            let mut should_pause = state.paused || force_paused();
-            let mut reason = if state.paused { "Manual User Pause" } else if force_paused() { "Force-pause flag" } else { "None" };
+        let mut should_pause = state.paused || force_paused();
+        let mut reason = if state.paused {
+            "Manual User Pause"
+        } else if force_paused() {
+            "Force-pause flag"
+        } else {
+            "None"
+        };
 
-            #[cfg(windows)]
-            {
-                if !should_pause && state.auto_pause_enabled {
-                    if let Some(r) = check_should_pause_detailed() {
-                        should_pause = true;
-                        reason = r;
-                    }
+        #[cfg(windows)]
+        {
+            if !should_pause && state.auto_pause_enabled {
+                if let Some(r) = check_should_pause_detailed() {
+                    should_pause = true;
+                    reason = r;
                 }
             }
+        }
 
-            let was_paused = IS_PAUSED.load(Ordering::Relaxed);
+        let was_paused = IS_PAUSED.load(Ordering::Relaxed);
 
-            if should_pause != was_paused {
-                log::info!("Performance monitor: State changing to Paused = {} because: {}", should_pause, reason);
-                if set_mpv_pause(should_pause) {
-                    IS_PAUSED.store(should_pause, Ordering::Relaxed);
-                    
-                    #[derive(serde::Serialize, Clone)]
-                    struct PausePayload {
-                        paused: bool,
-                    }
-                    let _ = app_handle.emit("wallpaper-paused", PausePayload { paused: should_pause });
+        if should_pause != was_paused {
+            log::info!(
+                "Performance monitor: State changing to Paused = {} because: {}",
+                should_pause,
+                reason
+            );
+            if set_mpv_pause(should_pause) {
+                IS_PAUSED.store(should_pause, Ordering::Relaxed);
+
+                #[derive(serde::Serialize, Clone)]
+                struct PausePayload {
+                    paused: bool,
                 }
+                let _ = app_handle.emit(
+                    "wallpaper-paused",
+                    PausePayload {
+                        paused: should_pause,
+                    },
+                );
             }
         }
     });
@@ -78,7 +91,10 @@ fn set_mpv_pause(pause: bool) -> bool {
         }
         Err(error) => {
             // Log as debug because this is common if mpv is still launching or shutting down
-            log::debug!("Could not send IPC to mpv (usually okay during transitions): {}", error);
+            log::debug!(
+                "Could not send IPC to mpv (usually okay during transitions): {}",
+                error
+            );
             false
         }
     }
@@ -104,10 +120,7 @@ fn check_should_pause_detailed() -> Option<&'static str> {
         let our_pid = std::process::id();
 
         let mut fg_pid = 0u32;
-        windows::Win32::UI::WindowsAndMessaging::GetWindowThreadProcessId(
-            hwnd,
-            Some(&mut fg_pid),
-        );
+        windows::Win32::UI::WindowsAndMessaging::GetWindowThreadProcessId(hwnd, Some(&mut fg_pid));
         if fg_pid == our_pid {
             return None;
         }
@@ -130,18 +143,19 @@ fn check_should_pause_detailed() -> Option<&'static str> {
         let fg_class = c_name.trim_end_matches('\0');
 
         // Chrome_WidgetWin_* is the WebView2/Chromium embedded class used by Tauri
-        if fg_class.starts_with("Chrome_WidgetWin") 
-           || fg_class.starts_with("Tauri") 
-           || fg_class.contains("WebView") 
-           || fg_class == "Shell_TrayWnd" 
-           || fg_class == "Shell_SecondaryTrayWnd" 
-           || fg_class == "CabinetWClass" {
+        if fg_class.starts_with("Chrome_WidgetWin")
+            || fg_class.starts_with("Tauri")
+            || fg_class.contains("WebView")
+            || fg_class == "Shell_TrayWnd"
+            || fg_class == "Shell_SecondaryTrayWnd"
+            || fg_class == "CabinetWClass"
+        {
             return None;
         }
 
         // 4. Check for foreground application
         if fg_class != "WorkerW" && fg_class != "Progman" && fg_class != "mpv" {
-             return Some("Focused window is active (Non-Desktop, Non-App)");
+            return Some("Focused window is active (Non-Desktop, Non-App)");
         }
 
         None

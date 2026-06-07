@@ -1,7 +1,7 @@
-use tauri::State;
+use crate::wallpaper;
 use crate::wallpaper::providers::{self, VideoResult};
 use crate::wallpaper::state::{AppStateStore, WallpaperState};
-use crate::wallpaper;
+use tauri::State;
 
 #[tauri::command]
 pub fn list_sources() -> Vec<String> {
@@ -76,10 +76,7 @@ pub fn remove_recent_video(
 }
 
 #[tauri::command]
-pub fn set_theme(
-    state: State<'_, AppStateStore>,
-    theme: String,
-) -> Result<WallpaperState, String> {
+pub fn set_theme(state: State<'_, AppStateStore>, theme: String) -> Result<WallpaperState, String> {
     wallpaper::state::set_theme(&state, theme)
 }
 
@@ -98,12 +95,18 @@ pub async fn install_mpv() -> Result<(), String> {
     {
         use std::os::windows::process::CommandExt;
         let mut cmd = std::process::Command::new("powershell");
-        // We use powershell to run winget so we can capture output or handle it better if needed, 
+        // We use powershell to run winget so we can capture output or handle it better if needed,
         // but mostly to ensure we can run it minimized/hidden.
-        cmd.args(&["-NoProfile", "-Command", "winget install shinchiro.mpv --accept-package-agreements --accept-source-agreements"]);
+        cmd.args(&[
+            "-NoProfile",
+            "-Command",
+            "winget install shinchiro.mpv --accept-package-agreements --accept-source-agreements",
+        ]);
         cmd.creation_flags(0x08000000);
 
-        let status = cmd.status().map_err(|e| format!("Failed to spawn winget process: {}", e))?;
+        let status = cmd
+            .status()
+            .map_err(|e| format!("Failed to spawn winget process: {}", e))?;
         if status.success() {
             Ok(())
         } else {
@@ -162,12 +165,15 @@ pub struct DisplayMonitor {
 #[tauri::command]
 pub fn get_monitors(app_handle: tauri::AppHandle) -> Result<Vec<DisplayMonitor>, String> {
     let mut result = Vec::new();
-    
+
     let monitors = app_handle.available_monitors().map_err(|e| e.to_string())?;
     let primary = app_handle.primary_monitor().ok().flatten();
-    
+
     for m in monitors {
-        let name = m.name().unwrap_or(&"Unknown Display".to_string()).to_string();
+        let name = m
+            .name()
+            .unwrap_or(&"Unknown Display".to_string())
+            .to_string();
         let size = m.size();
         let pos = m.position();
         let scale = m.scale_factor();
@@ -176,7 +182,7 @@ pub fn get_monitors(app_handle: tauri::AppHandle) -> Result<Vec<DisplayMonitor>,
         } else {
             false
         };
-        
+
         result.push(DisplayMonitor {
             name,
             width: size.width,
@@ -187,7 +193,7 @@ pub fn get_monitors(app_handle: tauri::AppHandle) -> Result<Vec<DisplayMonitor>,
             is_primary,
         });
     }
-    
+
     Ok(result)
 }
 
@@ -199,7 +205,9 @@ pub fn launch_external_app(path: String) -> Result<(), String> {
         let mut cmd = std::process::Command::new(&path);
         // CREATE_NO_WINDOW = 0x08000000
         cmd.creation_flags(0x08000000);
-        let _ = cmd.spawn().map_err(|e| format!("Failed to spawn {}: {}", path, e))?;
+        let _ = cmd
+            .spawn()
+            .map_err(|e| format!("Failed to spawn {}: {}", path, e))?;
     }
     #[cfg(not(windows))]
     {
@@ -224,13 +232,15 @@ pub fn extract_icon_base64(path: String) -> Result<String, String> {
              $bitmap.Save($stream, [System.Drawing.Imaging.ImageFormat]::Png);\n\
              $bytes = $stream.ToArray();\n\
              [Convert]::ToBase64String($bytes)",
-             path.replace("'", "''")
+            path.replace("'", "''")
         );
         let mut cmd = std::process::Command::new("powershell");
         cmd.args(&["-NoProfile", "-Command", &script]);
         cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
-        
-        let output = cmd.output().map_err(|e| format!("Failed to run PowerShell: {}", e))?;
+
+        let output = cmd
+            .output()
+            .map_err(|e| format!("Failed to run PowerShell: {}", e))?;
         if output.status.success() {
             let b64 = String::from_utf8_lossy(&output.stdout).trim().to_string();
             if b64.is_empty() {

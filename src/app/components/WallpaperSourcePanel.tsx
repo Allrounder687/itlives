@@ -34,6 +34,53 @@ export function WallpaperSourcePanel({ wallpaper }: WallpaperSourcePanelProps) {
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [newPinterestUrl, setNewPinterestUrl] = useState("");
   
+  // AI Settings
+  const [aiSearchEnabled, setAiSearchEnabled] = useState(
+    typeof localStorage !== 'undefined' ? localStorage.getItem("aiSearchEnabled") === "true" : false
+  );
+  const [aiProvider, setAiProvider] = useState(
+    typeof localStorage !== 'undefined' ? (localStorage.getItem("aiProvider") || "openai") : "openai"
+  );
+  const [aiBaseUrl, setAiBaseUrl] = useState(
+    typeof localStorage !== 'undefined' ? (localStorage.getItem("aiBaseUrl") || "") : ""
+  );
+  
+  // Store a separate API key for each provider so switching doesn't lose them
+  const getStoredApiKey = (provider: string) => typeof localStorage !== 'undefined' ? (localStorage.getItem(`aiApiKey_${provider}`) || "") : "";
+  const [aiApiKey, setAiApiKey] = useState(getStoredApiKey(aiProvider));
+  
+  const [aiModel, setAiModel] = useState(
+    typeof localStorage !== 'undefined' ? (localStorage.getItem("aiModel") || "gpt-3.5-turbo") : "gpt-3.5-turbo"
+  );
+  const [showAiKey, setShowAiKey] = useState(false);
+
+  const handleProviderChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newProvider = e.target.value;
+    setAiProvider(newProvider);
+    setAiApiKey(getStoredApiKey(newProvider));
+    
+    // Auto-fill default models based on provider
+    if (newProvider === "openai") setAiModel("gpt-4o-mini");
+    else if (newProvider === "anthropic") setAiModel("claude-3-haiku-20240307");
+    else if (newProvider === "google") setAiModel("gemini-1.5-flash");
+    else if (newProvider === "perplexity") setAiModel("llama-3.1-sonar-small-128k-online");
+    else if (newProvider === "openrouter") setAiModel("openrouter/auto");
+    else if (newProvider === "ollama") setAiModel("llama3");
+    
+    if (newProvider === "ollama") setAiBaseUrl("http://localhost:11434/v1");
+    else setAiBaseUrl("");
+  };
+
+  const handleSaveAiSettings = () => {
+    localStorage.setItem("aiSearchEnabled", String(aiSearchEnabled));
+    localStorage.setItem("aiProvider", aiProvider);
+    localStorage.setItem("aiBaseUrl", aiBaseUrl);
+    localStorage.setItem(`aiApiKey_${aiProvider}`, aiApiKey);
+    localStorage.setItem("aiModel", aiModel);
+    setSaveStatus("saved");
+    setTimeout(() => setSaveStatus("idle"), 2500);
+  };
+  
   const [isScanning, setIsScanning] = useState(false);
   const [scanResult, setScanResult] = useState<string | null>(null);
 
@@ -113,6 +160,82 @@ export function WallpaperSourcePanel({ wallpaper }: WallpaperSourcePanelProps) {
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+        
+        {/* AI Semantic Search section */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "10px", padding: "16px", background: "rgba(255, 255, 255, 0.01)", border: "1px solid rgba(255, 255, 255, 0.03)", borderRadius: "12px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ display: "flex", flexDirection: "column" }}>
+              <label className="field__label" style={{ fontWeight: 600, color: "var(--accent)" }}>
+                ✨ AI Semantic Search
+              </label>
+              <span className="field__hint" style={{ fontSize: "11px", opacity: 0.6, marginBottom: "4px", maxWidth: "80%" }}>
+                Translates complex descriptions like "cozy rainy night" into optimized tags for better results. Supports OpenAI, OpenRouter, and Ollama.
+              </span>
+            </div>
+            <input
+              type="checkbox"
+              checked={aiSearchEnabled}
+              onChange={(e) => {
+                setAiSearchEnabled(e.target.checked);
+                localStorage.setItem("aiSearchEnabled", String(e.target.checked));
+              }}
+              style={{ width: "20px", height: "20px", accentColor: "var(--accent)", cursor: "pointer" }}
+            />
+          </div>
+          
+          {aiSearchEnabled && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "10px" }}>
+              <div style={{ display: "flex", gap: "8px" }}>
+                <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "4px" }}>
+                   <label style={{ fontSize: "10px", color: "var(--text-soft)" }}>AI Provider</label>
+                   <select className="input input--hud" value={aiProvider} onChange={handleProviderChange} style={{ height: "36px" }}>
+                     <option value="openai">OpenAI</option>
+                     <option value="anthropic">Anthropic</option>
+                     <option value="google">Google Gemini</option>
+                     <option value="perplexity">Perplexity</option>
+                     <option value="openrouter">OpenRouter</option>
+                     <option value="ollama">Ollama (Local)</option>
+                     <option value="antigravity">Antigravity AI (OAuth)</option>
+                   </select>
+                </div>
+                <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "4px" }}>
+                   <label style={{ fontSize: "10px", color: "var(--text-soft)" }}>Model ID</label>
+                   <input type="text" className="input input--hud" value={aiModel} onChange={(e) => setAiModel(e.target.value)} placeholder="Model name" disabled={aiProvider === "antigravity"} />
+                </div>
+              </div>
+              
+              {aiProvider === "antigravity" ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: "4px", padding: "10px", background: "rgba(154, 230, 0, 0.1)", borderRadius: "8px", border: "1px solid rgba(154, 230, 0, 0.3)" }}>
+                  <span style={{ fontSize: "11px", color: "var(--text-soft)", textAlign: "center", marginBottom: "4px" }}>
+                    Connect to your Antigravity account to enable AI search instantly.
+                  </span>
+                  <button type="button" className="action-btn action-btn--primary" onClick={() => alert("Antigravity OAuth flow will open here. Currently a placeholder.")} style={{ width: "100%", background: "var(--accent)", color: "#000", fontWeight: "bold" }}>
+                    Sign in with Antigravity
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                     <label style={{ fontSize: "10px", color: "var(--text-soft)" }}>API Key {aiProvider === "ollama" ? "(Optional)" : ""}</label>
+                     <div style={{ display: "flex", gap: "8px", position: "relative" }}>
+                       <input type={showAiKey ? "text" : "password"} className="input input--hud" value={aiApiKey} onChange={(e) => setAiApiKey(e.target.value)} placeholder="sk-..." style={{ flex: 1 }} />
+                       <button type="button" className="action-btn action-btn--primary" onClick={handleSaveAiSettings} disabled={saveStatus === "saving"}>
+                         {saveStatus === "saving" ? "Saving..." : saveStatus === "saved" ? "Saved! ✓" : "Save AI"}
+                       </button>
+                     </div>
+                  </div>
+                  {(aiProvider === "ollama" || aiProvider === "openrouter" || aiProvider === "openai") && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                       <label style={{ fontSize: "10px", color: "var(--text-soft)" }}>Base URL Override (Optional)</label>
+                       <input type="text" className="input input--hud" value={aiBaseUrl} onChange={(e) => setAiBaseUrl(e.target.value)} placeholder={aiProvider === "ollama" ? "http://localhost:11434/v1" : "https://api.openai.com/v1"} />
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
         {/* WallHaven API Key section */}
         <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
           <label className="field__label" style={{ fontWeight: 600, color: "var(--text-soft)" }}>

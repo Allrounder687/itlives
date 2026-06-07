@@ -27,6 +27,10 @@ interface ControlBarProps {
   onResolutionsChange?: (res: string | null) => void;
   onRatiosChange?: (ratio: string | null) => void;
   onColorsChange?: (color: string | null) => void;
+  categoriesFilter?: string | null;
+  purityFilter?: string | null;
+  onCategoriesFilterChange?: (categories: string) => void;
+  onPurityFilterChange?: (purity: string) => void;
 }
 
 const CATEGORIES = [
@@ -82,6 +86,10 @@ export function ControlBar({
   onResolutionsChange,
   onRatiosChange,
   onColorsChange,
+  categoriesFilter,
+  purityFilter,
+  onCategoriesFilterChange,
+  onPurityFilterChange,
 }: ControlBarProps) {
   const [showPinterestSources, setShowPinterestSources] = useState(true);
   const [newPinUrl, setNewPinUrl] = useState("");
@@ -608,6 +616,10 @@ export function ControlBar({
               onResolutionChange={onResolutionsChange || (() => {})}
               onRatioChange={onRatiosChange || (() => {})}
               onColorChange={onColorsChange || (() => {})}
+              categoriesFilter={categoriesFilter}
+              purityFilter={purityFilter}
+              onCategoriesChange={onCategoriesFilterChange}
+              onPurityChange={onPurityFilterChange}
               showColorFilter={true}
             />
           )}

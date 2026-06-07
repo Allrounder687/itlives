@@ -1,8 +1,10 @@
 use tauri::command;
 use windows::Win32::Foundation::HWND;
-use windows::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowTextW, GetWindowThreadProcessId};
-use windows::Win32::System::Threading::{OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION};
 use windows::Win32::System::ProcessStatus::GetProcessImageFileNameW;
+use windows::Win32::System::Threading::{OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION};
+use windows::Win32::UI::WindowsAndMessaging::{
+    GetForegroundWindow, GetWindowTextW, GetWindowThreadProcessId,
+};
 
 #[derive(serde::Serialize)]
 pub struct WindowInfo {
@@ -29,7 +31,9 @@ pub fn get_active_window() -> Result<WindowInfo, String> {
 
         // Get Process Name
         let mut process_name = String::new();
-        if let Ok(process_handle) = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, process_id) {
+        if let Ok(process_handle) =
+            OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, process_id)
+        {
             let mut image_name: [u16; 512] = [0; 512];
             let len = GetProcessImageFileNameW(process_handle, &mut image_name);
             if len > 0 {

@@ -27,7 +27,7 @@ import { DownloadProgressOverlay } from "./components/DownloadProgressOverlay";
 function Home() {
   const wallpaper = useWallpaper();
   const [activeTab, setActiveTab] = useState<TabState>("discover");
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
   const [isOverlayMode, setIsOverlayMode] = useState(false);
   const [overlayConfig, setOverlayConfig] = useState<{ videoSrc?: string; layers?: any[] }>({});
   const [isErrorDismissed, setIsErrorDismissed] = useState(false);
@@ -104,7 +104,7 @@ function Home() {
   const fetchVideosListRef = useRef(wallpaper.fetchVideosList);
   fetchVideosListRef.current = wallpaper.fetchVideosList;
 
-  const lastFetchedRef = useRef<{ source: string; query: string; page: number; category: string; urlsHash: string; resolutions: string | null; ratios: string | null; colors: string | null; } | null>(null);
+  const lastFetchedRef = useRef<{ source: string; query: string; page: number; category: string; urlsHash: string; resolutions: string | null; ratios: string | null; colors: string | null; categoriesFilter: string | null; purityFilter: string | null; } | null>(null);
 
   // Automatically fetch wallpapers when hydration finishes or when source/query/page/category/pinterestUrls/activeTab changes
   useEffect(() => {
@@ -124,6 +124,8 @@ function Home() {
       resolutions: wallpaper.resolutions,
       ratios: wallpaper.ratios,
       colors: wallpaper.colors,
+      categoriesFilter: wallpaper.categoriesFilter,
+      purityFilter: wallpaper.purityFilter,
     };
 
     if(
@@ -135,7 +137,9 @@ function Home() {
       lastFetchedRef.current.urlsHash === currentFetchKey.urlsHash &&
       lastFetchedRef.current.resolutions === currentFetchKey.resolutions &&
       lastFetchedRef.current.ratios === currentFetchKey.ratios &&
-      lastFetchedRef.current.colors === currentFetchKey.colors
+      lastFetchedRef.current.colors === currentFetchKey.colors &&
+      lastFetchedRef.current.categoriesFilter === currentFetchKey.categoriesFilter &&
+      lastFetchedRef.current.purityFilter === currentFetchKey.purityFilter
     ) {
       return;
     }
@@ -167,6 +171,8 @@ function Home() {
     wallpaper.resolutions,
     wallpaper.ratios,
     wallpaper.colors,
+    wallpaper.categoriesFilter,
+    wallpaper.purityFilter,
     activeTab
   ]);
 
@@ -372,6 +378,10 @@ function Home() {
                 onResolutionsChange={wallpaper.setResolutions}
                 onRatiosChange={wallpaper.setRatios}
                 onColorsChange={wallpaper.setColors}
+                categoriesFilter={wallpaper.categoriesFilter}
+                purityFilter={wallpaper.purityFilter}
+                onCategoriesFilterChange={wallpaper.setCategoriesFilter}
+                onPurityFilterChange={wallpaper.setPurityFilter}
               />
               <SearchResults
                 results={wallpaper.searchResults} onSelect={wallpaper.selectVideo}
@@ -399,6 +409,7 @@ function Home() {
               onToggleQueue={(item) => queueIds.has(`${item.video.id}:${item.video.local_path}`) ? wallpaper.removeFromQueue(item.video) : wallpaper.addToQueue(item.video)}
               onRemoveRecent={(item) => wallpaper.removeRecentVideo(item.video)}
               onRemoveImport={(item) => wallpaper.removeImportedVideo(item.video)}
+              onUploadMedia={wallpaper.browseLocalVideo}
             />
           )}
 

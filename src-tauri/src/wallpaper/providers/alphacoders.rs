@@ -22,19 +22,26 @@ impl VideoProvider for AlphaCodersProvider {
             let mut rng = rand::thread_rng();
             items.choose(&mut rng).ok_or("No items selected")?.clone()
         };
-        
+
         let cache_dir = crate::wallpaper::desktop::get_cache_dir();
-        
+
         log::info!("[AlphaCoders] Selected Video URL: {}", chosen.video_url);
 
-        let local_path =
-            download_to_cache(&chosen.video_url, &chosen.id, "alphacoders", &cache_dir, None, None).await?;
+        let local_path = download_to_cache(
+            &chosen.video_url,
+            &chosen.id,
+            "alphacoders",
+            &cache_dir,
+            None,
+            None,
+        )
+        .await?;
 
         let _ = crate::wallpaper::desktop::cleanup_cache(15);
 
         let mut final_video = chosen;
         final_video.local_path = local_path;
-        
+
         Ok(final_video)
     }
 
@@ -50,7 +57,11 @@ impl VideoProvider for AlphaCodersProvider {
         } else {
             // NOTE: AlphaCoders search usually goes to the search endpoint.
             // But we will try to restrict it to live-wallpapers using the search query parameter.
-            format!("https://alphacoders.com/search?search={}&page={}&type=live-wallpapers", urlencoding::encode(&query), page)
+            format!(
+                "https://alphacoders.com/search?search={}&page={}&type=live-wallpapers",
+                urlencoding::encode(&query),
+                page
+            )
         };
 
         log::info!("[AlphaCoders] Fetching url: {}", url);
@@ -81,12 +92,12 @@ impl VideoProvider for AlphaCodersProvider {
         // Or: https://images2.alphacoders.com/140/1407175.mp4
         // Let's grab all MP4 urls in the page matching the pattern `https://images[0-9]+\.alphacoders\.com/[0-9]+/([0-9]+)\.mp4`
         let re = Regex::new(r"https://(images\d*\.alphacoders\.com/\d+/)(\d+)\.mp4").unwrap();
-        
+
         let mut items = Vec::new();
         for cap in re.captures_iter(&text) {
             let prefix = cap[1].to_string(); // e.g., "images2.alphacoders.com/140/"
-            let id = cap[2].to_string();     // e.g., "1407175"
-            
+            let id = cap[2].to_string(); // e.g., "1407175"
+
             // Reconstruct URLs.
             let video_url = format!("https://{}{}.mp4", prefix, id);
             // Thumbnails on alphacoders live wallpapers are usually MP4 too, but they also have fallback JPGs sometimes.
@@ -110,9 +121,9 @@ impl VideoProvider for AlphaCodersProvider {
                 source: "alphacoders".to_string(),
                 start_time: None,
                 end_time: None,
-            tags: None,
+                tags: None,
             };
-            
+
             items.push(result);
         }
 
@@ -123,8 +134,20 @@ impl VideoProvider for AlphaCodersProvider {
         Ok(items)
     }
 
-    async fn download_video(&self, video: &VideoResult, app_handle: Option<tauri::AppHandle>) -> Result<String, String> {
+    async fn download_video(
+        &self,
+        video: &VideoResult,
+        app_handle: Option<tauri::AppHandle>,
+    ) -> Result<String, String> {
         let cache_dir = crate::wallpaper::desktop::get_cache_dir();
-        super::download_to_cache(&video.video_url, &video.id, "alphacoders", &cache_dir, None, app_handle).await
+        super::download_to_cache(
+            &video.video_url,
+            &video.id,
+            "alphacoders",
+            &cache_dir,
+            None,
+            app_handle,
+        )
+        .await
     }
 }

@@ -4,9 +4,13 @@ interface AdvancedFiltersProps {
   resolutionFilter?: string | null;
   ratioFilter?: string | null;
   colorFilter?: string | null;
+  categoriesFilter?: string | null;
+  purityFilter?: string | null;
   onResolutionChange: (res: string | null) => void;
   onRatioChange: (ratio: string | null) => void;
   onColorChange: (color: string | null) => void;
+  onCategoriesChange?: (categories: string) => void;
+  onPurityChange?: (purity: string) => void;
   showColorFilter?: boolean;
 }
 
@@ -78,12 +82,16 @@ export function AdvancedFilters({
   resolutionFilter,
   ratioFilter,
   colorFilter,
+  categoriesFilter = "111",
+  purityFilter = "100",
   onResolutionChange,
   onRatioChange,
   onColorChange,
+  onCategoriesChange,
+  onPurityChange,
   showColorFilter = false,
 }: AdvancedFiltersProps) {
-  const [activeDropdown, setActiveDropdown] = useState<"resolution" | "ratio" | "color" | null>(null);
+  const [activeDropdown, setActiveDropdown] = useState<"resolution" | "ratio" | "color" | "categories" | "purity" | null>(null);
   const [resolutionMode, setResolutionMode] = useState<"atleast" | "exactly">("exactly");
   const [customW, setCustomW] = useState("");
   const [customH, setCustomH] = useState("");
@@ -99,7 +107,7 @@ export function AdvancedFilters({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const toggleDropdown = (key: "resolution" | "ratio" | "color") => {
+  const toggleDropdown = (key: "resolution" | "ratio" | "color" | "categories" | "purity") => {
     setActiveDropdown(activeDropdown === key ? null : key);
   };
 
@@ -119,8 +127,24 @@ export function AdvancedFilters({
     setActiveDropdown(null);
   };
 
+  const toggleCategoryBit = (index: number) => {
+    if (!onCategoriesChange) return;
+    const current = (categoriesFilter || "111").padEnd(3, '1');
+    const chars = current.split('');
+    chars[index] = chars[index] === '1' ? '0' : '1';
+    onCategoriesChange(chars.join(''));
+  };
+
+  const togglePurityBit = (index: number) => {
+    if (!onPurityChange) return;
+    const current = (purityFilter || "100").padEnd(3, '0');
+    const chars = current.split('');
+    chars[index] = chars[index] === '1' ? '0' : '1';
+    onPurityChange(chars.join(''));
+  };
+
   return (
-    <div className="wh-filters-container" style={{ position: "relative", display: "flex", gap: "8px", marginBottom: "12px" }} ref={dropdownRef}>
+    <div className="wh-filters-container" style={{ position: "relative", display: "flex", gap: "8px", marginBottom: "12px", flexWrap: "wrap" }} ref={dropdownRef}>
       
       {/* RESOLUTION BUTTON */}
       <div style={{ position: "relative" }}>
@@ -263,6 +287,70 @@ export function AdvancedFilters({
           </div>
         )}
       </div>
+      )}
+
+      {/* CATEGORIES BUTTON */}
+      {onCategoriesChange && (
+        <div style={{ position: "relative" }}>
+          <button 
+            className={`action-btn ${activeDropdown === "categories" || (categoriesFilter && categoriesFilter !== "111") ? "action-btn--primary" : "action-btn--ghost"}`}
+            onClick={() => toggleDropdown("categories")}
+            style={{ padding: "6px 12px", fontSize: "11px", display: "flex", alignItems: "center", gap: "6px" }}
+          >
+            Categories ▾
+          </button>
+
+          {activeDropdown === "categories" && (
+            <div className="wh-dropdown" style={{...dropdownStyle, minWidth: "150px"}}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                <button 
+                  onClick={() => toggleCategoryBit(0)}
+                  style={gridBtnStyle((categoriesFilter || "111")[0] === '1')}
+                >General</button>
+                <button 
+                  onClick={() => toggleCategoryBit(1)}
+                  style={gridBtnStyle((categoriesFilter || "111")[1] === '1')}
+                >Anime</button>
+                <button 
+                  onClick={() => toggleCategoryBit(2)}
+                  style={gridBtnStyle((categoriesFilter || "111")[2] === '1')}
+                >People</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* PURITY BUTTON */}
+      {onPurityChange && (
+        <div style={{ position: "relative" }}>
+          <button 
+            className={`action-btn ${activeDropdown === "purity" || (purityFilter && purityFilter !== "100") ? "action-btn--primary" : "action-btn--ghost"}`}
+            onClick={() => toggleDropdown("purity")}
+            style={{ padding: "6px 12px", fontSize: "11px", display: "flex", alignItems: "center", gap: "6px" }}
+          >
+            Purity ▾
+          </button>
+
+          {activeDropdown === "purity" && (
+            <div className="wh-dropdown" style={{...dropdownStyle, minWidth: "150px"}}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                <button 
+                  onClick={() => togglePurityBit(0)}
+                  style={gridBtnStyle((purityFilter || "100")[0] === '1')}
+                >SFW</button>
+                <button 
+                  onClick={() => togglePurityBit(1)}
+                  style={gridBtnStyle((purityFilter || "100")[1] === '1')}
+                >Sketchy</button>
+                <button 
+                  onClick={() => togglePurityBit(2)}
+                  style={gridBtnStyle((purityFilter || "100")[2] === '1')}
+                >NSFW</button>
+              </div>
+            </div>
+          )}
+        </div>
       )}
 
     </div>

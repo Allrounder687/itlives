@@ -52,6 +52,17 @@ const EFFECT_TEMPLATES: Record<string, Omit<EffectLayer, "id">> = {
   "liquid-ripple": { type: "liquid-ripple", name: "Screen Ripple", enabled: true, params: { intensity: 1.0, waveMode: "off", waveZoneX: 20, waveZoneY: 60, waveZoneW: 60, waveZoneH: 30, waveSpeed: 1.0, waveScale: 5.0, waveStrength: 1.0, autoRipple: false, autoInterval: 1.5, autoZoneX: 20, autoZoneY: 20, autoZoneW: 60, autoZoneH: 60, raindrops: false, rainIntensity: 1.0 } },
   "rain-on-glass": { type: "rain-on-glass", name: "Rain on Glass", enabled: true, params: { intensity: 1.0, dropSpeed: 1.0, streakCount: 15, dropletDensity: 20 } },
   "desktop-pet": { type: "desktop-pet", name: "Desktop Pet", enabled: true, params: { color: "#00aaff", scale: 50.0, speed: 1.0, behavior: "wander", enableCracks: true, name: "Bot", muted: false } },
+  "brightness-contrast": { type: "brightness-contrast", name: "Brightness / Contrast", enabled: true, params: { brightness: 0.1, contrast: 0.2 } },
+  "hue-saturation": { type: "hue-saturation", name: "Hue & Saturation", enabled: true, params: { hue: 0.0, saturation: 0.2 } },
+  sepia: { type: "sepia", name: "Sepia Filter", enabled: true, params: { intensity: 1.0 } },
+  pixelation: { type: "pixelation", name: "Pixel Art Filter", enabled: true, params: { granularity: 5 } },
+  noise: { type: "noise", name: "Film Grain / Noise", enabled: true, params: { opacity: 0.5, premultiply: true } },
+  "chromatic-aberration": { type: "chromatic-aberration", name: "RGB Split (Chroma)", enabled: true, params: { offsetX: 0.02, offsetY: 0.02 } },
+  "color-average": { type: "color-average", name: "Black & White", enabled: true, params: {} },
+  "color-depth": { type: "color-depth", name: "Posterize (Color Depth)", enabled: true, params: { bits: 8 } },
+  "dot-screen": { type: "dot-screen", name: "Comic Halftone", enabled: true, params: { angle: 1.57, scale: 1.0 } },
+  "tilt-shift": { type: "tilt-shift", name: "Miniature Blur", enabled: true, params: { blur: 0.5, taper: 0.5 } },
+  "water-effect": { type: "water-effect", name: "Underwater", enabled: true, params: { factor: 1.0 } },
 };
 
 const EFFECT_DROPDOWN: { group: string, items: { key: string, icon: string, label: string }[] }[] = [
@@ -94,6 +105,19 @@ const EFFECT_DROPDOWN: { group: string, items: { key: string, icon: string, labe
   ]},
   { group: "🤖 Companions", items: [
     { key: "desktop-pet", icon: "🐾", label: "Desktop Pet" },
+  ]},
+  { group: "📸 Pro Photo Editing", items: [
+    { key: "brightness-contrast", icon: "☀️", label: "Brightness / Contrast" },
+    { key: "hue-saturation", icon: "🌈", label: "Hue & Saturation" },
+    { key: "sepia", icon: "🎞️", label: "Sepia Filter" },
+    { key: "pixelation", icon: "👾", label: "Pixel Art Filter" },
+    { key: "noise", icon: "📻", label: "Film Grain / Noise" },
+    { key: "chromatic-aberration", icon: "📸", label: "RGB Split" },
+    { key: "color-average", icon: "🌑", label: "Black & White" },
+    { key: "color-depth", icon: "🎛️", label: "Posterize (Color Depth)" },
+    { key: "dot-screen", icon: "📰", label: "Comic Halftone" },
+    { key: "tilt-shift", icon: "🔍", label: "Miniature Blur" },
+    { key: "water-effect", icon: "🌊", label: "Underwater" },
   ]},
 ];
 
@@ -1807,6 +1831,122 @@ export function EditorWorkspace({ currentVideo, onSelectVideo, onApplyWallpaper,
                 <div className="property-group">
                   <label>Position Y ({selectedLayer.params.y || 80}%)</label>
                   <input type="range" min="0" max="100" className="property-control" value={selectedLayer.params.y || 80} onChange={(e) => updateParam(selectedLayer.id, "y", parseInt(e.target.value))} />
+                </div>
+              </>
+            )}
+
+            {selectedLayer.type === "brightness-contrast" && (
+              <>
+                <div className="property-group">
+                  <label>Brightness ({selectedLayer.params.brightness || 0})</label>
+                  <input type="range" min="-1" max="1" step="0.05" className="property-control" value={selectedLayer.params.brightness || 0} onChange={(e) => updateParam(selectedLayer.id, "brightness", parseFloat(e.target.value))} />
+                </div>
+                <div className="property-group">
+                  <label>Contrast ({selectedLayer.params.contrast || 0})</label>
+                  <input type="range" min="-1" max="1" step="0.05" className="property-control" value={selectedLayer.params.contrast || 0} onChange={(e) => updateParam(selectedLayer.id, "contrast", parseFloat(e.target.value))} />
+                </div>
+              </>
+            )}
+
+            {selectedLayer.type === "hue-saturation" && (
+              <>
+                <div className="property-group">
+                  <label>Hue Shift ({selectedLayer.params.hue || 0})</label>
+                  <input type="range" min={-Math.PI} max={Math.PI} step="0.1" className="property-control" value={selectedLayer.params.hue || 0} onChange={(e) => updateParam(selectedLayer.id, "hue", parseFloat(e.target.value))} />
+                </div>
+                <div className="property-group">
+                  <label>Saturation ({selectedLayer.params.saturation || 0})</label>
+                  <input type="range" min="-1" max="1" step="0.05" className="property-control" value={selectedLayer.params.saturation || 0} onChange={(e) => updateParam(selectedLayer.id, "saturation", parseFloat(e.target.value))} />
+                </div>
+              </>
+            )}
+
+            {selectedLayer.type === "sepia" && (
+              <>
+                <div className="property-group">
+                  <label>Intensity ({selectedLayer.params.intensity || 0})</label>
+                  <input type="range" min="0" max="1" step="0.05" className="property-control" value={selectedLayer.params.intensity || 0} onChange={(e) => updateParam(selectedLayer.id, "intensity", parseFloat(e.target.value))} />
+                </div>
+              </>
+            )}
+
+            {selectedLayer.type === "pixelation" && (
+              <>
+                <div className="property-group">
+                  <label>Granularity ({selectedLayer.params.granularity || 5})</label>
+                  <input type="range" min="1" max="50" step="1" className="property-control" value={selectedLayer.params.granularity || 5} onChange={(e) => updateParam(selectedLayer.id, "granularity", parseFloat(e.target.value))} />
+                </div>
+              </>
+            )}
+
+            {selectedLayer.type === "noise" && (
+              <>
+                <div className="property-group">
+                  <label>Opacity ({selectedLayer.params.opacity || 0.5})</label>
+                  <input type="range" min="0" max="1" step="0.05" className="property-control" value={selectedLayer.params.opacity || 0.5} onChange={(e) => updateParam(selectedLayer.id, "opacity", parseFloat(e.target.value))} />
+                </div>
+                <div className="property-group">
+                  <label className="checkbox-label">
+                    <input type="checkbox" checked={selectedLayer.params.premultiply !== false} onChange={(e) => updateParam(selectedLayer.id, "premultiply", e.target.checked)} />
+                    Premultiply Alpha
+                  </label>
+                </div>
+              </>
+            )}
+
+            {selectedLayer.type === "chromatic-aberration" && (
+              <>
+                <div className="property-group">
+                  <label>Offset X ({selectedLayer.params.offsetX || 0})</label>
+                  <input type="range" min="-0.1" max="0.1" step="0.005" className="property-control" value={selectedLayer.params.offsetX || 0} onChange={(e) => updateParam(selectedLayer.id, "offsetX", parseFloat(e.target.value))} />
+                </div>
+                <div className="property-group">
+                  <label>Offset Y ({selectedLayer.params.offsetY || 0})</label>
+                  <input type="range" min="-0.1" max="0.1" step="0.005" className="property-control" value={selectedLayer.params.offsetY || 0} onChange={(e) => updateParam(selectedLayer.id, "offsetY", parseFloat(e.target.value))} />
+                </div>
+              </>
+            )}
+
+            {selectedLayer.type === "color-depth" && (
+              <>
+                <div className="property-group">
+                  <label>Bits Per Channel ({selectedLayer.params.bits || 8})</label>
+                  <input type="range" min="1" max="16" step="1" className="property-control" value={selectedLayer.params.bits || 8} onChange={(e) => updateParam(selectedLayer.id, "bits", parseInt(e.target.value))} />
+                </div>
+              </>
+            )}
+
+            {selectedLayer.type === "dot-screen" && (
+              <>
+                <div className="property-group">
+                  <label>Angle ({selectedLayer.params.angle || 1.57})</label>
+                  <input type="range" min="0" max={Math.PI} step="0.1" className="property-control" value={selectedLayer.params.angle || 1.57} onChange={(e) => updateParam(selectedLayer.id, "angle", parseFloat(e.target.value))} />
+                </div>
+                <div className="property-group">
+                  <label>Scale ({selectedLayer.params.scale || 1.0})</label>
+                  <input type="range" min="0.1" max="10" step="0.1" className="property-control" value={selectedLayer.params.scale || 1.0} onChange={(e) => updateParam(selectedLayer.id, "scale", parseFloat(e.target.value))} />
+                </div>
+              </>
+            )}
+
+            {selectedLayer.type === "tilt-shift" && (
+              <>
+                <div className="property-group">
+                  <label>Blur Intensity ({selectedLayer.params.blur || 0.5})</label>
+                  <input type="range" min="0" max="2" step="0.05" className="property-control" value={selectedLayer.params.blur || 0.5} onChange={(e) => updateParam(selectedLayer.id, "blur", parseFloat(e.target.value))} />
+                </div>
+                <div className="property-group">
+                  <label>Taper ({selectedLayer.params.taper || 0.5})</label>
+                  <input type="range" min="0" max="1" step="0.05" className="property-control" value={selectedLayer.params.taper || 0.5} onChange={(e) => updateParam(selectedLayer.id, "taper", parseFloat(e.target.value))} />
+                </div>
+              </>
+            )}
+
+            {selectedLayer.type === "water-effect" && (
+              <>
+                <div className="property-group">
+                  <label>Distortion Factor ({selectedLayer.params.factor || 1.0})</label>
+                  <input type="range" min="0" max="5" step="0.1" className="property-control" value={selectedLayer.params.factor || 1.0} onChange={(e) => updateParam(selectedLayer.id, "factor", parseFloat(e.target.value))} />
                 </div>
               </>
             )}

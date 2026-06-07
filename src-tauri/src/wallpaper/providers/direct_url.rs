@@ -46,7 +46,7 @@ impl VideoProvider for DirectUrlProvider {
                 source: "direct".to_string(),
                 start_time: None,
                 end_time: None,
-            tags: None,
+                tags: None,
             });
         }
 
@@ -61,7 +61,8 @@ impl VideoProvider for DirectUrlProvider {
             .collect::<String>();
 
         let cache_dir = crate::wallpaper::desktop::get_cache_dir();
-        let local_path = download_to_cache(url, &video_id, "direct", &cache_dir, None, None).await?;
+        let local_path =
+            download_to_cache(url, &video_id, "direct", &cache_dir, None, None).await?;
 
         Ok(VideoResult {
             id: video_id,
@@ -82,7 +83,11 @@ impl VideoProvider for DirectUrlProvider {
         self.fetch_video(config).await.map(|v| vec![v])
     }
 
-    async fn download_video(&self, video: &VideoResult, app_handle: Option<tauri::AppHandle>) -> Result<String, String> {
+    async fn download_video(
+        &self,
+        video: &VideoResult,
+        app_handle: Option<tauri::AppHandle>,
+    ) -> Result<String, String> {
         // Direct Provider has local files or direct URLs download already cache saved index paths.
         if !video.local_path.is_empty() && std::path::Path::new(&video.local_path).exists() {
             return Ok(video.local_path.clone());
@@ -98,7 +103,15 @@ impl VideoProvider for DirectUrlProvider {
         }
 
         let cache_dir = crate::wallpaper::desktop::get_cache_dir();
-        super::download_to_cache(&video.video_url, &video.id, "direct", &cache_dir, None, app_handle).await
+        super::download_to_cache(
+            &video.video_url,
+            &video.id,
+            "direct",
+            &cache_dir,
+            None,
+            app_handle,
+        )
+        .await
     }
 }
 

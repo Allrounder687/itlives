@@ -1,10 +1,10 @@
-use std::net::TcpListener;
-use std::io::{Read, Write};
-use std::thread;
-use crate::wallpaper::state::{AppStateStore, WallpaperState};
 use crate::wallpaper;
+use crate::wallpaper::state::{AppStateStore, WallpaperState};
+use std::io::{Read, Write};
+use std::net::TcpListener;
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
+use std::thread;
 
 pub fn start(state: AppStateStore, app: tauri::AppHandle) {
     thread::spawn(move || {
@@ -48,11 +48,19 @@ fn parse_request_path(request: &str) -> Option<String> {
     None
 }
 
-fn handle_request(stream: &mut std::net::TcpStream, path: &str, state: &AppStateStore, app: tauri::AppHandle) {
+fn handle_request(
+    stream: &mut std::net::TcpStream,
+    path: &str,
+    state: &AppStateStore,
+    app: tauri::AppHandle,
+) {
     let (status_code, response_body) = match path {
         "/status" => {
             let snapshot = state.snapshot();
-            (200, serde_json::to_string_pretty(&snapshot).unwrap_or_default())
+            (
+                200,
+                serde_json::to_string_pretty(&snapshot).unwrap_or_default(),
+            )
         }
         "/pause" => {
             let _ = wallpaper::desktop::set_paused(true);
@@ -69,12 +77,18 @@ fn handle_request(stream: &mut std::net::TcpStream, path: &str, state: &AppState
             let new_paused = !current.paused;
             let _ = wallpaper::desktop::set_paused(new_paused);
             let _ = wallpaper::state::set_paused(state, new_paused);
-            (200, format!(r#"{{"status":"{}"}}"#, if new_paused { "paused" } else { "playing" }))
+            (
+                200,
+                format!(
+                    r#"{{"status":"{}"}}"#,
+                    if new_paused { "paused" } else { "playing" }
+                ),
+            )
         }
         "/next" => {
             let current = state.snapshot();
             let mut next_video = None;
-            
+
             if let Ok(advanced) = wallpaper::state::advance_queue(state) {
                 next_video = Some(advanced.video);
             } else if !current.recents.is_empty() {
@@ -111,7 +125,11 @@ fn handle_request(stream: &mut std::net::TcpStream, path: &str, state: &AppState
         }
         "/play_last" | "/start" => {
             let current = state.snapshot();
-            if let Some(video) = current.current_video.as_ref().or_else(|| current.recents.first().map(|i| &i.video)) {
+            if let Some(video) = current
+                .current_video
+                .as_ref()
+                .or_else(|| current.recents.first().map(|i| &i.video))
+            {
                 let _ = wallpaper::desktop::set_video(
                     app.clone(),
                     &video.local_path,
@@ -136,9 +154,7 @@ fn handle_request(stream: &mut std::net::TcpStream, path: &str, state: &AppState
             let _ = wallpaper::state::clear_active(state);
             (200, r#"{"status":"stopped"}"#.to_string())
         }
-        _ => {
-            (404, r#"{"error":"not_found"}"#.to_string())
-        }
+        _ => (404, r#"{"error":"not_found"}"#.to_string()),
     };
 
     let response = format!(
@@ -151,12 +167,18 @@ fn handle_request(stream: &mut std::net::TcpStream, path: &str, state: &AppState
 pub fn save_rainmeter_inc(state: &WallpaperState) {
     let dir = crate::wallpaper::desktop::app_data_dir();
     let path = dir.join("rainmeter_state.inc");
-    
+
     let current_video = state.current_video.as_ref();
-    let video_title = current_video.map(|v| v.id.clone()).unwrap_or_else(|| "None".to_string());
-    let video_path = current_video.map(|v| v.local_path.clone()).unwrap_or_else(|| "".to_string());
-    let video_thumbnail = current_video.map(|v| v.thumbnail_url.clone()).unwrap_or_else(|| "".to_string());
-    
+    let video_title = current_video
+        .map(|v| v.id.clone())
+        .unwrap_or_else(|| "None".to_string());
+    let video_path = current_video
+        .map(|v| v.local_path.clone())
+        .unwrap_or_else(|| "".to_string());
+    let video_thumbnail = current_video
+        .map(|v| v.thumbnail_url.clone())
+        .unwrap_or_else(|| "".to_string());
+
     let content = format!(
         "[Variables]\nitLives_IsPlaying={}\nitLives_Paused={}\nitLives_Volume={}\nitLives_VideoTitle={}\nitLives_VideoPath={}\nitLives_VideoThumbnail={}\n",
         if state.is_playing { 1 } else { 0 },

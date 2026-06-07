@@ -2,11 +2,13 @@ use std::path::PathBuf;
 use tauri::command;
 
 fn get_profiles_dir() -> PathBuf {
-    let app_data = std::env::var("OPENCLAW_LWP_RUNTIME_DIR")
-        .unwrap_or_else(|_| {
-            let local_app_data = std::env::var("LOCALAPPDATA").unwrap_or_else(|_| "C:\\".to_string());
-            PathBuf::from(local_app_data).join("itLives").to_string_lossy().to_string()
-        });
+    let app_data = std::env::var("OPENCLAW_LWP_RUNTIME_DIR").unwrap_or_else(|_| {
+        let local_app_data = std::env::var("LOCALAPPDATA").unwrap_or_else(|_| "C:\\".to_string());
+        PathBuf::from(local_app_data)
+            .join("itLives")
+            .to_string_lossy()
+            .to_string()
+    });
     let dir = PathBuf::from(app_data).join("profiles");
     std::fs::create_dir_all(&dir).ok();
     dir

@@ -303,6 +303,16 @@ function PetEntity({ params, isOverlay, widgets, onUpdateParam, onRemoveLayer, i
       needs, feed, play, sleep, foodPos, setFoodPos, onUpdateParam, onRemoveLayer
     };
 
+    // Prevent Animation time from growing infinitely and causing float32 precision loss
+    Object.values(actions).forEach(a => {
+      if (a && a.isRunning() && a.loop === THREE.LoopRepeat) {
+        const dur = a.getClip().duration;
+        if (dur > 0 && a.time > dur * 10) {
+          a.time = a.time % dur;
+        }
+      }
+    });
+
     const { isMoving, targetVec } = updateAI(clampedDelta, aiParams);
 
     const speedWalk = 100 * speedScale;

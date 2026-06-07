@@ -48,7 +48,10 @@ impl VideoProvider for WallhavenProvider {
 
     async fn fetch_video(&self, config: &SearchConfig) -> Result<VideoResult, String> {
         let items = self.fetch_videos_list(config).await?;
-        items.into_iter().next().ok_or("No wallpapers found".to_string())
+        items
+            .into_iter()
+            .next()
+            .ok_or("No wallpapers found".to_string())
     }
 
     async fn fetch_videos_list(&self, config: &SearchConfig) -> Result<Vec<VideoResult>, String> {
@@ -57,9 +60,25 @@ impl VideoProvider for WallhavenProvider {
         let page = if config.page == 0 { 1 } else { config.page };
 
         let mut url = format!(
-            "https://wallhaven.cc/api/v1/search?purity=100&page={}",
+            "https://wallhaven.cc/api/v1/search?page={}",
             page
         );
+
+        if let Some(ref categories) = config.categories {
+            if !categories.trim().is_empty() {
+                url = format!("{}&categories={}", url, categories.trim());
+            }
+        } else {
+            url = format!("{}&categories=111", url);
+        }
+
+        if let Some(ref purity) = config.purity {
+            if !purity.trim().is_empty() {
+                url = format!("{}&purity={}", url, purity.trim());
+            }
+        } else {
+            url = format!("{}&purity=100", url);
+        }
 
         if config.order == "random" {
             url.push_str("&sorting=random");
@@ -71,8 +90,14 @@ impl VideoProvider for WallhavenProvider {
                 if parts.len() >= 7 {
                     let username = parts[4];
                     let coll_id_with_params = parts[6];
-                    let coll_id = coll_id_with_params.split('?').next().unwrap_or(coll_id_with_params);
-                    url = format!("https://wallhaven.cc/api/v1/collections/{}/{}?page={}", username, coll_id, page);
+                    let coll_id = coll_id_with_params
+                        .split('?')
+                        .next()
+                        .unwrap_or(coll_id_with_params);
+                    url = format!(
+                        "https://wallhaven.cc/api/v1/collections/{}/{}?page={}",
+                        username, coll_id, page
+                    );
                 }
             } else {
                 url = format!("{}&q={}", url, urlencoding::encode(query));
@@ -132,7 +157,10 @@ impl VideoProvider for WallhavenProvider {
             results.push(VideoResult {
                 id: item.id.clone(),
                 video_url: item.path.clone(), // Set the high-res image URL as "video_url"
-                thumbnail_url: item.thumbs.original.clone()
+                thumbnail_url: item
+                    .thumbs
+                    .original
+                    .clone()
                     .or(item.thumbs.small.clone())
                     .unwrap_or_default(),
                 local_path: String::new(),
@@ -142,14 +170,18 @@ impl VideoProvider for WallhavenProvider {
                 source: "wallhaven".to_string(),
                 start_time: None,
                 end_time: None,
-            tags: None,
+                tags: None,
             });
         }
 
         Ok(results)
     }
 
-    async fn download_video(&self, video: &VideoResult, app_handle: Option<tauri::AppHandle>) -> Result<String, String> {
+    async fn download_video(
+        &self,
+        video: &VideoResult,
+        app_handle: Option<tauri::AppHandle>,
+    ) -> Result<String, String> {
         let cache_dir = crate::wallpaper::desktop::get_cache_dir();
         super::download_to_cache(
             &video.video_url,
@@ -158,7 +190,8 @@ impl VideoProvider for WallhavenProvider {
             &cache_dir,
             Some(vec![("User-Agent".to_string(), "Mozilla/5.0".to_string())]),
             app_handle,
-        ).await
+        )
+        .await
     }
 
     async fn fetch_tags(&self, id: &str) -> Result<Vec<String>, String> {
@@ -181,7 +214,7 @@ impl VideoProvider for WallhavenProvider {
                 return Ok(tags.into_iter().map(|t| t.name).collect());
             }
         }
-        
+
         Ok(Vec::new())
     }
 }

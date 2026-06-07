@@ -231,7 +231,10 @@ pub fn set_auto_pause(store: &AppStateStore, enabled: bool) -> Result<WallpaperS
     })
 }
 
-pub fn set_keep_effects_running_on_pause(store: &AppStateStore, enabled: bool) -> Result<WallpaperState, String> {
+pub fn set_keep_effects_running_on_pause(
+    store: &AppStateStore,
+    enabled: bool,
+) -> Result<WallpaperState, String> {
     store.update(|state| {
         state.keep_effects_running_on_pause = enabled;
         Ok(())
@@ -268,20 +271,14 @@ pub fn set_video_filter(
     })
 }
 
-pub fn set_playback_speed(
-    store: &AppStateStore,
-    speed: f64,
-) -> Result<WallpaperState, String> {
+pub fn set_playback_speed(store: &AppStateStore, speed: f64) -> Result<WallpaperState, String> {
     store.update(|state| {
         state.playback_speed = speed.clamp(0.1, 4.0);
         Ok(())
     })
 }
 
-pub fn set_blur_strength(
-    store: &AppStateStore,
-    strength: u32,
-) -> Result<WallpaperState, String> {
+pub fn set_blur_strength(store: &AppStateStore, strength: u32) -> Result<WallpaperState, String> {
     store.update(|state| {
         state.blur_strength = strength.min(100);
         Ok(())
@@ -340,7 +337,9 @@ pub fn remove_imported_video(
     video: VideoResult,
 ) -> Result<WallpaperState, String> {
     store.update(|state| {
-        state.imports.retain(|item| !same_video(&item.video, &video));
+        state
+            .imports
+            .retain(|item| !same_video(&item.video, &video));
         Ok(())
     })
 }
@@ -350,7 +349,9 @@ pub fn remove_recent_video(
     video: VideoResult,
 ) -> Result<WallpaperState, String> {
     store.update(|state| {
-        state.recents.retain(|item| !same_video(&item.video, &video));
+        state
+            .recents
+            .retain(|item| !same_video(&item.video, &video));
         Ok(())
     })
 }
@@ -423,19 +424,29 @@ pub fn set_thumbnail(
 ) -> Result<WallpaperState, String> {
     store.update(|state| {
         for item in state.imports.iter_mut() {
-            if item.video.local_path == local_path { item.video.thumbnail_url = thumb_path.clone(); }
+            if item.video.local_path == local_path {
+                item.video.thumbnail_url = thumb_path.clone();
+            }
         }
         for item in state.recents.iter_mut() {
-            if item.video.local_path == local_path { item.video.thumbnail_url = thumb_path.clone(); }
+            if item.video.local_path == local_path {
+                item.video.thumbnail_url = thumb_path.clone();
+            }
         }
         for item in state.favorites.iter_mut() {
-            if item.video.local_path == local_path { item.video.thumbnail_url = thumb_path.clone(); }
+            if item.video.local_path == local_path {
+                item.video.thumbnail_url = thumb_path.clone();
+            }
         }
         for item in state.queue.iter_mut() {
-            if item.video.local_path == local_path { item.video.thumbnail_url = thumb_path.clone(); }
+            if item.video.local_path == local_path {
+                item.video.thumbnail_url = thumb_path.clone();
+            }
         }
         if let Some(ref mut curr) = state.current_video {
-            if curr.local_path == local_path { curr.thumbnail_url = thumb_path.clone(); }
+            if curr.local_path == local_path {
+                curr.thumbnail_url = thumb_path.clone();
+            }
         }
         Ok(())
     })
@@ -453,10 +464,7 @@ pub fn set_rotation(
     })
 }
 
-pub fn set_wallhaven_api_key(
-    store: &AppStateStore,
-    key: String,
-) -> Result<WallpaperState, String> {
+pub fn set_wallhaven_api_key(store: &AppStateStore, key: String) -> Result<WallpaperState, String> {
     store.update(|state| {
         state.wallhaven_api_key = key;
         Ok(())
@@ -505,7 +513,10 @@ pub fn advance_queue(store: &AppStateStore) -> Result<QueueAdvanceResult, String
     })
 }
 
-pub fn toggle_hide_video(store: &AppStateStore, video_id: String) -> Result<WallpaperState, String> {
+pub fn toggle_hide_video(
+    store: &AppStateStore,
+    video_id: String,
+) -> Result<WallpaperState, String> {
     let state = store.update(|s| {
         if let Some(pos) = s.hidden_videos.iter().position(|id| id == &video_id) {
             s.hidden_videos.remove(pos);

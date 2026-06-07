@@ -1,13 +1,10 @@
-use tauri::{State, Manager, Emitter};
+use crate::wallpaper;
 use crate::wallpaper::providers::VideoResult;
 use crate::wallpaper::state::{AppStateStore, WallpaperState};
-use crate::wallpaper;
+use tauri::{Emitter, Manager, State};
 
 use std::sync::atomic::{AtomicBool, Ordering};
 static TRACKING_STARTED: AtomicBool = AtomicBool::new(false);
-
-
-
 
 #[tauri::command]
 pub async fn apply_wallpaper(
@@ -20,35 +17,37 @@ pub async fn apply_wallpaper(
     monitor: Option<String>,
 ) -> Result<WallpaperState, String> {
     if video.local_path.is_empty() || video.local_path.starts_with("http") {
-        log::info!("[Core] Download on apply triggered for source: {}", video.source);
+        log::info!(
+            "[Core] Download on apply triggered for source: {}",
+            video.source
+        );
         let provider = crate::wallpaper::providers::get_provider(&video.source)?;
         let local_path = provider.download_video(&video, Some(app.clone())).await?;
         video.local_path = local_path;
-        
+
         let _ = wallpaper::desktop::cleanup_cache(15);
     }
 
     let current = wallpaper::state::get(&state);
     let _ = wallpaper::state::set_rotation(&state, false, current.rotation_interval_seconds);
-    
+
     let path_lower = video.local_path.to_lowercase();
     let is_web = path_lower.ends_with(".html");
-    let is_static_image = path_lower.ends_with(".jpg") 
-        || path_lower.ends_with(".jpeg") 
-        || path_lower.ends_with(".png") 
+    let is_static_image = path_lower.ends_with(".jpg")
+        || path_lower.ends_with(".jpeg")
+        || path_lower.ends_with(".png")
         || path_lower.ends_with(".webp")
         || video.source == "wallhaven"
         || video.source == "pinterest";
 
     if is_web {
-        wallpaper::desktop::set_web_wallpaper(
-            app.clone(),
-            &video.local_path,
-            monitor.clone(),
-        )?;
+        wallpaper::desktop::set_web_wallpaper(app.clone(), &video.local_path, monitor.clone())?;
     } else if is_static_image {
         // If applying static image, close webviews
-        let m_key = monitor.as_ref().cloned().unwrap_or_else(|| "default".to_string());
+        let m_key = monitor
+            .as_ref()
+            .cloned()
+            .unwrap_or_else(|| "default".to_string());
         if m_key == "SPAN_ALL" {
             for (label, window) in app.webview_windows() {
                 if label.starts_with("web_wallpaper_") {
@@ -56,18 +55,19 @@ pub async fn apply_wallpaper(
                 }
             }
         } else {
-            let window_label = format!("web_wallpaper_{}", m_key.replace(" ", "_").replace("\\", "_"));
+            let window_label = format!(
+                "web_wallpaper_{}",
+                m_key.replace(" ", "_").replace("\\", "_")
+            );
             if let Some(window) = app.get_webview_window(&window_label) {
                 let _ = window.close();
             }
         }
-        
+
         let local_path = video.local_path.clone();
-        tokio::task::spawn_blocking(move || {
-            wallpaper::desktop::set_static_image(&local_path)
-        })
-        .await
-        .map_err(|e| format!("Static image processing task failed: {}", e))??;
+        tokio::task::spawn_blocking(move || wallpaper::desktop::set_static_image(&local_path))
+            .await
+            .map_err(|e| format!("Static image processing task failed: {}", e))??;
     } else {
         wallpaper::desktop::set_video(
             app.clone(),
@@ -77,7 +77,7 @@ pub async fn apply_wallpaper(
             &current.video_filter,
             current.playback_speed,
             current.blur_strength,
-            false, 
+            false,
             start_time,
             end_time,
             monitor.clone(),
@@ -92,7 +92,7 @@ pub fn stop_wallpaper(
     app_handle: tauri::AppHandle,
 ) -> Result<WallpaperState, String> {
     wallpaper::desktop::stop_video()?;
-    
+
     if let Some(window) = app_handle.get_webview_window("effects_overlay") {
         let _ = window.hide();
     }
@@ -148,9 +148,9 @@ pub fn set_wallpaper_filter(
     if persisted.is_playing {
         if let Some(video) = persisted.current_video.as_ref() {
             let path_lower = video.local_path.to_lowercase();
-            let is_static = path_lower.ends_with(".jpg") 
-                || path_lower.ends_with(".jpeg") 
-                || path_lower.ends_with(".png") 
+            let is_static = path_lower.ends_with(".jpg")
+                || path_lower.ends_with(".jpeg")
+                || path_lower.ends_with(".png")
                 || path_lower.ends_with(".webp")
                 || video.source == "wallhaven"
                 || video.source == "pinterest";
@@ -191,9 +191,9 @@ pub fn set_wallpaper_scale(
     if persisted.is_playing {
         if let Some(video) = persisted.current_video.as_ref() {
             let path_lower = video.local_path.to_lowercase();
-            let is_static = path_lower.ends_with(".jpg") 
-                || path_lower.ends_with(".jpeg") 
-                || path_lower.ends_with(".png") 
+            let is_static = path_lower.ends_with(".jpg")
+                || path_lower.ends_with(".jpeg")
+                || path_lower.ends_with(".png")
                 || path_lower.ends_with(".webp")
                 || video.source == "wallhaven"
                 || video.source == "pinterest";
@@ -246,11 +246,11 @@ pub fn set_wallpaper_blur(
 ) -> Result<WallpaperState, String> {
     let persisted = wallpaper::state::set_blur_strength(&state, blur)?;
     if persisted.is_playing {
-       if let Some(video) = persisted.current_video.as_ref() {
+        if let Some(video) = persisted.current_video.as_ref() {
             let path_lower = video.local_path.to_lowercase();
-            let is_static = path_lower.ends_with(".jpg") 
-                || path_lower.ends_with(".jpeg") 
-                || path_lower.ends_with(".png") 
+            let is_static = path_lower.ends_with(".jpg")
+                || path_lower.ends_with(".jpeg")
+                || path_lower.ends_with(".png")
                 || path_lower.ends_with(".webp")
                 || video.source == "wallhaven"
                 || video.source == "pinterest";
@@ -276,7 +276,7 @@ pub fn set_wallpaper_blur(
                     log::warn!("Failed to set video blur: {}", e);
                 }
             }
-       }
+        }
     }
     Ok(persisted)
 }
@@ -295,16 +295,24 @@ pub fn apply_desktop_effects(
     layers_json: String,
 ) -> Result<(), String> {
     // 1. Save effects configuration securely inside local data state
-    let data_dir = app_handle.path().app_local_data_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+    let data_dir = app_handle
+        .path()
+        .app_local_data_dir()
+        .unwrap_or_else(|_| std::path::PathBuf::from("."));
     std::fs::create_dir_all(&data_dir).ok();
     let config_path = data_dir.join("current_effects.json");
-    std::fs::write(config_path, &layers_json).map_err(|e| format!("Failed to save current_effects.json: {}", e))?;
-
+    std::fs::write(config_path, &layers_json)
+        .map_err(|e| format!("Failed to save current_effects.json: {}", e))?;
 
     // 2. Spawn Transparent Overlay Window to attach into layout grids
-    log::info!("[Overlay] apply_desktop_effects triggered with config size: {}", layers_json.len());
+    log::info!(
+        "[Overlay] apply_desktop_effects triggered with config size: {}",
+        layers_json.len()
+    );
     if let Some(window) = app_handle.get_webview_window("effects_overlay") {
-        log::info!("[Overlay] Found effects_overlay window, making visible and setting ignore_cursor...");
+        log::info!(
+            "[Overlay] Found effects_overlay window, making visible and setting ignore_cursor..."
+        );
         let _ = window.show();
         let _ = window.set_ignore_cursor_events(true);
         let _ = window.emit("effects-updated", layers_json.clone());
@@ -313,57 +321,81 @@ pub fn apply_desktop_effects(
         #[cfg(windows)]
         {
             let workerw_opt = crate::wallpaper::desktop::win32::get_desktop_workerw();
+            let effects_overlay_hwnd = app_handle.get_webview_window("effects_overlay")
+                .and_then(|w| w.hwnd().ok())
+                .map(|h| h.0 as isize)
+                .unwrap_or(0);
             log::info!("[Overlay] Lookup WorkerW handles found: {:?}", workerw_opt);
             if let Some(workerw) = workerw_opt {
-                if let Ok(hwnd) = window.hwnd() {
-                    let shelldll: Vec<u16> = "SHELLDLL_DefView\0".encode_utf16().collect();
-                    let shell_hwnd = unsafe {
-                        windows::Win32::UI::WindowsAndMessaging::FindWindowExW(
-                            windows::Win32::Foundation::HWND(workerw as _),
-                            windows::Win32::Foundation::HWND(0 as _),
-                            windows::core::PCWSTR(shelldll.as_ptr()),
-                            windows::core::PCWSTR::null()
-                        ).unwrap_or(windows::Win32::Foundation::HWND(1 as _)) // HWND_BOTTOM fallback
-                    };
-
+                if effects_overlay_hwnd != 0 {
                     unsafe {
                         // Stitch the effects overlay into the Icon Container
                         let _ = windows::Win32::UI::WindowsAndMessaging::SetParent(
-                            windows::Win32::Foundation::HWND(hwnd.0 as _),
-                            windows::Win32::Foundation::HWND(workerw as _)
+                            windows::Win32::Foundation::HWND(effects_overlay_hwnd as _),
+                            windows::Win32::Foundation::HWND(workerw as _),
                         );
 
                         // Strip borders
                         let old_style = windows::Win32::UI::WindowsAndMessaging::GetWindowLongW(
-                            windows::Win32::Foundation::HWND(hwnd.0 as _),
-                            windows::Win32::UI::WindowsAndMessaging::GWL_STYLE
-                        );
-                        let _ = windows::Win32::UI::WindowsAndMessaging::SetWindowLongW(
-                            windows::Win32::Foundation::HWND(hwnd.0 as _),
+                            windows::Win32::Foundation::HWND(effects_overlay_hwnd as _),
                             windows::Win32::UI::WindowsAndMessaging::GWL_STYLE,
-                            old_style & !0x00280020 // Remove WS_POPUP, WS_CAPTION etc
+                        );
+                        let mut new_style = old_style as u32;
+                        new_style &= !windows::Win32::UI::WindowsAndMessaging::WS_POPUP.0;
+                        new_style &= !windows::Win32::UI::WindowsAndMessaging::WS_CAPTION.0;
+                        new_style &= !windows::Win32::UI::WindowsAndMessaging::WS_THICKFRAME.0;
+                        new_style &= !windows::Win32::UI::WindowsAndMessaging::WS_MINIMIZEBOX.0;
+                        new_style &= !windows::Win32::UI::WindowsAndMessaging::WS_MAXIMIZEBOX.0;
+                        new_style &= !windows::Win32::UI::WindowsAndMessaging::WS_SYSMENU.0;
+                        new_style |= windows::Win32::UI::WindowsAndMessaging::WS_CHILD.0;
+                        let _ = windows::Win32::UI::WindowsAndMessaging::SetWindowLongW(
+                            windows::Win32::Foundation::HWND(effects_overlay_hwnd as _),
+                            windows::Win32::UI::WindowsAndMessaging::GWL_STYLE,
+                            new_style as i32,
                         );
 
                         // Push it exactly behind the icons (SHELLDLL_DefView)
-                        let target_z = if shell_hwnd != windows::Win32::Foundation::HWND(0 as _) && shell_hwnd != windows::Win32::Foundation::HWND(1 as _) {
+                        let shelldll: Vec<u16> = "SHELLDLL_DefView\0".encode_utf16().collect();
+                        let shell_hwnd = windows::Win32::UI::WindowsAndMessaging::FindWindowExW(
+                            windows::Win32::Foundation::HWND(workerw as _),
+                            windows::Win32::Foundation::HWND(0 as _),
+                            windows::core::PCWSTR(shelldll.as_ptr()),
+                            windows::core::PCWSTR::null(),
+                        )
+                        .unwrap_or(windows::Win32::Foundation::HWND(1 as _));
+
+                        let target_z = if shell_hwnd != windows::Win32::Foundation::HWND(0 as _)
+                            && shell_hwnd != windows::Win32::Foundation::HWND(1 as _)
+                        {
                             shell_hwnd
                         } else {
                             windows::Win32::Foundation::HWND(1 as _)
                         };
 
-                        let v_x = windows::Win32::UI::WindowsAndMessaging::GetSystemMetrics(windows::Win32::UI::WindowsAndMessaging::SM_XVIRTUALSCREEN);
-                        let v_y = windows::Win32::UI::WindowsAndMessaging::GetSystemMetrics(windows::Win32::UI::WindowsAndMessaging::SM_YVIRTUALSCREEN);
-                        let v_w = windows::Win32::UI::WindowsAndMessaging::GetSystemMetrics(windows::Win32::UI::WindowsAndMessaging::SM_CXVIRTUALSCREEN);
-                        let v_h = windows::Win32::UI::WindowsAndMessaging::GetSystemMetrics(windows::Win32::UI::WindowsAndMessaging::SM_CYVIRTUALSCREEN);
+                        let v_x = windows::Win32::UI::WindowsAndMessaging::GetSystemMetrics(
+                            windows::Win32::UI::WindowsAndMessaging::SM_XVIRTUALSCREEN,
+                        );
+                        let v_y = windows::Win32::UI::WindowsAndMessaging::GetSystemMetrics(
+                            windows::Win32::UI::WindowsAndMessaging::SM_YVIRTUALSCREEN,
+                        );
+                        let v_w = windows::Win32::UI::WindowsAndMessaging::GetSystemMetrics(
+                            windows::Win32::UI::WindowsAndMessaging::SM_CXVIRTUALSCREEN,
+                        );
+                        let v_h = windows::Win32::UI::WindowsAndMessaging::GetSystemMetrics(
+                            windows::Win32::UI::WindowsAndMessaging::SM_CYVIRTUALSCREEN,
+                        );
 
                         let _ = windows::Win32::UI::WindowsAndMessaging::SetWindowPos(
-                            windows::Win32::Foundation::HWND(hwnd.0 as _),
+                            windows::Win32::Foundation::HWND(effects_overlay_hwnd as _),
                             target_z,
-                            v_x, v_y, v_w, v_h,
-                            windows::Win32::UI::WindowsAndMessaging::SWP_SHOWWINDOW
+                            v_x,
+                            v_y,
+                            v_w,
+                            v_h,
+                            windows::Win32::UI::WindowsAndMessaging::SWP_SHOWWINDOW,
                         );
                     }
-                    
+
                     log::info!("[Overlay] Native reparenting successful.");
                     start_mouse_tracking(app_handle.clone());
                 }
@@ -386,9 +418,13 @@ pub fn start_mouse_tracking(app_handle: tauri::AppHandle) {
     log::info!("[Overlay] Starting background global mouse cursor tracking stream...");
 
     std::thread::spawn(move || {
-        use windows::Win32::UI::WindowsAndMessaging::{GetCursorPos, GetSystemMetrics, SM_XVIRTUALSCREEN, SM_YVIRTUALSCREEN};
-        use windows::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_LBUTTON, VK_RBUTTON, VK_MBUTTON};
         use windows::Win32::Foundation::POINT;
+        use windows::Win32::UI::Input::KeyboardAndMouse::{
+            GetAsyncKeyState, VK_LBUTTON, VK_MBUTTON, VK_RBUTTON,
+        };
+        use windows::Win32::UI::WindowsAndMessaging::{
+            GetCursorPos, GetSystemMetrics, SM_XVIRTUALSCREEN, SM_YVIRTUALSCREEN,
+        };
 
         let mut was_l_down = false;
         let mut was_r_down = false;
@@ -404,7 +440,7 @@ pub fn start_mouse_tracking(app_handle: tauri::AppHandle) {
                         y: i32,
                         button: Option<String>,
                     }
-                    
+
                     let vx = GetSystemMetrics(SM_XVIRTUALSCREEN);
                     let vy = GetSystemMetrics(SM_YVIRTUALSCREEN);
                     let payload = CursorPayload {
@@ -412,13 +448,13 @@ pub fn start_mouse_tracking(app_handle: tauri::AppHandle) {
                         y: pt.y - vy,
                         button: None,
                     };
-                    
+
                     let _ = app_handle.emit("cursor-moved", payload.clone());
 
                     // Track left mouse button clicks
                     let lbtn_state = GetAsyncKeyState(VK_LBUTTON.0 as i32);
                     let is_l_down = (lbtn_state as u16 & 0x8000) != 0;
-                    
+
                     if is_l_down && !was_l_down {
                         let mut click_payload = payload.clone();
                         click_payload.button = Some("left".to_string());
@@ -429,7 +465,7 @@ pub fn start_mouse_tracking(app_handle: tauri::AppHandle) {
                     // Track right mouse button clicks
                     let rbtn_state = GetAsyncKeyState(VK_RBUTTON.0 as i32);
                     let is_r_down = (rbtn_state as u16 & 0x8000) != 0;
-                    
+
                     if is_r_down && !was_r_down {
                         let mut click_payload = payload.clone();
                         click_payload.button = Some("right".to_string());
@@ -440,7 +476,7 @@ pub fn start_mouse_tracking(app_handle: tauri::AppHandle) {
                     // Track middle mouse button clicks (Food)
                     let mbtn_state = GetAsyncKeyState(VK_MBUTTON.0 as i32);
                     let is_m_down = (mbtn_state as u16 & 0x8000) != 0;
-                    
+
                     if is_m_down && !was_m_down {
                         let mut click_payload = payload.clone();
                         click_payload.button = Some("food".to_string());
@@ -456,7 +492,10 @@ pub fn start_mouse_tracking(app_handle: tauri::AppHandle) {
 
 #[tauri::command]
 pub fn get_current_effects(app_handle: tauri::AppHandle) -> Result<String, String> {
-    let data_dir = app_handle.path().app_local_data_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+    let data_dir = app_handle
+        .path()
+        .app_local_data_dir()
+        .unwrap_or_else(|_| std::path::PathBuf::from("."));
     let config_path = data_dir.join("current_effects.json");
     if config_path.exists() {
         std::fs::read_to_string(config_path).map_err(|e| e.to_string())
@@ -464,5 +503,3 @@ pub fn get_current_effects(app_handle: tauri::AppHandle) -> Result<String, Strin
         Ok("{}".to_string())
     }
 }
-
-

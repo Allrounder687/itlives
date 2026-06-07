@@ -51,6 +51,8 @@ export function useAppState() {
     resolutions: null,
     ratios: null,
     colors: null,
+    categoriesFilter: "111",
+    purityFilter: "100",
     keepEffectsRunningOnPause: false,
   });
 

@@ -13,7 +13,10 @@ impl VideoProvider for WallpaperWavesProvider {
 
     async fn fetch_video(&self, config: &SearchConfig) -> Result<VideoResult, String> {
         let items = self.fetch_videos_list(config).await?;
-        items.into_iter().next().ok_or_else(|| "No wallpapers found on Wallpaper Waves".to_string())
+        items
+            .into_iter()
+            .next()
+            .ok_or_else(|| "No wallpapers found on Wallpaper Waves".to_string())
     }
 
     async fn fetch_videos_list(&self, config: &SearchConfig) -> Result<Vec<VideoResult>, String> {
@@ -23,7 +26,7 @@ impl VideoProvider for WallpaperWavesProvider {
 
         // Normalize spaces to hyphens for category slug matching
         let normalized = query.replace(' ', "-").to_lowercase();
-        
+
         let url = if normalized.is_empty() || normalized == "all" {
             if page <= 1 {
                 "https://wallpaperwaves.com/".to_string()
@@ -31,20 +34,43 @@ impl VideoProvider for WallpaperWavesProvider {
                 format!("https://wallpaperwaves.com/page/{}/", page)
             }
         } else if [
-            "anime", "abstract", "animal", "cartoon", "fantasy", "games", "landscape", 
-            "memes", "pixel-art", "retro", "sci-fi", "tv-movies", "vehicle"
-        ].contains(&normalized.as_str()) {
+            "anime",
+            "abstract",
+            "animal",
+            "cartoon",
+            "fantasy",
+            "games",
+            "landscape",
+            "memes",
+            "pixel-art",
+            "retro",
+            "sci-fi",
+            "tv-movies",
+            "vehicle",
+        ]
+        .contains(&normalized.as_str())
+        {
             if page <= 1 {
                 format!("https://wallpaperwaves.com/category/{}/", normalized)
             } else {
-                format!("https://wallpaperwaves.com/category/{}/page/{}/", normalized, page)
+                format!(
+                    "https://wallpaperwaves.com/category/{}/page/{}/",
+                    normalized, page
+                )
             }
         } else {
             // General WordPress search query
             if page <= 1 {
-                format!("https://wallpaperwaves.com/?s={}", urlencoding::encode(&query))
+                format!(
+                    "https://wallpaperwaves.com/?s={}",
+                    urlencoding::encode(&query)
+                )
             } else {
-                format!("https://wallpaperwaves.com/page/{}/?s={}", page, urlencoding::encode(&query))
+                format!(
+                    "https://wallpaperwaves.com/page/{}/?s={}",
+                    page,
+                    urlencoding::encode(&query)
+                )
             }
         };
 
@@ -65,7 +91,8 @@ impl VideoProvider for WallpaperWavesProvider {
             .map_err(|e| format!("WallpaperWaves parse failed: {}", e))?;
 
         // Extract articles
-        let article_re = Regex::new(r"(?s)<article[^>]*class=[^>]*moewalls-card.*?/article>").unwrap();
+        let article_re =
+            Regex::new(r"(?s)<article[^>]*class=[^>]*moewalls-card.*?/article>").unwrap();
         let href_re = Regex::new(r#"<div class="jeg_thumb">\s*<a href="([^"]+)""#).unwrap();
         let src_re = Regex::new(r#"<img[^>]*src="([^"]+)""#).unwrap();
         let res_re = Regex::new(r#"class="moe-badge-right"[^>]*>([^<]+)<"#).unwrap();
@@ -96,7 +123,8 @@ impl VideoProvider for WallpaperWavesProvider {
                     thumb_url.clone()
                 };
 
-                let resolution = res_re.captures(block)
+                let resolution = res_re
+                    .captures(block)
                     .map(|c| c[1].to_string())
                     .unwrap_or_else(|| "1920x1080".to_string());
 
@@ -105,7 +133,10 @@ impl VideoProvider for WallpaperWavesProvider {
                 if resolution.contains('x') {
                     let parts: Vec<&str> = resolution.split('x').collect();
                     if parts.len() == 2 {
-                        if let (Ok(w), Ok(h)) = (parts[0].trim().parse::<u32>(), parts[1].trim().parse::<u32>()) {
+                        if let (Ok(w), Ok(h)) = (
+                            parts[0].trim().parse::<u32>(),
+                            parts[1].trim().parse::<u32>(),
+                        ) {
                             width = w;
                             height = h;
                         }
@@ -123,7 +154,7 @@ impl VideoProvider for WallpaperWavesProvider {
                     source: "wallpaperwaves".to_string(),
                     start_time: None,
                     end_time: None,
-            tags: None,
+                    tags: None,
                 });
             }
         }
@@ -131,7 +162,11 @@ impl VideoProvider for WallpaperWavesProvider {
         Ok(results)
     }
 
-    async fn download_video(&self, video: &VideoResult, app_handle: Option<tauri::AppHandle>) -> Result<String, String> {
+    async fn download_video(
+        &self,
+        video: &VideoResult,
+        app_handle: Option<tauri::AppHandle>,
+    ) -> Result<String, String> {
         let client = reqwest::Client::new();
         let detail_url = if video.local_path.starts_with("http") {
             video.local_path.clone()
@@ -139,7 +174,10 @@ impl VideoProvider for WallpaperWavesProvider {
             format!("https://wallpaperwaves.com/{}/", video.id)
         };
 
-        log::info!("[WallpaperWaves] Fetching detail page for download: {}", detail_url);
+        log::info!(
+            "[WallpaperWaves] Fetching detail page for download: {}",
+            detail_url
+        );
         let resp = client
             .get(&detail_url)
             .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
@@ -170,6 +208,14 @@ impl VideoProvider for WallpaperWavesProvider {
         log::info!("[WallpaperWaves] Resolved download URL: {}", download_url);
 
         let cache_dir = crate::wallpaper::desktop::get_cache_dir();
-        download_to_cache(&download_url, &video.id, "wallpaperwaves", &cache_dir, None, app_handle).await
+        download_to_cache(
+            &download_url,
+            &video.id,
+            "wallpaperwaves",
+            &cache_dir,
+            None,
+            app_handle,
+        )
+        .await
     }
 }

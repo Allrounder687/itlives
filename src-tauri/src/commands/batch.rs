@@ -1,10 +1,10 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
-use std::sync::atomic::{AtomicBool, Ordering};
 
 #[derive(Serialize, Clone)]
 pub struct BatchProgress {
@@ -55,16 +55,21 @@ pub async fn start_wallhaven_batch_download(
     }
     let username = parts[4];
     let coll_id = parts[6];
-    
-    let base_api_url = format!("https://wallhaven.cc/api/v1/collections/{}/{}", username, coll_id);
-    
+
+    let base_api_url = format!(
+        "https://wallhaven.cc/api/v1/collections/{}/{}",
+        username, coll_id
+    );
+
     let target_path = PathBuf::from(&target_dir);
     if !target_path.exists() {
-        fs::create_dir_all(&target_path).await.map_err(|e| e.to_string())?;
+        fs::create_dir_all(&target_path)
+            .await
+            .map_err(|e| e.to_string())?;
     }
 
     CANCEL_FLAG.store(false, Ordering::SeqCst);
-    
+
     tauri::async_runtime::spawn(async move {
         let client = reqwest::Client::new();
         let mut current_page = 1;
@@ -73,12 +78,15 @@ pub async fn start_wallhaven_batch_download(
 
         loop {
             if CANCEL_FLAG.load(Ordering::SeqCst) {
-                let _ = app.emit("batch-download-progress", BatchProgress {
-                    current: downloaded_count,
-                    total: total_expected,
-                    current_url: "".to_string(),
-                    status: "Cancelled".to_string(),
-                });
+                let _ = app.emit(
+                    "batch-download-progress",
+                    BatchProgress {
+                        current: downloaded_count,
+                        total: total_expected,
+                        current_url: "".to_string(),
+                        status: "Cancelled".to_string(),
+                    },
+                );
                 break;
             }
 
@@ -93,12 +101,15 @@ pub async fn start_wallhaven_batch_download(
 
             if resp.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
                 // Rate limited, sleep and retry
-                let _ = app.emit("batch-download-progress", BatchProgress {
-                    current: downloaded_count,
-                    total: total_expected,
-                    current_url: "".to_string(),
-                    status: "Rate limited by Wallhaven. Sleeping 10s...".to_string(),
-                });
+                let _ = app.emit(
+                    "batch-download-progress",
+                    BatchProgress {
+                        current: downloaded_count,
+                        total: total_expected,
+                        current_url: "".to_string(),
+                        status: "Rate limited by Wallhaven. Sleeping 10s...".to_string(),
+                    },
+                );
                 tokio::time::sleep(Duration::from_secs(10)).await;
                 continue;
             }
@@ -136,12 +147,15 @@ pub async fn start_wallhaven_batch_download(
                 let file_path = target_path.join(&file_name);
 
                 if !file_path.exists() {
-                    let _ = app.emit("batch-download-progress", BatchProgress {
-                        current: downloaded_count,
-                        total: total_expected,
-                        current_url: item.path.clone(),
-                        status: format!("Downloading {}...", file_name),
-                    });
+                    let _ = app.emit(
+                        "batch-download-progress",
+                        BatchProgress {
+                            current: downloaded_count,
+                            total: total_expected,
+                            current_url: item.path.clone(),
+                            status: format!("Downloading {}...", file_name),
+                        },
+                    );
 
                     // Download image
                     if let Ok(img_resp) = client.get(&item.path).send().await {
@@ -154,12 +168,15 @@ pub async fn start_wallhaven_batch_download(
                     // Respect Wallhaven API limits (approx 1 request per 1.5 seconds)
                     tokio::time::sleep(Duration::from_millis(1500)).await;
                 } else {
-                    let _ = app.emit("batch-download-progress", BatchProgress {
-                        current: downloaded_count,
-                        total: total_expected,
-                        current_url: item.path.clone(),
-                        status: format!("Skipped {} (Already exists)", file_name),
-                    });
+                    let _ = app.emit(
+                        "batch-download-progress",
+                        BatchProgress {
+                            current: downloaded_count,
+                            total: total_expected,
+                            current_url: item.path.clone(),
+                            status: format!("Skipped {} (Already exists)", file_name),
+                        },
+                    );
                 }
 
                 downloaded_count += 1;
@@ -177,12 +194,19 @@ pub async fn start_wallhaven_batch_download(
             current_page += 1;
         }
 
-        let _ = app.emit("batch-download-progress", BatchProgress {
-            current: downloaded_count,
-            total: total_expected,
-            current_url: "".to_string(),
-            status: if CANCEL_FLAG.load(Ordering::SeqCst) { "Cancelled".to_string() } else { "Completed".to_string() },
-        });
+        let _ = app.emit(
+            "batch-download-progress",
+            BatchProgress {
+                current: downloaded_count,
+                total: total_expected,
+                current_url: "".to_string(),
+                status: if CANCEL_FLAG.load(Ordering::SeqCst) {
+                    "Cancelled".to_string()
+                } else {
+                    "Completed".to_string()
+                },
+            },
+        );
     });
 
     Ok(())
@@ -193,10 +217,12 @@ pub async fn download_single_file(url: String, target_path: String) -> Result<()
     let client = reqwest::Client::new();
     let img_resp = client.get(&url).send().await.map_err(|e| e.to_string())?;
     let bytes = img_resp.bytes().await.map_err(|e| e.to_string())?;
-    
-    let mut file = fs::File::create(&target_path).await.map_err(|e| e.to_string())?;
+
+    let mut file = fs::File::create(&target_path)
+        .await
+        .map_err(|e| e.to_string())?;
     file.write_all(&bytes).await.map_err(|e| e.to_string())?;
-    
+
     Ok(())
 }
 
@@ -208,11 +234,13 @@ pub async fn start_wallhaven_selection_download(
 ) -> Result<(), String> {
     let target_path = PathBuf::from(&target_dir);
     if !target_path.exists() {
-        fs::create_dir_all(&target_path).await.map_err(|e| e.to_string())?;
+        fs::create_dir_all(&target_path)
+            .await
+            .map_err(|e| e.to_string())?;
     }
 
     CANCEL_FLAG.store(false, Ordering::SeqCst);
-    
+
     tauri::async_runtime::spawn(async move {
         let client = reqwest::Client::new();
         let total_expected = urls.len() as u32;
@@ -228,12 +256,15 @@ pub async fn start_wallhaven_selection_download(
             let file_path = target_path.join(&file_name);
 
             if !file_path.exists() {
-                let _ = app.emit("batch-download-progress", BatchProgress {
-                    current: downloaded_count,
-                    total: total_expected,
-                    current_url: url.clone(),
-                    status: format!("Downloading {}...", file_name),
-                });
+                let _ = app.emit(
+                    "batch-download-progress",
+                    BatchProgress {
+                        current: downloaded_count,
+                        total: total_expected,
+                        current_url: url.clone(),
+                        status: format!("Downloading {}...", file_name),
+                    },
+                );
 
                 if let Ok(img_resp) = client.get(&url).send().await {
                     if let Ok(bytes) = img_resp.bytes().await {
@@ -244,23 +275,33 @@ pub async fn start_wallhaven_selection_download(
                 }
                 tokio::time::sleep(Duration::from_millis(1500)).await;
             } else {
-                let _ = app.emit("batch-download-progress", BatchProgress {
-                    current: downloaded_count,
-                    total: total_expected,
-                    current_url: url.clone(),
-                    status: format!("Skipped {} (Already exists)", file_name),
-                });
+                let _ = app.emit(
+                    "batch-download-progress",
+                    BatchProgress {
+                        current: downloaded_count,
+                        total: total_expected,
+                        current_url: url.clone(),
+                        status: format!("Skipped {} (Already exists)", file_name),
+                    },
+                );
             }
 
             downloaded_count += 1;
         }
 
-        let _ = app.emit("batch-download-progress", BatchProgress {
-            current: downloaded_count,
-            total: total_expected,
-            current_url: "".to_string(),
-            status: if CANCEL_FLAG.load(Ordering::SeqCst) { "Cancelled".to_string() } else { "Completed".to_string() },
-        });
+        let _ = app.emit(
+            "batch-download-progress",
+            BatchProgress {
+                current: downloaded_count,
+                total: total_expected,
+                current_url: "".to_string(),
+                status: if CANCEL_FLAG.load(Ordering::SeqCst) {
+                    "Cancelled".to_string()
+                } else {
+                    "Completed".to_string()
+                },
+            },
+        );
     });
 
     Ok(())

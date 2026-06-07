@@ -1,7 +1,7 @@
-use tauri::State;
-use crate::wallpaper::providers::VideoResult;
-use crate::wallpaper::state::{AppStateStore, WallpaperState, QueueAdvanceResult};
 use crate::wallpaper;
+use crate::wallpaper::providers::VideoResult;
+use crate::wallpaper::state::{AppStateStore, QueueAdvanceResult, WallpaperState};
+use tauri::State;
 
 #[tauri::command]
 pub fn add_to_queue(
@@ -41,11 +41,16 @@ pub async fn advance_rotation(
 ) -> Result<QueueAdvanceResult, String> {
     let current = wallpaper::state::get(&state);
     let mut advanced = wallpaper::state::advance_queue(&state)?;
-    
+
     if advanced.video.local_path.is_empty() || advanced.video.local_path.starts_with("http") {
-        log::info!("[Core] Download on advance triggered for source: {}", advanced.video.source);
+        log::info!(
+            "[Core] Download on advance triggered for source: {}",
+            advanced.video.source
+        );
         let provider = crate::wallpaper::providers::get_provider(&advanced.video.source)?;
-        let local_path = provider.download_video(&advanced.video, Some(app.clone())).await?;
+        let local_path = provider
+            .download_video(&advanced.video, Some(app.clone()))
+            .await?;
         advanced.video.local_path = local_path;
         let _ = crate::wallpaper::desktop::cleanup_cache(15);
     }
@@ -58,7 +63,7 @@ pub async fn advance_rotation(
         &current.video_filter,
         current.playback_speed,
         current.blur_strength,
-        false, 
+        false,
         None,
         None,
         None,

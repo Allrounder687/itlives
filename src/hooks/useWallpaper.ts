@@ -189,6 +189,8 @@ export function useWallpaper() {
     setResolutions: (resolutions: string | null) => setState(s => ({ ...s, resolutions, page: 1 })),
     setRatios: (ratios: string | null) => setState(s => ({ ...s, ratios, page: 1 })),
     setColors: (colors: string | null) => setState(s => ({ ...s, colors, page: 1 })),
+    setCategoriesFilter: (categoriesFilter: string) => setState(s => ({ ...s, categoriesFilter, page: 1 })),
+    setPurityFilter: (purityFilter: string) => setState(s => ({ ...s, purityFilter, page: 1 })),
     setSelectedMonitor: (monitor: DisplayMonitor | null) => setState(s => ({ ...s, selectedMonitor: monitor })),
     setColorFilter: (colorFilter: string) => setState(s => {
       // Keep old colorFilter logic just in case it's used elsewhere, but we map to colors

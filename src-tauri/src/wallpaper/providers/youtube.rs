@@ -3,9 +3,9 @@
 
 use super::{SearchConfig, VideoProvider, VideoResult};
 use serde::Deserialize;
-use std::process::Command;
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
+use std::process::Command;
 use tauri::Emitter;
 
 pub struct YouTubeProvider;
@@ -23,7 +23,12 @@ pub struct YtMeta {
 }
 
 /// Helper to scan directories recursively for a specific executable.
-fn find_in_dir_recursive(dir: &std::path::Path, filename: &str, depth: usize, max_depth: usize) -> Option<std::path::PathBuf> {
+fn find_in_dir_recursive(
+    dir: &std::path::Path,
+    filename: &str,
+    depth: usize,
+    max_depth: usize,
+) -> Option<std::path::PathBuf> {
     if depth > max_depth {
         return None;
     }
@@ -148,7 +153,7 @@ fn expand_path_var(raw_path: &str) -> String {
 #[cfg(windows)]
 fn find_in_registry_path(filename: &str) -> Option<std::path::PathBuf> {
     let mut paths_to_check = Vec::new();
-    
+
     // Query User PATH from HKCU
     let mut cmd_user = Command::new("reg");
     cmd_user.args(&["query", "HKCU\\Environment", "/v", "Path"]);
@@ -161,10 +166,15 @@ fn find_in_registry_path(filename: &str) -> Option<std::path::PathBuf> {
             }
         }
     }
-    
+
     // Query System PATH from HKLM
     let mut cmd_sys = Command::new("reg");
-    cmd_sys.args(&["query", "HKLM\\System\\CurrentControlSet\\Control\\Session Manager\\Environment", "/v", "Path"]);
+    cmd_sys.args(&[
+        "query",
+        "HKLM\\System\\CurrentControlSet\\Control\\Session Manager\\Environment",
+        "/v",
+        "Path",
+    ]);
     cmd_sys.creation_flags(0x08000000);
     if let Ok(output) = cmd_sys.output() {
         if output.status.success() {
@@ -188,7 +198,7 @@ fn find_in_registry_path(filename: &str) -> Option<std::path::PathBuf> {
             }
         }
     }
-    
+
     None
 }
 
@@ -213,14 +223,19 @@ pub fn find_ytdlp() -> Result<String, String> {
 
 fn find_ytdlp_uncached() -> Result<String, String> {
     // 1. Check local app data bin directory first (Tauri runtime context)
-    let local_path = crate::wallpaper::desktop::app_data_dir().join("bin").join("yt-dlp.exe");
+    let local_path = crate::wallpaper::desktop::app_data_dir()
+        .join("bin")
+        .join("yt-dlp.exe");
     if local_path.exists() {
         return Ok(local_path.to_string_lossy().to_string());
     }
 
     // 2. Check hardcoded fallback local app data path directly (using LOCALAPPDATA env var)
     if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
-        let p = std::path::PathBuf::from(local_app_data).join("itLives").join("bin").join("yt-dlp.exe");
+        let p = std::path::PathBuf::from(local_app_data)
+            .join("itLives")
+            .join("bin")
+            .join("yt-dlp.exe");
         if p.exists() {
             return Ok(p.to_string_lossy().to_string());
         }
@@ -291,14 +306,19 @@ pub fn find_ffmpeg() -> Option<std::path::PathBuf> {
 
 fn find_ffmpeg_uncached() -> Option<std::path::PathBuf> {
     // 1. Check local app data bin directory first (Tauri runtime context)
-    let local_path = crate::wallpaper::desktop::app_data_dir().join("bin").join("ffmpeg.exe");
+    let local_path = crate::wallpaper::desktop::app_data_dir()
+        .join("bin")
+        .join("ffmpeg.exe");
     if local_path.exists() {
         return Some(local_path);
     }
 
     // 2. Check hardcoded fallback local app data path directly (using LOCALAPPDATA env var)
     if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
-        let p = std::path::PathBuf::from(local_app_data).join("itLives").join("bin").join("ffmpeg.exe");
+        let p = std::path::PathBuf::from(local_app_data)
+            .join("itLives")
+            .join("bin")
+            .join("ffmpeg.exe");
         if p.exists() {
             return Some(p);
         }
@@ -368,16 +388,12 @@ pub fn fetch_metadata(url: &str) -> Result<YtMeta, String> {
     let ytdlp = find_ytdlp()?;
 
     let mut cmd = Command::new(&ytdlp);
-    cmd.args([
-        "--dump-json",
-        "--no-playlist",
-        "--no-warnings",
-        url,
-    ]);
+    cmd.args(["--dump-json", "--no-playlist", "--no-warnings", url]);
     #[cfg(windows)]
     cmd.creation_flags(0x08000000);
 
-    let output = cmd.output()
+    let output = cmd
+        .output()
         .map_err(|e| format!("Failed to run yt-dlp: {}", e))?;
 
     if !output.status.success() {
@@ -415,7 +431,9 @@ pub fn download_clip(
     let dest = cache_dir.join(&filename);
 
     if dest.exists() {
-        if let Some(w) = window { let _ = w.emit("yt-progress", 100); }
+        if let Some(w) = window {
+            let _ = w.emit("yt-progress", 100);
+        }
         return Ok(dest.to_string_lossy().to_string());
     }
 
@@ -427,7 +445,9 @@ pub fn download_clip(
 
     log::info!(
         "[YouTube] Downloading clip: {} section={} quality={}p",
-        url, section_arg, max_height
+        url,
+        section_arg,
+        max_height
     );
 
     use std::io::{BufRead, BufReader};
@@ -463,7 +483,8 @@ pub fn download_clip(
     #[cfg(windows)]
     cmd.creation_flags(0x08000000);
 
-    let mut child = cmd.stdout(Stdio::piped())
+    let mut child = cmd
+        .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
         .map_err(|e| format!("Failed to spawn yt-dlp: {}", e))?;
@@ -480,15 +501,19 @@ pub fn download_clip(
 
     if let Some(stderr) = child.stderr.take() {
         let w_clone = window.map(|w| w.clone());
-        let clip_dur = if end_secs > start_secs { end_secs - start_secs } else { 1.0 };
+        let clip_dur = if end_secs > start_secs {
+            end_secs - start_secs
+        } else {
+            1.0
+        };
         let err_clone = error_lines.clone();
-        
+
         std::thread::spawn(move || {
             let reader = BufReader::new(stderr);
             // Split on \r (carriage return) instead of \n to capture incremental updates
             for chunk in reader.split(b'\r').filter_map(|c| c.ok()) {
                 let line = String::from_utf8_lossy(&chunk);
-                
+
                 // Track all lines in our thread-safe error buffer for debugging
                 let trimmed = line.trim().to_string();
                 if !trimmed.is_empty() {
@@ -505,14 +530,20 @@ pub fn download_clip(
                                 let _ = w.emit("yt-progress", pct as u32);
                             }
                         }
-                    } 
+                    }
                     // ffmpeg timestamp parser: "time=00:00:05.12"
                     else if line.contains("time=") {
-                        if let Some(time_part) = line.split_whitespace().find(|s| s.starts_with("time=")) {
+                        if let Some(time_part) =
+                            line.split_whitespace().find(|s| s.starts_with("time="))
+                        {
                             let ts_str = time_part.replace("time=", ""); // "00:00:05.12"
                             let hms: Vec<&str> = ts_str.split(':').collect();
                             if hms.len() >= 3 {
-                                if let (Ok(h), Ok(m), Ok(s)) = (hms[0].parse::<f64>(), hms[1].parse::<f64>(), hms[2].parse::<f64>()) {
+                                if let (Ok(h), Ok(m), Ok(s)) = (
+                                    hms[0].parse::<f64>(),
+                                    hms[1].parse::<f64>(),
+                                    hms[2].parse::<f64>(),
+                                ) {
                                     let current_secs = (h * 3600.0) + (m * 60.0) + s;
                                     let pct = ((current_secs / clip_dur) * 100.0).min(100.0);
                                     let _ = w.emit("yt-progress", pct as u32);
@@ -525,7 +556,9 @@ pub fn download_clip(
         });
     }
 
-    let status = child.wait().map_err(|e| format!("yt-dlp wait failed: {}", e))?;
+    let status = child
+        .wait()
+        .map_err(|e| format!("yt-dlp wait failed: {}", e))?;
 
     if !status.success() {
         let errs = if let Ok(g) = error_lines.lock() {
@@ -535,13 +568,13 @@ pub fn download_clip(
         } else {
             String::new()
         };
-        
+
         let msg = if errs.is_empty() {
             "yt-dlp download failed".to_string()
         } else {
             format!("yt-dlp download failed: {}", errs)
         };
-        
+
         return Err(msg);
     }
 
@@ -549,7 +582,9 @@ pub fn download_clip(
         return Err("yt-dlp completed but output file was not created".to_string());
     }
 
-    if let Some(w) = window { let _ = w.emit("yt-progress", 100); }
+    if let Some(w) = window {
+        let _ = w.emit("yt-progress", 100);
+    }
 
     log::info!(
         "[YouTube] Clip saved: {} ({} bytes)",
@@ -594,26 +629,22 @@ impl VideoProvider for YouTubeProvider {
         })
     }
 
-    async fn fetch_videos_list(
-        &self,
-        config: &SearchConfig,
-    ) -> Result<Vec<VideoResult>, String> {
+    async fn fetch_videos_list(&self, config: &SearchConfig) -> Result<Vec<VideoResult>, String> {
         self.fetch_video(config).await.map(|v| vec![v])
     }
 
-    async fn download_video(&self, video: &VideoResult, _app_handle: Option<tauri::AppHandle>) -> Result<String, String> {
+    async fn download_video(
+        &self,
+        video: &VideoResult,
+        _app_handle: Option<tauri::AppHandle>,
+    ) -> Result<String, String> {
         // If already downloaded, return
-        if !video.local_path.is_empty()
-            && std::path::Path::new(&video.local_path).exists()
-        {
+        if !video.local_path.is_empty() && std::path::Path::new(&video.local_path).exists() {
             return Ok(video.local_path.clone());
         }
 
         let start = video.start_time.unwrap_or(0.0);
-        let end = video
-            .end_time
-            .unwrap_or(video.duration)
-            .max(start + 1.0);
+        let end = video.end_time.unwrap_or(video.duration).max(start + 1.0);
 
         let url = video.video_url.clone();
         let vid_id = video.id.clone();

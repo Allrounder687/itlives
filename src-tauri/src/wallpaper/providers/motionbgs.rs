@@ -5,8 +5,6 @@ use rand::seq::SliceRandom;
 
 pub struct MotionBgsProvider;
 
-
-
 #[async_trait::async_trait]
 impl VideoProvider for MotionBgsProvider {
     fn name(&self) -> &str {
@@ -17,7 +15,7 @@ impl VideoProvider for MotionBgsProvider {
         let client = reqwest::Client::new();
         let query = config.query.to_lowercase();
         let page = if config.page == 0 { 1 } else { config.page };
-        
+
         let url = if query == "all" || query.is_empty() {
             if page <= 1 {
                 "https://motionbgs.com/".to_string()
@@ -59,20 +57,22 @@ impl VideoProvider for MotionBgsProvider {
         // Extract IDs and slugs using string splitting or simple parsing.
         // Pattern: /i/c/546x308/media/ID/SLUG.jpg or link href="/ID/SLUG"
         let mut items = Vec::new();
-        
+
         // Let's use regular expression or string searches to extract items
         let mut cursor = 0;
         while let Some(start_idx) = text[cursor..].find("546x308/media/") {
-            let actual_start = cursor + start_idx + 14; 
+            let actual_start = cursor + start_idx + 14;
             let remaining = &text[actual_start..];
-            
+
             if let Some(slash_idx) = remaining.find('/') {
                 let id_str = &remaining[..slash_idx];
                 if id_str.chars().all(|c| c.is_ascii_digit()) {
                     let id = id_str;
                     let remaining2 = &remaining[slash_idx + 1..];
-                    
-                    if let Some(quote_idx) = remaining2.find(|c| c == '\"' || c == '\'' || c == ' ' || c == '/') {
+
+                    if let Some(quote_idx) =
+                        remaining2.find(|c| c == '\"' || c == '\'' || c == ' ' || c == '/')
+                    {
                         let slug = &remaining2[..quote_idx];
                         if !slug.is_empty() && slug != "thumb" && slug != "thumb.jpg" {
                             items.push((id.to_string(), slug.to_string()));
@@ -99,10 +99,18 @@ impl VideoProvider for MotionBgsProvider {
             results.shuffle(&mut rng);
             results.into_iter().next().ok_or("No items found")?
         };
-        
+
         let cache_dir = crate::wallpaper::desktop::get_cache_dir();
-        let local_path = download_to_cache(&chosen.video_url, &chosen.id, "motionbgs", &cache_dir, None, None).await?;
-        
+        let local_path = download_to_cache(
+            &chosen.video_url,
+            &chosen.id,
+            "motionbgs",
+            &cache_dir,
+            None,
+            None,
+        )
+        .await?;
+
         let mut final_video = chosen;
         final_video.local_path = local_path;
         Ok(final_video)
@@ -142,7 +150,7 @@ impl VideoProvider for MotionBgsProvider {
 
         let mut items = Vec::new();
         let mut cursor = 0;
-        
+
         while let Some(start_idx) = text[cursor..].find("546x308/media/") {
             let actual_start = cursor + start_idx + 14;
             let remaining = &text[actual_start..];
@@ -151,7 +159,9 @@ impl VideoProvider for MotionBgsProvider {
                 if id_str.chars().all(|c| c.is_ascii_digit()) {
                     let id = id_str;
                     let remaining2 = &remaining[slash_idx + 1..];
-                    if let Some(quote_idx) = remaining2.find(|c| c == '\"' || c == '\'' || c == ' ' || c == '/') {
+                    if let Some(quote_idx) =
+                        remaining2.find(|c| c == '\"' || c == '\'' || c == ' ' || c == '/')
+                    {
                         let slug = &remaining2[..quote_idx];
                         if !slug.is_empty() && slug != "thumb" && slug != "thumb.jpg" {
                             items.push((id.to_string(), slug.to_string()));
@@ -169,22 +179,31 @@ impl VideoProvider for MotionBgsProvider {
         for (id, slug) in items {
             let mut base_slug = slug.clone();
             // Sequentially strip extensions (e.g. .jpg.webp -> .jpg -> empty)
-            while base_slug.ends_with(".webp") || base_slug.ends_with(".jpg") || base_slug.ends_with(".png") {
-                if base_slug.ends_with(".webp") { base_slug = base_slug[..base_slug.len() - 5].to_string(); }
-                else if base_slug.ends_with(".jpg") { base_slug = base_slug[..base_slug.len() - 4].to_string(); }
-                else if base_slug.ends_with(".png") { base_slug = base_slug[..base_slug.len() - 4].to_string(); }
+            while base_slug.ends_with(".webp")
+                || base_slug.ends_with(".jpg")
+                || base_slug.ends_with(".png")
+            {
+                if base_slug.ends_with(".webp") {
+                    base_slug = base_slug[..base_slug.len() - 5].to_string();
+                } else if base_slug.ends_with(".jpg") {
+                    base_slug = base_slug[..base_slug.len() - 4].to_string();
+                } else if base_slug.ends_with(".png") {
+                    base_slug = base_slug[..base_slug.len() - 4].to_string();
+                }
             }
 
             // Extract resolution from slug if present (e.g. 1920x1080 or 3840x2160)
             let mut width = 1920;
             let mut height = 1080;
             let mut video_res = "1920x1080".to_string();
-            
+
             if base_slug.contains("3840x2160") {
-                width = 3840; height = 2160; video_res = "3840x2160".to_string();
+                width = 3840;
+                height = 2160;
+                video_res = "3840x2160".to_string();
             }
 
-            // Remove resolution from slug for the clean name used in direct path if needed, 
+            // Remove resolution from slug for the clean name used in direct path if needed,
             // but the direct path actually includes it.
             // Direct path: https://motionbgs.com/media/ID/SLUG.RESOLUTION.mp4
             let mut name_only = base_slug.clone();
@@ -194,8 +213,14 @@ impl VideoProvider for MotionBgsProvider {
 
             results.push(VideoResult {
                 id: id.clone(),
-                video_url: format!("https://motionbgs.com/media/{}/{}.{}.mp4", id, name_only, video_res),
-                thumbnail_url: format!("https://motionbgs.com/i/c/546x308/media/{}/{}.jpg", id, base_slug),
+                video_url: format!(
+                    "https://motionbgs.com/media/{}/{}.{}.mp4",
+                    id, name_only, video_res
+                ),
+                thumbnail_url: format!(
+                    "https://motionbgs.com/i/c/546x308/media/{}/{}.jpg",
+                    id, base_slug
+                ),
                 local_path: String::new(),
                 duration: 0.0,
                 width,
@@ -203,15 +228,27 @@ impl VideoProvider for MotionBgsProvider {
                 source: "motionbgs".to_string(),
                 start_time: None,
                 end_time: None,
-            tags: None,
+                tags: None,
             });
         }
 
         Ok(results)
     }
 
-    async fn download_video(&self, video: &VideoResult, app_handle: Option<tauri::AppHandle>) -> Result<String, String> {
+    async fn download_video(
+        &self,
+        video: &VideoResult,
+        app_handle: Option<tauri::AppHandle>,
+    ) -> Result<String, String> {
         let cache_dir = crate::wallpaper::desktop::get_cache_dir();
-        super::download_to_cache(&video.video_url, &video.id, "motionbgs", &cache_dir, None, app_handle).await
+        super::download_to_cache(
+            &video.video_url,
+            &video.id,
+            "motionbgs",
+            &cache_dir,
+            None,
+            app_handle,
+        )
+        .await
     }
 }

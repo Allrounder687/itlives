@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 
 export interface EffectLayer {
   id: string;
-  type: "snow" | "rain" | "vignette" | "light-leak" | "cursor-trail" | "ribbon-trail" | "click-ripple" | "blur-region" | "bloom" | "glitch" | "audio-visualizer" | "parallax" | "color-grade" | "fireflies" | "stars" | "fog" | "clock" | "music-player" | "water-caustics" | "blowing-leaves" | "app-launcher" | "sprite" | "particle-emitter" | "god-rays" | "vhs" | "liquid-ripple" | "rain-on-glass" | "desktop-pet" | "timetable" | "food-bowl" | "food-pizza" | "food-meat";
+  type: "snow" | "rain" | "vignette" | "light-leak" | "cursor-trail" | "ribbon-trail" | "click-ripple" | "blur-region" | "bloom" | "glitch" | "audio-visualizer" | "parallax" | "color-grade" | "fireflies" | "stars" | "fog" | "clock" | "music-player" | "water-caustics" | "blowing-leaves" | "app-launcher" | "sprite" | "particle-emitter" | "god-rays" | "vhs" | "liquid-ripple" | "rain-on-glass" | "desktop-pet" | "timetable" | "food-bowl" | "food-pizza" | "food-meat" | "brightness-contrast" | "hue-saturation" | "sepia" | "pixelation" | "noise" | "chromatic-aberration" | "color-average" | "color-depth" | "dot-screen" | "tilt-shift" | "water-effect";
   name: string;
   enabled: boolean;
   params: Record<string, any>;

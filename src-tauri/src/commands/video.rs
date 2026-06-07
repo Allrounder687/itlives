@@ -1,6 +1,6 @@
-use tauri::{State, Window, Emitter};
 use crate::wallpaper::providers::{self, SearchConfig, VideoResult};
 use crate::wallpaper::state::AppStateStore;
+use tauri::{Emitter, State, Window};
 
 fn hex_to_color_name(hex: &str) -> Option<&'static str> {
     match hex {
@@ -28,21 +28,37 @@ fn hex_to_color_name(hex: &str) -> Option<&'static str> {
 
 fn clean_search_query(q: &str) -> String {
     let trimmed = q.trim();
-    if trimmed.is_empty() || trimmed.to_lowercase() == "all" || trimmed.to_lowercase() == "wallpaper" || trimmed.to_lowercase() == "wallpapers" {
+    if trimmed.is_empty()
+        || trimmed.to_lowercase() == "all"
+        || trimmed.to_lowercase() == "wallpaper"
+        || trimmed.to_lowercase() == "wallpapers"
+    {
         return trimmed.to_string();
     }
-    
+
     let mut cleaned = trimmed.to_lowercase();
     if cleaned.ends_with(" wallpapers") {
-        cleaned = cleaned.strip_suffix(" wallpapers").unwrap_or(&cleaned).to_string();
+        cleaned = cleaned
+            .strip_suffix(" wallpapers")
+            .unwrap_or(&cleaned)
+            .to_string();
     } else if cleaned.ends_with(" wallpaper") {
-        cleaned = cleaned.strip_suffix(" wallpaper").unwrap_or(&cleaned).to_string();
+        cleaned = cleaned
+            .strip_suffix(" wallpaper")
+            .unwrap_or(&cleaned)
+            .to_string();
     } else if cleaned.ends_with(" walls") {
-        cleaned = cleaned.strip_suffix(" walls").unwrap_or(&cleaned).to_string();
+        cleaned = cleaned
+            .strip_suffix(" walls")
+            .unwrap_or(&cleaned)
+            .to_string();
     } else if cleaned.ends_with(" wall") {
-        cleaned = cleaned.strip_suffix(" wall").unwrap_or(&cleaned).to_string();
+        cleaned = cleaned
+            .strip_suffix(" wall")
+            .unwrap_or(&cleaned)
+            .to_string();
     }
-    
+
     cleaned.trim().to_string()
 }
 
@@ -52,24 +68,37 @@ pub async fn fetch_video(
     source: String,
     query: String,
     order: String,
+    categories: Option<String>,
+    purity: Option<String>,
 ) -> Result<VideoResult, String> {
     let app_state = state.snapshot();
     let api_key = Some(app_state.wallhaven_api_key);
     let disabled = app_state.disabled_sources;
 
     if disabled.contains(&source) {
-        return Err(format!("The wallpaper source '{}' has been disabled in settings.", source));
+        return Err(format!(
+            "The wallpaper source '{}' has been disabled in settings.",
+            source
+        ));
     }
 
     let cleaned_query = clean_search_query(&query);
 
     // For unified source, pick a random SFW provider and fetch from it
     if source == "unified" || source == "all" {
-        let mut sfw_providers = vec!["motionbgs", "alphacoders", "wallhaven", "pinterest", "wallpaperwaves"];
+        let mut sfw_providers = vec![
+            "motionbgs",
+            "alphacoders",
+            "wallhaven",
+            "pinterest",
+            "wallpaperwaves",
+        ];
         sfw_providers.retain(|p| !disabled.contains(&p.to_string()));
 
         if sfw_providers.is_empty() {
-            return Err("All unified live wallpaper sources have been disabled in settings.".to_string());
+            return Err(
+                "All unified live wallpaper sources have been disabled in settings.".to_string(),
+            );
         }
 
         let chosen = {
@@ -78,7 +107,18 @@ pub async fn fetch_video(
             *sfw_providers.choose(&mut rng).unwrap_or(&"motionbgs")
         };
         let provider = providers::get_provider(chosen)?;
-        let config = SearchConfig { query: cleaned_query, order, count: 40, page: 1, api_key, resolutions: None, ratios: None, colors: None };
+        let config = SearchConfig {
+            query: cleaned_query,
+            order,
+            count: 40,
+            page: 1,
+            api_key,
+            resolutions: None,
+            ratios: None,
+            colors: None,
+            categories: categories.clone(),
+            purity: purity.clone(),
+        };
         return provider.fetch_video(&config).await;
     }
     let provider = providers::get_provider(&source)?;
@@ -91,6 +131,8 @@ pub async fn fetch_video(
         resolutions: None,
         ratios: None,
         colors: None,
+        categories,
+        purity,
     };
     provider.fetch_video(&config).await
 }
@@ -105,22 +147,40 @@ pub async fn fetch_videos_list(
     resolutions: Option<String>,
     ratios: Option<String>,
     colors: Option<String>,
+    categories: Option<String>,
+    purity: Option<String>,
 ) -> Result<Vec<VideoResult>, String> {
     let app_state = state.snapshot();
     let api_key = Some(app_state.wallhaven_api_key);
     let disabled = app_state.disabled_sources;
 
-    log::info!("[fetch_videos_list] source={}, query={}, res={:?}, rat={:?}, col={:?}", source, query, resolutions, ratios, colors);
+    log::info!(
+        "[fetch_videos_list] source={}, query={}, res={:?}, rat={:?}, col={:?}",
+        source,
+        query,
+        resolutions,
+        ratios,
+        colors
+    );
 
     if disabled.contains(&source) {
-        return Err(format!("The wallpaper source '{}' has been disabled in settings.", source));
+        return Err(format!(
+            "The wallpaper source '{}' has been disabled in settings.",
+            source
+        ));
     }
 
     let cleaned_query = clean_search_query(&query);
 
     if source == "all" || source == "unified" {
         // Fan out to all SFW providers concurrently and merge results
-        let mut providers_list = vec!["motionbgs", "alphacoders", "wallhaven", "pinterest", "wallpaperwaves"];
+        let mut providers_list = vec![
+            "motionbgs",
+            "alphacoders",
+            "wallhaven",
+            "pinterest",
+            "wallpaperwaves",
+        ];
         providers_list.retain(|p| !disabled.contains(&p.to_string()));
 
         if providers_list.is_empty() {
@@ -128,7 +188,9 @@ pub async fn fetch_videos_list(
         }
 
         let mut fetch_page = page;
-        if fetch_page <= 1 && (cleaned_query.is_empty() || cleaned_query == "all" || cleaned_query == "wallpaper") {
+        if fetch_page <= 1
+            && (cleaned_query.is_empty() || cleaned_query == "all" || cleaned_query == "wallpaper")
+        {
             use rand::Rng;
             fetch_page = rand::thread_rng().gen_range(1..=15);
         }
@@ -142,10 +204,12 @@ pub async fn fetch_videos_list(
             resolutions: resolutions.clone(),
             ratios: ratios.clone(),
             colors: colors.clone(),
+            categories: categories.clone(),
+            purity: purity.clone(),
         };
 
         let mut all_results = Vec::new();
-        
+
         // Concurrent fetching for better performance
         let mut tasks = Vec::new();
         for p_name in providers_list {
@@ -153,7 +217,10 @@ pub async fn fetch_videos_list(
             if p_name != "wallhaven" {
                 if let Some(ref hex) = config.colors {
                     if let Some(name) = hex_to_color_name(hex) {
-                        if config_clone.query.is_empty() || config_clone.query == "all" || config_clone.query == "wallpaper" {
+                        if config_clone.query.is_empty()
+                            || config_clone.query == "all"
+                            || config_clone.query == "wallpaper"
+                        {
                             config_clone.query = name.to_string();
                         } else {
                             config_clone.query = format!("{} {}", config_clone.query, name);
@@ -176,7 +243,7 @@ pub async fn fetch_videos_list(
                 all_results.extend(res);
             }
         }
-        
+
         // Apply post-fetch filters to the unified results
         providers::apply_post_fetch_filters(&mut all_results, &config);
 
@@ -184,18 +251,20 @@ pub async fn fetch_videos_list(
         use rand::seq::SliceRandom;
         let mut rng = rand::thread_rng();
         all_results.shuffle(&mut rng);
-        
+
         return Ok(all_results);
     }
 
     let provider = providers::get_provider(&source)?;
-    
+
     let mut fetch_page = page;
-    if fetch_page <= 1 && (cleaned_query.is_empty() || cleaned_query == "all" || cleaned_query == "wallpaper") {
+    if fetch_page <= 1
+        && (cleaned_query.is_empty() || cleaned_query == "all" || cleaned_query == "wallpaper")
+    {
         use rand::Rng;
         fetch_page = rand::thread_rng().gen_range(1..=15);
     }
-    
+
     let mut config = SearchConfig {
         query: cleaned_query,
         order,
@@ -205,6 +274,8 @@ pub async fn fetch_videos_list(
         resolutions,
         ratios,
         colors,
+        categories,
+        purity,
     };
 
     if source != "wallhaven" {
@@ -220,7 +291,7 @@ pub async fn fetch_videos_list(
     }
 
     let mut results = provider.fetch_videos_list(&config).await?;
-    
+
     // Apply post-fetch filters for all providers
     providers::apply_post_fetch_filters(&mut results, &config);
 
@@ -287,7 +358,14 @@ pub async fn download_youtube_clip(
     let dl_url = url.clone();
     let dl_id = meta.id.clone();
     let local_path = tokio::task::spawn_blocking(move || {
-        crate::wallpaper::providers::youtube::download_clip(&dl_url, &dl_id, start_time, end_time, max_height, Some(&window))
+        crate::wallpaper::providers::youtube::download_clip(
+            &dl_url,
+            &dl_id,
+            start_time,
+            end_time,
+            max_height,
+            Some(&window),
+        )
     })
     .await
     .map_err(|e| format!("Task join error: {}", e))??;
@@ -318,25 +396,34 @@ pub async fn save_thumbnail(
     local_path: String,
     base64_data: String,
 ) -> Result<crate::wallpaper::state::WallpaperState, String> {
-    use base64::{Engine as _, engine::general_purpose};
-    
+    use base64::{engine::general_purpose, Engine as _};
+
     let path = std::path::PathBuf::from(&local_path);
-    let id = path.file_stem().and_then(|s| s.to_str()).unwrap_or("unknown");
-    
+    let id = path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("unknown");
+
     let base_dir = crate::wallpaper::desktop::app_data_dir().join("thumbnails");
     let _ = std::fs::create_dir_all(&base_dir);
     let thumb_path = base_dir.join(format!("{}.jpg", id));
-    
+
     let clean_base64 = if let Some(pos) = base64_data.find(",") {
-        &base64_data[pos+1..]
+        &base64_data[pos + 1..]
     } else {
         &base64_data
     };
 
-    let bytes = general_purpose::STANDARD.decode(clean_base64).map_err(|e| e.to_string())?;
+    let bytes = general_purpose::STANDARD
+        .decode(clean_base64)
+        .map_err(|e| e.to_string())?;
     std::fs::write(&thumb_path, bytes).map_err(|e| e.to_string())?;
 
-    crate::wallpaper::state::set_thumbnail(&state, local_path, thumb_path.to_string_lossy().to_string())
+    crate::wallpaper::state::set_thumbnail(
+        &state,
+        local_path,
+        thumb_path.to_string_lossy().to_string(),
+    )
 }
 
 #[tauri::command]
@@ -351,7 +438,8 @@ pub async fn install_ytdlp(window: Window) -> Result<(), String> {
 
     // 1. Get destination path
     let bin_dir = crate::wallpaper::desktop::app_data_dir().join("bin");
-    std::fs::create_dir_all(&bin_dir).map_err(|e| format!("Failed to create bin directory: {}", e))?;
+    std::fs::create_dir_all(&bin_dir)
+        .map_err(|e| format!("Failed to create bin directory: {}", e))?;
     let dest_path = bin_dir.join("yt-dlp.exe");
 
     // 2. Perform download in blocking task so we don't block the async executor thread
@@ -362,7 +450,8 @@ pub async fn install_ytdlp(window: Window) -> Result<(), String> {
             .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
 
         let url = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe";
-        let mut response = client.get(url)
+        let mut response = client
+            .get(url)
             .send()
             .map_err(|e| format!("Failed to send request: {}", e))?;
 
@@ -378,7 +467,8 @@ pub async fn install_ytdlp(window: Window) -> Result<(), String> {
         let mut downloaded: u64 = 0;
 
         loop {
-            let bytes_read = response.read(&mut buffer)
+            let bytes_read = response
+                .read(&mut buffer)
                 .map_err(|e| format!("Error reading download stream: {}", e))?;
 
             if bytes_read == 0 {
@@ -396,7 +486,8 @@ pub async fn install_ytdlp(window: Window) -> Result<(), String> {
             }
         }
 
-        file.flush().map_err(|e| format!("Failed to flush file: {}", e))?;
+        file.flush()
+            .map_err(|e| format!("Failed to flush file: {}", e))?;
         Ok(())
     })
     .await
@@ -421,7 +512,9 @@ pub async fn install_ffmpeg() -> Result<(), String> {
         ]);
         cmd.creation_flags(0x08000000);
 
-        let status = cmd.status().map_err(|e| format!("Failed to spawn winget process: {}", e))?;
+        let status = cmd
+            .status()
+            .map_err(|e| format!("Failed to spawn winget process: {}", e))?;
         if status.success() {
             Ok(())
         } else {
@@ -438,9 +531,15 @@ pub async fn install_ffmpeg() -> Result<(), String> {
 pub async fn fetch_wallhaven_collections(username: String) -> Result<String, String> {
     let url = format!("https://wallhaven.cc/api/v1/collections/{}", username);
     let client = reqwest::Client::new();
-    let resp = client.get(&url).send().await.map_err(|e| format!("Network error: {}", e))?;
+    let resp = client
+        .get(&url)
+        .send()
+        .await
+        .map_err(|e| format!("Network error: {}", e))?;
     if !resp.status().is_success() {
         return Err(format!("Wallhaven returned status {}", resp.status()));
     }
-    resp.text().await.map_err(|e| format!("Failed to parse response: {}", e))
+    resp.text()
+        .await
+        .map_err(|e| format!("Failed to parse response: {}", e))
 }

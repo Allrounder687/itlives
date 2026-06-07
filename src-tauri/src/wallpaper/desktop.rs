@@ -1,12 +1,12 @@
 //! Desktop wallpaper integration using Win32 API.
 //! Embeds video behind desktop icons by finding the WorkerW window.
 
-use std::path::PathBuf;
-use std::process::Command;
+use lazy_static::lazy_static;
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
+use std::path::PathBuf;
+use std::process::Command;
 use std::sync::Mutex;
-use lazy_static::lazy_static;
 
 use std::collections::HashMap;
 
@@ -88,8 +88,13 @@ pub mod win32 {
 
     unsafe extern "system" fn enum_cb(hwnd: HWND, _lparam: LPARAM) -> BOOL {
         let shelldll: Vec<u16> = "SHELLDLL_DefView\0".encode_utf16().collect();
-        let shell = FindWindowExW(hwnd, HWND(0 as _), PCWSTR(shelldll.as_ptr()), PCWSTR::null());
-        
+        let shell = FindWindowExW(
+            hwnd,
+            HWND(0 as _),
+            PCWSTR(shelldll.as_ptr()),
+            PCWSTR::null(),
+        );
+
         if shell.is_ok() && !shell.unwrap().is_invalid() {
             // This is the window that actually holds the icons!
             // The old PowerShell script embedded directly into this window, and shoved mpv behind SHELLDLL_DefView.
@@ -124,7 +129,7 @@ pub mod win32 {
             let mut class_name = [0u16; 256];
             let len = windows::Win32::UI::WindowsAndMessaging::GetClassNameW(hwnd, &mut class_name);
             let c_name = String::from_utf16_lossy(&class_name[..len as usize]);
-            
+
             if c_name == "mpv" {
                 FOUND_HWND = hwnd;
                 return BOOL(0); // Stop enumeration, we found the actual mpv player window!
@@ -180,7 +185,10 @@ pub fn set_video(
             }
         }
     }
-    let mut m_key = target_m.as_ref().and_then(|m| m.name().cloned()).unwrap_or_else(|| "default".to_string());
+    let mut m_key = target_m
+        .as_ref()
+        .and_then(|m| m.name().cloned())
+        .unwrap_or_else(|| "default".to_string());
     if let Some(ref m_name) = monitor_name {
         if m_name == "SPAN_ALL" {
             m_key = "SPAN_ALL".to_string();
@@ -189,7 +197,10 @@ pub fn set_video(
     if let Ok(last) = LAST_CONFIG.lock() {
         if let Some(config) = last.get(&m_key) {
             if config == &new_config {
-                log::info!("Skip re-apply: Configuration identical for monitor {}", m_key);
+                log::info!(
+                    "Skip re-apply: Configuration identical for monitor {}",
+                    m_key
+                );
                 return Ok("Skipped redundant re-apply".to_string());
             }
         }
@@ -208,26 +219,29 @@ pub fn set_video(
     {
         let mpv_path = find_mpv().ok_or("mpv not found. Install: winget install shinchiro.mpv")?;
         let workerw = win32::get_desktop_workerw().unwrap_or(0);
-        
-    let mut width = target_m.as_ref().map(|m| m.size().width).unwrap_or(1920);
-    let mut height = target_m.as_ref().map(|m| m.size().height).unwrap_or(1080);
-    let mut x = target_m.as_ref().map(|m| m.position().x).unwrap_or(0);
-    let mut y = target_m.as_ref().map(|m| m.position().y).unwrap_or(0);
 
-    // Close any web wallpaper for this monitor
-    let window_label = format!("web_wallpaper_{}", m_key.replace(" ", "_").replace("\\", "_"));
-    if let Some(window) = app.get_webview_window(&window_label) {
-        let _ = window.close();
-    }
-    
-    // If SPAN_ALL, close all web wallpapers
-    if m_key == "SPAN_ALL" {
-        for (label, window) in app.webview_windows() {
-            if label.starts_with("web_wallpaper_") {
-                let _ = window.close();
+        let mut width = target_m.as_ref().map(|m| m.size().width).unwrap_or(1920);
+        let mut height = target_m.as_ref().map(|m| m.size().height).unwrap_or(1080);
+        let mut x = target_m.as_ref().map(|m| m.position().x).unwrap_or(0);
+        let mut y = target_m.as_ref().map(|m| m.position().y).unwrap_or(0);
+
+        // Close any web wallpaper for this monitor
+        let window_label = format!(
+            "web_wallpaper_{}",
+            m_key.replace(" ", "_").replace("\\", "_")
+        );
+        if let Some(window) = app.get_webview_window(&window_label) {
+            let _ = window.close();
+        }
+
+        // If SPAN_ALL, close all web wallpapers
+        if m_key == "SPAN_ALL" {
+            for (label, window) in app.webview_windows() {
+                if label.starts_with("web_wallpaper_") {
+                    let _ = window.close();
+                }
             }
         }
-    }
 
         if m_key == "SPAN_ALL" {
             let mut min_x = i32::MAX;
@@ -253,11 +267,17 @@ pub fn set_video(
         }
 
         let target_width = ((width as f64 * scale_percent as f64 / 100.0) / 2.0).round() as u32 * 2;
-        let target_height = ((height as f64 * scale_percent as f64 / 100.0) / 2.0).round() as u32 * 2;
+        let target_height =
+            ((height as f64 * scale_percent as f64 / 100.0) / 2.0).round() as u32 * 2;
         let target_width = target_width.max(2);
         let target_height = target_height.max(2);
 
-        let filter_chain = get_filter_chain(target_width as u64, target_height as u64, video_filter, blur);
+        let filter_chain = get_filter_chain(
+            target_width as u64,
+            target_height as u64,
+            video_filter,
+            blur,
+        );
         let mute = if volume_percent <= 0 { "yes" } else { "no" };
         let pause_val = if paused { "yes" } else { "no" };
 
@@ -317,50 +337,63 @@ pub fn set_video(
         cmd.args(&args);
         #[cfg(windows)]
         cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
-        
-        let child = cmd.spawn().map_err(|e| format!("Failed to spawn mpv: {}", e))?;
+
+        let child = cmd
+            .spawn()
+            .map_err(|e| format!("Failed to spawn mpv: {}", e))?;
         let pid = child.id();
-        
+
         // Save PID for this monitor
         save_mpv_pid(&m_key, pid);
 
         if workerw != 0 {
             let m_key_thread = m_key.clone();
             std::thread::spawn(move || {
-                for _ in 0..30 { // Try for up to 15 seconds (30 * 500ms)
+                for _ in 0..30 {
+                    // Try for up to 15 seconds (30 * 500ms)
                     std::thread::sleep(std::time::Duration::from_millis(500));
                     if let Some(hwnd) = win32::find_hwnd_by_pid(pid) {
                         unsafe {
                             let _ = windows::Win32::UI::WindowsAndMessaging::SetParent(
                                 windows::Win32::Foundation::HWND(hwnd as _),
-                                windows::Win32::Foundation::HWND(workerw as _)
+                                windows::Win32::Foundation::HWND(workerw as _),
                             );
-                            
-                            let shelldll: Vec<u16> = "SHELLDLL_DefView\0".encode_utf16().collect();
-                            let shell_hwnd = windows::Win32::UI::WindowsAndMessaging::FindWindowExW(
-                                windows::Win32::Foundation::HWND(workerw as _),
-                                windows::Win32::Foundation::HWND(0 as _),
-                                windows::core::PCWSTR(shelldll.as_ptr()),
-                                windows::core::PCWSTR::null()
-                            ).unwrap_or(windows::Win32::Foundation::HWND(1 as _));
 
-                            let chrome_class: Vec<u16> = "Chrome_WidgetWin_1\0".encode_utf16().collect();
-                            let effects_hwnd = windows::Win32::UI::WindowsAndMessaging::FindWindowExW(
-                                windows::Win32::Foundation::HWND(workerw as _),
-                                windows::Win32::Foundation::HWND(0 as _),
-                                windows::core::PCWSTR(chrome_class.as_ptr()),
-                                windows::core::PCWSTR::null()
-                            ).unwrap_or(windows::Win32::Foundation::HWND(0 as _));
+                            let shelldll: Vec<u16> = "SHELLDLL_DefView\0".encode_utf16().collect();
+                            let shell_hwnd =
+                                windows::Win32::UI::WindowsAndMessaging::FindWindowExW(
+                                    windows::Win32::Foundation::HWND(workerw as _),
+                                    windows::Win32::Foundation::HWND(0 as _),
+                                    windows::core::PCWSTR(shelldll.as_ptr()),
+                                    windows::core::PCWSTR::null(),
+                                )
+                                .unwrap_or(windows::Win32::Foundation::HWND(1 as _));
+
+                            let chrome_class: Vec<u16> =
+                                "Chrome_WidgetWin_1\0".encode_utf16().collect();
+                            let effects_hwnd =
+                                windows::Win32::UI::WindowsAndMessaging::FindWindowExW(
+                                    windows::Win32::Foundation::HWND(workerw as _),
+                                    windows::Win32::Foundation::HWND(0 as _),
+                                    windows::core::PCWSTR(chrome_class.as_ptr()),
+                                    windows::core::PCWSTR::null(),
+                                )
+                                .unwrap_or(windows::Win32::Foundation::HWND(0 as _));
 
                             // To maintain the sandwich: if effects overlay is active, place video strictly behind it.
                             // Otherwise, place video strictly behind the desktop icons.
-                            let mut target_z = if shell_hwnd != windows::Win32::Foundation::HWND(0 as _) && shell_hwnd != windows::Win32::Foundation::HWND(1 as _) {
+                            let mut target_z = if shell_hwnd
+                                != windows::Win32::Foundation::HWND(0 as _)
+                                && shell_hwnd != windows::Win32::Foundation::HWND(1 as _)
+                            {
                                 shell_hwnd
                             } else {
                                 windows::Win32::Foundation::HWND(1 as _)
                             };
 
-                            if effects_hwnd != windows::Win32::Foundation::HWND(0 as _) && effects_hwnd != windows::Win32::Foundation::HWND(1 as _) {
+                            if effects_hwnd != windows::Win32::Foundation::HWND(0 as _)
+                                && effects_hwnd != windows::Win32::Foundation::HWND(1 as _)
+                            {
                                 // If effects overlay is found, we use it as the insertion point so mpv slides underneath it
                                 target_z = effects_hwnd;
                             }
@@ -368,18 +401,27 @@ pub fn set_video(
                             let _ = windows::Win32::UI::WindowsAndMessaging::SetWindowPos(
                                 windows::Win32::Foundation::HWND(hwnd as _),
                                 target_z,
-                                x, y, width as i32, height as i32,
-                                windows::Win32::UI::WindowsAndMessaging::SWP_SHOWWINDOW
+                                x,
+                                y,
+                                width as i32,
+                                height as i32,
+                                windows::Win32::UI::WindowsAndMessaging::SWP_SHOWWINDOW,
                             );
 
                             let _ = windows::Win32::UI::WindowsAndMessaging::SetWindowPos(
                                 windows::Win32::Foundation::HWND(hwnd as _),
                                 target_z,
-                                x, y, width as i32, height as i32,
-                                windows::Win32::UI::WindowsAndMessaging::SWP_SHOWWINDOW
+                                x,
+                                y,
+                                width as i32,
+                                height as i32,
+                                windows::Win32::UI::WindowsAndMessaging::SWP_SHOWWINDOW,
                             );
                         }
-                        log::info!("Successfully reparented mpv window for monitor {}", m_key_thread);
+                        log::info!(
+                            "Successfully reparented mpv window for monitor {}",
+                            m_key_thread
+                        );
                         break;
                     }
                 }
@@ -407,8 +449,11 @@ pub fn set_web_wallpaper(
     use tauri::Manager;
     let monitors = app.available_monitors().unwrap_or_default();
     let mut target_m = monitors.first().cloned();
-    let mut m_key = target_m.as_ref().and_then(|m| m.name().cloned()).unwrap_or_else(|| "default".to_string());
-    
+    let mut m_key = target_m
+        .as_ref()
+        .and_then(|m| m.name().cloned())
+        .unwrap_or_else(|| "default".to_string());
+
     if let Some(ref m_name) = monitor_name {
         if m_name == "SPAN_ALL" {
             m_key = "SPAN_ALL".to_string();
@@ -458,10 +503,18 @@ pub fn set_web_wallpaper(
         }
     }
 
-    let window_label = format!("web_wallpaper_{}", m_key.replace(" ", "_").replace("\\", "_"));
+    let window_label = format!(
+        "web_wallpaper_{}",
+        m_key.replace(" ", "_").replace("\\", "_")
+    );
 
     if let Some(window) = app.get_webview_window(&window_label) {
-        window.eval(&format!("window.location.replace('{}');", url.replace("'", "\\'"))).map_err(|e| e.to_string())?;
+        window
+            .eval(&format!(
+                "window.location.replace('{}');",
+                url.replace("'", "\\'")
+            ))
+            .map_err(|e| e.to_string())?;
         if let Ok(mut current) = CURRENT_VIDEO.lock() {
             current.insert(m_key.clone(), url.to_string());
         }
@@ -478,12 +531,16 @@ pub fn set_web_wallpaper(
         tauri::Url::from_file_path(path).unwrap()
     };
 
-    let window = tauri::WebviewWindowBuilder::new(&app, &window_label, tauri::WebviewUrl::External(parsed_url))
-        .decorations(false)
-        .transparent(true)
-        .skip_taskbar(true)
-        .build()
-        .map_err(|e| format!("Failed to build webview: {}", e))?;
+    let window = tauri::WebviewWindowBuilder::new(
+        &app,
+        &window_label,
+        tauri::WebviewUrl::External(parsed_url),
+    )
+    .decorations(false)
+    .transparent(true)
+    .skip_taskbar(true)
+    .build()
+    .map_err(|e| format!("Failed to build webview: {}", e))?;
 
     #[cfg(windows)]
     {
@@ -492,18 +549,40 @@ pub fn set_web_wallpaper(
         unsafe {
             let _ = windows::Win32::UI::WindowsAndMessaging::SetParent(
                 windows::Win32::Foundation::HWND(hwnd.0 as _),
-                windows::Win32::Foundation::HWND(workerw as _)
+                windows::Win32::Foundation::HWND(workerw as _),
             );
-            
+
+            // Strip window decorations that might reappear upon reparenting
+            let old_style = windows::Win32::UI::WindowsAndMessaging::GetWindowLongW(
+                windows::Win32::Foundation::HWND(hwnd.0 as _),
+                windows::Win32::UI::WindowsAndMessaging::GWL_STYLE,
+            );
+            let mut new_style = old_style as u32;
+            new_style &= !windows::Win32::UI::WindowsAndMessaging::WS_POPUP.0;
+            new_style &= !windows::Win32::UI::WindowsAndMessaging::WS_CAPTION.0;
+            new_style &= !windows::Win32::UI::WindowsAndMessaging::WS_THICKFRAME.0;
+            new_style &= !windows::Win32::UI::WindowsAndMessaging::WS_MINIMIZEBOX.0;
+            new_style &= !windows::Win32::UI::WindowsAndMessaging::WS_MAXIMIZEBOX.0;
+            new_style &= !windows::Win32::UI::WindowsAndMessaging::WS_SYSMENU.0;
+            new_style |= windows::Win32::UI::WindowsAndMessaging::WS_CHILD.0;
+            let _ = windows::Win32::UI::WindowsAndMessaging::SetWindowLongW(
+                windows::Win32::Foundation::HWND(hwnd.0 as _),
+                windows::Win32::UI::WindowsAndMessaging::GWL_STYLE,
+                new_style as i32,
+            );
+
             let shelldll: Vec<u16> = "SHELLDLL_DefView\0".encode_utf16().collect();
             let shell_hwnd = windows::Win32::UI::WindowsAndMessaging::FindWindowExW(
                 windows::Win32::Foundation::HWND(workerw as _),
                 windows::Win32::Foundation::HWND(0 as _),
                 windows::core::PCWSTR(shelldll.as_ptr()),
-                windows::core::PCWSTR::null()
-            ).unwrap_or(windows::Win32::Foundation::HWND(1 as _));
+                windows::core::PCWSTR::null(),
+            )
+            .unwrap_or(windows::Win32::Foundation::HWND(1 as _));
 
-            let mut target_z = if shell_hwnd != windows::Win32::Foundation::HWND(0 as _) && shell_hwnd != windows::Win32::Foundation::HWND(1 as _) {
+            let mut target_z = if shell_hwnd != windows::Win32::Foundation::HWND(0 as _)
+                && shell_hwnd != windows::Win32::Foundation::HWND(1 as _)
+            {
                 shell_hwnd
             } else {
                 windows::Win32::Foundation::HWND(1 as _)
@@ -514,21 +593,28 @@ pub fn set_web_wallpaper(
                 windows::Win32::Foundation::HWND(workerw as _),
                 windows::Win32::Foundation::HWND(0 as _),
                 windows::core::PCWSTR(chrome_class.as_ptr()),
-                windows::core::PCWSTR::null()
-            ).unwrap_or(windows::Win32::Foundation::HWND(0 as _));
+                windows::core::PCWSTR::null(),
+            )
+            .unwrap_or(windows::Win32::Foundation::HWND(0 as _));
 
             // If we are injecting a webview (effects overlay itself uses webview),
             // we should be careful not to place it behind itself. But this is mainly for web-wallpapers.
             // If effects_hwnd exists and is NOT the webview we are currently injecting (hwnd), place behind it.
-            if effects_hwnd != windows::Win32::Foundation::HWND(0 as _) && effects_hwnd != windows::Win32::Foundation::HWND(1 as _) && effects_hwnd.0 != hwnd.0 {
+            if effects_hwnd != windows::Win32::Foundation::HWND(0 as _)
+                && effects_hwnd != windows::Win32::Foundation::HWND(1 as _)
+                && effects_hwnd.0 != hwnd.0
+            {
                 target_z = effects_hwnd;
             }
 
             let _ = windows::Win32::UI::WindowsAndMessaging::SetWindowPos(
                 windows::Win32::Foundation::HWND(hwnd.0 as _),
                 target_z,
-                x, y, width as i32, height as i32,
-                windows::Win32::UI::WindowsAndMessaging::SWP_SHOWWINDOW
+                x,
+                y,
+                width as i32,
+                height as i32,
+                windows::Win32::UI::WindowsAndMessaging::SWP_SHOWWINDOW,
             );
         }
     }
@@ -553,8 +639,12 @@ pub fn stop_video_for_monitor(m_key: &str) {
         }
     }
     let _ = std::fs::remove_file(&pid_file);
-    if let Ok(mut m) = CURRENT_VIDEO.lock() { m.remove(m_key); }
-    if let Ok(mut m) = LAST_CONFIG.lock() { m.remove(m_key); }
+    if let Ok(mut m) = CURRENT_VIDEO.lock() {
+        m.remove(m_key);
+    }
+    if let Ok(mut m) = LAST_CONFIG.lock() {
+        m.remove(m_key);
+    }
 }
 
 /// Stops all current video wallpapers (all monitors).
@@ -574,8 +664,12 @@ pub fn stop_video() -> Result<String, String> {
             let _ = std::fs::remove_file(entry.path());
         }
     }
-    if let Ok(mut m) = CURRENT_VIDEO.lock() { m.clear(); }
-    if let Ok(mut m) = LAST_CONFIG.lock() { m.clear(); }
+    if let Ok(mut m) = CURRENT_VIDEO.lock() {
+        m.clear();
+    }
+    if let Ok(mut m) = LAST_CONFIG.lock() {
+        m.clear();
+    }
     Ok("Wallpaper stopped".to_string())
 }
 
@@ -590,7 +684,9 @@ pub fn get_current() -> Option<String> {
 pub fn set_speed(speed: f64) -> Result<(), String> {
     let speed = speed.clamp(0.1, 4.0);
     if let Ok(mut last) = LAST_CONFIG.lock() {
-        if last.is_empty() { return Ok(()); }
+        if last.is_empty() {
+            return Ok(());
+        }
         for config in last.values_mut() {
             config.speed = speed;
         }
@@ -626,17 +722,22 @@ pub fn set_volume(volume_percent: u64) -> Result<(), String> {
 /// Helper to generate the combined filter chain (v2)
 fn get_filter_chain(target_width: u64, target_height: u64, preset: &str, blur: u32) -> String {
     let mut filters = Vec::new();
-    
+
     // 1. Initial Scale
     filters.push(format!("scale={}:{}", target_width, target_height));
 
     // 2. Preset Filters
     match preset {
         "grayscale" => filters.push("format=gray".to_string()),
-        "vivid" => filters.push("eq=contrast=1.12:brightness=0:saturation=1.35:gamma=1.0".to_string()),
-        "soft" => filters.push("eq=contrast=0.94:brightness=0.04:saturation=0.88:gamma=1.0".to_string()),
+        "vivid" => {
+            filters.push("eq=contrast=1.12:brightness=0:saturation=1.35:gamma=1.0".to_string())
+        }
+        "soft" => {
+            filters.push("eq=contrast=0.94:brightness=0.04:saturation=0.88:gamma=1.0".to_string())
+        }
         "noir" => filters.push("format=gray,eq=contrast=1.15:brightness=-0.04".to_string()),
-        "retro" => filters.push("hue=h=8:s=0.92,eq=contrast=1.05:brightness=0.03:saturation=1.18".to_string()),
+        "retro" => filters
+            .push("hue=h=8:s=0.92,eq=contrast=1.05:brightness=0.03:saturation=1.18".to_string()),
         _ => {}
     }
 
@@ -693,10 +794,16 @@ pub fn cleanup_cache(keep: usize) -> Result<usize, String> {
     let mut entries: Vec<_> = std::fs::read_dir(&cache_dir)
         .map_err(|e| e.to_string())?
         .filter_map(|e| e.ok())
-        .filter(|e| e.path().extension().is_some_and(|ext| {
-            let ext_str = ext.to_string_lossy().to_lowercase();
-            ext_str == "mp4" || ext_str == "jpg" || ext_str == "jpeg" || ext_str == "png" || ext_str == "webp"
-        }))
+        .filter(|e| {
+            e.path().extension().is_some_and(|ext| {
+                let ext_str = ext.to_string_lossy().to_lowercase();
+                ext_str == "mp4"
+                    || ext_str == "jpg"
+                    || ext_str == "jpeg"
+                    || ext_str == "png"
+                    || ext_str == "webp"
+            })
+        })
         .collect();
 
     entries.sort_by_key(|e| {
@@ -733,7 +840,7 @@ fn process_static_image_if_needed(path: &str) -> Result<String, String> {
         // 1. Get Screen Resolution
         let screen_w = unsafe { GetSystemMetrics(SM_CXSCREEN) };
         let screen_h = unsafe { GetSystemMetrics(SM_CYSCREEN) };
-        
+
         let (screen_w, screen_h) = if screen_w <= 0 || screen_h <= 0 {
             log::warn!("Invalid screen metrics detected. Defaulting to 1920x1080.");
             (1920, 1080)
@@ -742,9 +849,9 @@ fn process_static_image_if_needed(path: &str) -> Result<String, String> {
         };
 
         // 2. Open Image and Check Aspect Ratio
-        let img = image::open(img_path)
-            .map_err(|e| format!("Failed to open static image: {}", e))?;
-        
+        let img =
+            image::open(img_path).map_err(|e| format!("Failed to open static image: {}", e))?;
+
         let img_w = img.width();
         let img_h = img.height();
 
@@ -754,12 +861,16 @@ fn process_static_image_if_needed(path: &str) -> Result<String, String> {
 
         let aspect_img = img_w as f32 / img_h as f32;
         let aspect_screen = screen_w as f32 / screen_h as f32;
-        
+
         let diff = (aspect_img - aspect_screen).abs();
-        
+
         // If aspect ratio matches within a tiny threshold, no composite is needed.
         if diff <= 0.05 {
-            log::info!("Image matches screen aspect ratio ({} vs {}). No composite needed.", aspect_img, aspect_screen);
+            log::info!(
+                "Image matches screen aspect ratio ({} vs {}). No composite needed.",
+                aspect_img,
+                aspect_screen
+            );
             return Ok(resolved_path);
         }
 
@@ -777,32 +888,40 @@ fn process_static_image_if_needed(path: &str) -> Result<String, String> {
         let low_res_w = 240u32;
         let low_res_h = (240 * screen_h / screen_w).max(8);
 
-        let scale_cover_low = (low_res_w as f32 / img_w as f32).max(low_res_h as f32 / img_h as f32);
+        let scale_cover_low =
+            (low_res_w as f32 / img_w as f32).max(low_res_h as f32 / img_h as f32);
         let cover_low_w = ((img_w as f32 * scale_cover_low).round() as u32).max(low_res_w);
         let cover_low_h = ((img_h as f32 * scale_cover_low).round() as u32).max(low_res_h);
 
-        let cover_low_img = img.resize(cover_low_w, cover_low_h, image::imageops::FilterType::Triangle);
+        let cover_low_img = img.resize(
+            cover_low_w,
+            cover_low_h,
+            image::imageops::FilterType::Triangle,
+        );
         let crop_low_x = (cover_low_w - low_res_w) / 2;
         let crop_low_y = (cover_low_h - low_res_h) / 2;
-        let cover_low_cropped = cover_low_img.crop_imm(crop_low_x, crop_low_y, low_res_w, low_res_h);
+        let cover_low_cropped =
+            cover_low_img.crop_imm(crop_low_x, crop_low_y, low_res_w, low_res_h);
 
         // Blur the low-res cover background
         let blurred_low_res = image::imageops::blur(&cover_low_cropped.to_rgba8(), 4.0);
         let blurred_bg_img = image::DynamicImage::ImageRgba8(blurred_low_res);
-        let mut base_img = blurred_bg_img.resize_exact(screen_w, screen_h, image::imageops::FilterType::Triangle).to_rgba8();
+        let mut base_img = blurred_bg_img
+            .resize_exact(screen_w, screen_h, image::imageops::FilterType::Triangle)
+            .to_rgba8();
 
         let scale_contain = scale_x.min(scale_y);
         // Clamp contain dimensions to be at most screen_w/screen_h to prevent subtraction underflow
         let contain_w = ((img_w as f32 * scale_contain).round() as u32).min(screen_w);
         let contain_h = ((img_h as f32 * scale_contain).round() as u32).min(screen_h);
-        
+
         // Use Triangle filter (fast and smooth linear scaling) instead of the extremely heavy Lanczos3
         let contain_img = img.resize(contain_w, contain_h, image::imageops::FilterType::Triangle);
         let contain_rgba = contain_img.to_rgba8();
 
         let overlay_x = ((screen_w - contain_w) / 2) as i64;
         let overlay_y = ((screen_h - contain_h) / 2) as i64;
-        
+
         image::imageops::overlay(&mut base_img, &contain_rgba, overlay_x, overlay_y);
 
         // 4. Save the composite image in cache directory
@@ -811,10 +930,14 @@ fn process_static_image_if_needed(path: &str) -> Result<String, String> {
         let file_name = img_path.file_stem().unwrap_or_default().to_string_lossy();
         let composite_path = cache_dir.join(format!("{}_composite.png", file_name));
 
-        base_img.save(&composite_path)
+        base_img
+            .save(&composite_path)
             .map_err(|e| format!("Failed to save composite wallpaper image: {}", e))?;
 
-        log::info!("Composite wallpaper successfully written to: {:?}", composite_path);
+        log::info!(
+            "Composite wallpaper successfully written to: {:?}",
+            composite_path
+        );
         Ok(composite_path.to_string_lossy().into_owned())
     }
     #[cfg(not(windows))]
@@ -838,7 +961,10 @@ pub fn set_static_image(path: &str) -> Result<String, String> {
     let final_image_path = match process_static_image_if_needed(&resolved_path) {
         Ok(composite_path) => composite_path,
         Err(e) => {
-            log::warn!("Failed to process image composite: {}. Falling back to original path.", e);
+            log::warn!(
+                "Failed to process image composite: {}. Falling back to original path.",
+                e
+            );
             resolved_path
         }
     };
@@ -847,11 +973,15 @@ pub fn set_static_image(path: &str) -> Result<String, String> {
     #[cfg(windows)]
     {
         use std::os::windows::ffi::OsStrExt;
-        let path_wide: Vec<u16> = final_img_path.as_os_str().encode_wide().chain(std::iter::once(0)).collect();
+        let path_wide: Vec<u16> = final_img_path
+            .as_os_str()
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect();
 
         unsafe {
             use windows::Win32::UI::WindowsAndMessaging::{
-                SystemParametersInfoW, SPI_SETDESKWALLPAPER, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS
+                SystemParametersInfoW, SPI_SETDESKWALLPAPER, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS,
             };
 
             let res = SystemParametersInfoW(
@@ -871,12 +1001,18 @@ pub fn set_static_image(path: &str) -> Result<String, String> {
         current.insert("static".to_string(), path.to_string());
     }
 
-    log::info!("Static desktop background set to image: {}", final_image_path);
+    log::info!(
+        "Static desktop background set to image: {}",
+        final_image_path
+    );
     Ok(format!("Static wallpaper set: {}", final_image_path))
 }
 
 fn mpv_pid_file_for(m_key: &str) -> PathBuf {
-    let safe_key: String = m_key.chars().map(|c| if c.is_alphanumeric() { c } else { '_' }).collect();
+    let safe_key: String = m_key
+        .chars()
+        .map(|c| if c.is_alphanumeric() { c } else { '_' })
+        .collect();
     let pid_dir = app_data_dir().join("pids");
     let _ = std::fs::create_dir_all(&pid_dir);
     pid_dir.join(format!("{}.pid", safe_key))
@@ -895,7 +1031,7 @@ fn send_ipc_command(payload: &str) -> Result<(), String> {
 
     for idx in 0..8 {
         let pipe_name = format!(r"\\.\pipe\itlives-mpv-{}", idx);
-        
+
         if let Ok(mut pipe) = OpenOptions::new().write(true).open(&pipe_name) {
             if pipe.write_all(payload.as_bytes()).is_ok() {
                 sent_any = true;

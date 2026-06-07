@@ -52,6 +52,8 @@ export interface PersistedState {
   pinterest_urls: string[];
   hidden_videos: string[];
   keep_effects_running_on_pause: boolean;
+  categories_filter: string;
+  purity_filter: string;
 }
 
 export interface WallpaperState {
@@ -98,6 +100,8 @@ export interface WallpaperState {
   resolutions: string | null;
   ratios: string | null;
   colors: string | null;
+  categoriesFilter: string;
+  purityFilter: string;
 }
 
 export function applyPersistedState(persisted: PersistedState, current: WallpaperState): WallpaperState {
@@ -133,6 +137,8 @@ export function applyPersistedState(persisted: PersistedState, current: Wallpape
     resolutions: current.resolutions ?? null,
     ratios: current.ratios ?? null,
     colors: current.colors ?? null,
+    categoriesFilter: persisted.categories_filter ?? "111",
+    purityFilter: persisted.purity_filter ?? "100",
   };
 }
 
