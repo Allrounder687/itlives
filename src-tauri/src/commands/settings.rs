@@ -81,6 +81,22 @@ pub fn set_theme(state: State<'_, AppStateStore>, theme: String) -> Result<Wallp
 }
 
 #[tauri::command]
+pub fn set_categories_filter(
+    state: State<'_, AppStateStore>,
+    categories: String,
+) -> Result<WallpaperState, String> {
+    wallpaper::state::set_categories_filter(&state, categories)
+}
+
+#[tauri::command]
+pub fn set_purity_filter(
+    state: State<'_, AppStateStore>,
+    purity: String,
+) -> Result<WallpaperState, String> {
+    wallpaper::state::set_purity_filter(&state, purity)
+}
+
+#[tauri::command]
 pub fn check_dependencies() -> Vec<String> {
     let mut missing = Vec::new();
     if wallpaper::desktop::find_mpv().is_none() {

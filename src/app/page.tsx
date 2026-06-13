@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useTransition, useMemo } from "react";
 import { useWallpaper } from "@/hooks/useWallpaper";
 import { TitleBar } from "./components/TitleBar";
 import { Sidebar, TabState } from "./components/Sidebar";
@@ -9,27 +9,44 @@ import { HeroPanel } from "./components/HeroPanel";
 import { MasterHUD } from "./components/MasterHUD";
 import { ControlBar } from "./components/ControlBar";
 import { SearchResults } from "./components/SearchResults";
-import { FloatingPreview } from "./components/FloatingPreview";
-import { UnifiedLibrary } from "./components/LibraryList";
 import { AutomationPanel } from "./components/AutomationPanel";
-import { VideoPreview } from "./components/VideoPreview";
 import { QueuePanel } from "./components/QueuePanel";
-import { YouTubePanel } from "./components/YouTubePanel";
-import { EditorWorkspace } from "./components/EditorWorkspace";
-import { WebGLEffectRenderer } from "./components/WebGLEffectRenderer";
-import { ParallaxWorkspace } from "./components/ParallaxWorkspace";
 import { ThemeSelector } from "./components/ThemeSelector";
-import { CommunityPanel } from "./components/CommunityPanel";
 import { DependencyChecker } from "./components/DependencyChecker";
 import { WallpaperSourcePanel } from "./components/WallpaperSourcePanel";
 import { DownloadProgressOverlay } from "./components/DownloadProgressOverlay";
 
+const UnifiedLibrary = dynamic(() => import("./components/LibraryList").then((m) => m.UnifiedLibrary), { ssr: false });
+const VideoPreview = dynamic(() => import("./components/VideoPreview").then((m) => m.VideoPreview), { ssr: false });
+const YouTubePanel = dynamic(() => import("./components/YouTubePanel").then((m) => m.YouTubePanel), { ssr: false });
+const EditorWorkspace = dynamic(() => import("./components/EditorWorkspace").then((m) => m.EditorWorkspace), { ssr: false });
+const WebGLEffectRenderer = dynamic(() => import("./components/WebGLEffectRenderer").then((m) => m.WebGLEffectRenderer), { ssr: false });
+const ParallaxWorkspace = dynamic(() => import("./components/ParallaxWorkspace").then((m) => m.ParallaxWorkspace), { ssr: false });
+const CommunityPanel = dynamic(() => import("./components/CommunityPanel").then((m) => m.CommunityPanel), { ssr: false });
+const FloatingPreview = dynamic(() => import("./components/FloatingPreview").then((m) => m.FloatingPreview), { ssr: false });
+
 function Home() {
   const wallpaper = useWallpaper();
   const [activeTab, setActiveTab] = useState<TabState>("discover");
+  const [renderedTab, setRenderedTab] = useState<TabState>("discover");
+  const [isPending, startTransition] = useTransition();
+
+  const handleTabChange = useCallback((tab: TabState) => {
+    setActiveTab(tab);
+    startTransition(() => {
+      setRenderedTab(tab);
+    });
+  }, []);
+
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
   const [isOverlayMode, setIsOverlayMode] = useState(false);
-  const [overlayConfig, setOverlayConfig] = useState<{ videoSrc?: string; layers?: any[] }>({});
+  const [overlayConfig, setOverlayConfig] = useState<{ 
+    videoSrc?: string; 
+    layers?: any[]; 
+    bgMode?: "cover" | "contain" | "blur-fill" | "stretch" | "triptych" | "mirror" | "tiles";
+    bgBlur?: number;
+    bgBrightness?: number;
+  }>({});
   const [isErrorDismissed, setIsErrorDismissed] = useState(false);
   const [isErrorVisible, setIsErrorVisible] = useState(false);
   
@@ -176,24 +193,29 @@ function Home() {
     activeTab
   ]);
 
-  const handleFetchAndApply = async () => {
+  const handleFetchAndApply = useCallback(async () => {
     const result = await wallpaper.fetchVideo();
     if (result) {
       await wallpaper.applyWallpaper(result);
     }
-  };
+  }, [wallpaper.fetchVideo, wallpaper.applyWallpaper]);
 
-  const favoriteIds = new Set(wallpaper.favorites.map((item) => `${item.video.id}:${item.video.local_path}`));
-  const queueIds = new Set(wallpaper.queue.map((item) => `${item.video.id}:${item.video.local_path}`));
+  const favoriteIds = useMemo(() => {
+    return new Set(wallpaper.favorites.map((item) => `${item.video.id}:${item.video.local_path}`));
+  }, [wallpaper.favorites]);
 
-  const toggleCurrentQueue = () => {
+  const queueIds = useMemo(() => {
+    return new Set(wallpaper.queue.map((item) => `${item.video.id}:${item.video.local_path}`));
+  }, [wallpaper.queue]);
+
+  const toggleCurrentQueue = useCallback(() => {
     if (!wallpaper.currentVideo) return;
     if (wallpaper.isQueued(wallpaper.currentVideo)) {
       void wallpaper.removeFromQueue(wallpaper.currentVideo);
     } else {
       void wallpaper.addToQueue(wallpaper.currentVideo);
     }
-  };
+  }, [wallpaper.currentVideo, wallpaper.isQueued, wallpaper.removeFromQueue, wallpaper.addToQueue]);
 
   const handleOverlayParamUpdate = useCallback((layerId: string, paramName: string, value: any) => {
     setOverlayConfig(prev => {
@@ -214,6 +236,393 @@ function Home() {
       return { ...prev, layers: prev.layers.filter(l => l.id !== layerId) };
     });
   }, []);
+  const discoverPanel = useMemo(() => {
+    if (renderedTab !== "discover") return null;
+    return (
+      <section className="panel panel--main">
+        <ControlBar
+          source={wallpaper.source} query={wallpaper.query} isLoading={wallpaper.isLoading}
+          onSourceChange={wallpaper.setSource} onQueryChange={wallpaper.setQuery}
+          onCategoryChange={wallpaper.setCategory} onBrowseLocalFile={wallpaper.browseLocalVideo}
+          onFetch={() => wallpaper.fetchVideosList()} onFetchAndApply={handleFetchAndApply}
+          onStop={wallpaper.stopWallpaper}
+          pinterestUrls={wallpaper.pinterestUrls}
+          onSetPinterestUrls={wallpaper.setPinterestUrls}
+          category={wallpaper.category}
+          colorFilter={wallpaper.colorFilter}
+          onColorFilterChange={wallpaper.setColorFilter}
+          resolutions={wallpaper.resolutions}
+          ratios={wallpaper.ratios}
+          colors={wallpaper.colors}
+          onResolutionsChange={wallpaper.setResolutions}
+          onRatiosChange={wallpaper.setRatios}
+          onColorsChange={wallpaper.setColors}
+          categoriesFilter={wallpaper.categoriesFilter}
+          purityFilter={wallpaper.purityFilter}
+          onCategoriesFilterChange={wallpaper.setCategoriesFilter}
+          onPurityFilterChange={wallpaper.setPurityFilter}
+        />
+        <SearchResults
+          results={wallpaper.searchResults} onSelect={wallpaper.selectVideo}
+          page={wallpaper.page} onPageChange={wallpaper.setPage}
+          isLoading={wallpaper.isLoading}
+          hasMore={wallpaper.hasMore ?? true}
+          duplicateNotice={wallpaper.duplicateNotice}
+          onEditEffects={(video) => {
+            setEditorPreviewVideo(video);
+            handleTabChange("editor");
+          }}
+        />
+        {wallpaper.isLoading && wallpaper.page === 1 && <div className="skeleton skeleton-preview" />}
+      </section>
+    );
+  }, [
+    renderedTab,
+    wallpaper.source,
+    wallpaper.query,
+    wallpaper.isLoading,
+    wallpaper.pinterestUrls,
+    wallpaper.category,
+    wallpaper.colorFilter,
+    wallpaper.resolutions,
+    wallpaper.ratios,
+    wallpaper.colors,
+    wallpaper.categoriesFilter,
+    wallpaper.purityFilter,
+    wallpaper.searchResults,
+    wallpaper.page,
+    wallpaper.hasMore,
+    wallpaper.duplicateNotice,
+    wallpaper.setSource,
+    wallpaper.setQuery,
+    wallpaper.setCategory,
+    wallpaper.browseLocalVideo,
+    wallpaper.fetchVideosList,
+    handleFetchAndApply,
+    wallpaper.stopWallpaper,
+    wallpaper.setPinterestUrls,
+    wallpaper.setColorFilter,
+    wallpaper.setResolutions,
+    wallpaper.setRatios,
+    wallpaper.setColors,
+    wallpaper.setCategoriesFilter,
+    wallpaper.setPurityFilter,
+    wallpaper.selectVideo,
+    wallpaper.setPage,
+    handleTabChange
+  ]);
+
+  const libraryPanel = useMemo(() => {
+    if (renderedTab !== "library") return null;
+    return (
+      <UnifiedLibrary
+        favorites={wallpaper.favorites} recents={wallpaper.recents}
+        imports={wallpaper.imports} favoriteIds={favoriteIds} queueIds={queueIds}
+        hiddenVideos={wallpaper.hiddenVideos}
+        onApply={(item) => wallpaper.applyWallpaper(item.video)}
+        onPreview={(item) => wallpaper.selectVideo(item.video)}
+        onToggleFavorite={(item) => wallpaper.toggleFavorite(item.video)}
+        onToggleQueue={(item) => queueIds.has(`${item.video.id}:${item.video.local_path}`) ? wallpaper.removeFromQueue(item.video) : wallpaper.addToQueue(item.video)}
+        onRemoveRecent={(item) => wallpaper.removeRecentVideo(item.video)}
+        onRemoveImport={(item) => wallpaper.removeImportedVideo(item.video)}
+        onUploadMedia={wallpaper.browseLocalVideo}
+      />
+    );
+  }, [
+    renderedTab,
+    wallpaper.favorites,
+    wallpaper.recents,
+    wallpaper.imports,
+    favoriteIds,
+    queueIds,
+    wallpaper.hiddenVideos,
+    wallpaper.applyWallpaper,
+    wallpaper.selectVideo,
+    wallpaper.toggleFavorite,
+    wallpaper.removeFromQueue,
+    wallpaper.addToQueue,
+    wallpaper.removeRecentVideo,
+    wallpaper.removeImportedVideo,
+    wallpaper.browseLocalVideo
+  ]);
+
+  const communityPanel = useMemo(() => {
+    if (renderedTab !== "community") return null;
+    return <CommunityPanel currentWallpaper={wallpaper.currentVideo} />;
+  }, [renderedTab, wallpaper.currentVideo]);
+
+  const settingsPanel = useMemo(() => {
+    if (renderedTab !== "settings") return null;
+    return (
+      <section className="panel" style={{ padding: "16px", marginTop: "1rem" }}>
+        <div className="section-head" style={{ marginBottom: "1.5rem" }}>
+          <span className="eyebrow">Controls & Appearance</span>
+          <h2>Application Settings</h2>
+        </div>
+        <div className="support-grid">
+          <ThemeSelector currentTheme={wallpaper.theme} onThemeChange={wallpaper.setTheme} />
+          <WallpaperSourcePanel wallpaper={wallpaper} />
+          <AutomationPanel wallpaper={wallpaper} />
+          <QueuePanel wallpaper={wallpaper} />
+        </div>
+      </section>
+    );
+  }, [
+    renderedTab,
+    wallpaper.theme,
+    wallpaper.setTheme,
+    wallpaper
+  ]);
+
+  const directPanel = useMemo(() => {
+    if (renderedTab !== "direct") return null;
+    return (
+      <section className="panel panel--main">
+        <ControlBar
+          source={wallpaper.source} query={wallpaper.query} isLoading={wallpaper.isLoading}
+          onSourceChange={wallpaper.setSource} onQueryChange={wallpaper.setQuery}
+          onCategoryChange={wallpaper.setCategory} onBrowseLocalFile={wallpaper.browseLocalVideo}
+          onFetch={() => wallpaper.fetchVideosList()} onFetchAndApply={handleFetchAndApply}
+          onStop={wallpaper.stopWallpaper}
+        />
+        <div className="hud-ready-zone">
+          <div className="hud-ring" />
+          <div className="hud-center">
+            <span className="eyebrow">Ready to Deploy</span>
+            <p className="muted">Paste a stream URL or browse for a local file to override the current desktop scene.</p>
+          </div>
+        </div>
+      </section>
+    );
+  }, [
+    renderedTab,
+    wallpaper.source,
+    wallpaper.query,
+    wallpaper.isLoading,
+    wallpaper.setSource,
+    wallpaper.setQuery,
+    wallpaper.setCategory,
+    wallpaper.browseLocalVideo,
+    wallpaper.fetchVideosList,
+    handleFetchAndApply,
+    wallpaper.stopWallpaper
+  ]);
+
+  const previewPanel = useMemo(() => {
+    if (renderedTab !== "preview") return null;
+    return (
+      <section className="panel preview-deck">
+        <div className="section-head">
+          <span className="eyebrow">Dedicated Preview</span>
+          <h2>Wallpaper Playback</h2>
+        </div>
+        {wallpaper.currentVideo && !wallpaper.isLoading ? (
+          <VideoPreview
+            video={wallpaper.currentVideo}
+            volumePercent={wallpaper.volumePercent}
+            filterPreset={wallpaper.videoFilter}
+            isFavorite={wallpaper.isFavorite(wallpaper.currentVideo)}
+            isQueued={wallpaper.isQueued(wallpaper.currentVideo)}
+            playbackSpeed={wallpaper.playbackSpeed}
+            blurStrength={wallpaper.blurStrength}
+            onApply={(st?: number, et?: number) => wallpaper.applyWallpaper(wallpaper.currentVideo!, st, et)}
+            onToggleFavorite={() => wallpaper.toggleFavorite(wallpaper.currentVideo!)}
+            onToggleQueue={toggleCurrentQueue}
+            onSetSpeed={wallpaper.setPlaybackSpeed}
+            onSetBlur={wallpaper.setBlurStrength}
+            isHidden={wallpaper.hiddenVideos.includes(wallpaper.currentVideo.id)}
+            onToggleHide={() => wallpaper.toggleHideVideo(wallpaper.currentVideo!.id)}
+            onEditEffects={() => {
+              handleTabChange("editor");
+              setTimeout(() => window.dispatchEvent(new CustomEvent('load-profile', {detail: wallpaper.currentVideo!.id})), 100);
+            }}
+          />
+        ) : !wallpaper.isLoading ? (
+          <div className="preview-empty">
+            <span className="eyebrow">No Media Loaded</span>
+            <h3>Fetch a wallpaper from the Studio tab</h3>
+          </div>
+        ) : null}
+      </section>
+    );
+  }, [
+    renderedTab,
+    wallpaper.currentVideo,
+    wallpaper.isLoading,
+    wallpaper.volumePercent,
+    wallpaper.videoFilter,
+    wallpaper.favorites,
+    wallpaper.queue,
+    wallpaper.playbackSpeed,
+    wallpaper.blurStrength,
+    wallpaper.applyWallpaper,
+    wallpaper.toggleFavorite,
+    toggleCurrentQueue,
+    wallpaper.setPlaybackSpeed,
+    wallpaper.setBlurStrength,
+    wallpaper.hiddenVideos,
+    wallpaper.toggleHideVideo,
+    handleTabChange
+  ]);
+
+  const youtubePanel = useMemo(() => {
+    if (renderedTab !== "youtube") return null;
+    return (
+      <YouTubePanel onApplyWallpaper={(v) => wallpaper.applyWallpaper(v)} onStop={wallpaper.stopWallpaper} isPlaying={wallpaper.isPlaying} />
+    );
+  }, [renderedTab, wallpaper.applyWallpaper, wallpaper.stopWallpaper, wallpaper.isPlaying]);
+
+  const editorPanel = useMemo(() => {
+    if (renderedTab !== "editor") return null;
+    return (
+      <EditorWorkspace 
+        currentVideo={wallpaper.currentVideo} 
+        onSelectVideo={(video) => wallpaper.selectVideo(video)}
+        onApplyWallpaper={async (v) => { await wallpaper.applyWallpaper(v); }} 
+        onUploadMedia={wallpaper.browseLocalVideo}
+        onStopWallpaper={wallpaper.stopWallpaper}
+        recentWallpapers={wallpaper.recents}
+      />
+    );
+  }, [
+    renderedTab,
+    wallpaper.currentVideo,
+    wallpaper.selectVideo,
+    wallpaper.applyWallpaper,
+    wallpaper.browseLocalVideo,
+    wallpaper.stopWallpaper,
+    wallpaper.recents
+  ]);
+
+  const parallaxPanel = useMemo(() => {
+    if (renderedTab !== "parallax") return null;
+    return <ParallaxWorkspace />;
+  }, [renderedTab]);
+
+  const handleEditEffects = useCallback((video: any) => {
+    handleTabChange("editor");
+    setTimeout(() => window.dispatchEvent(new CustomEvent('load-profile', {detail: video.id})), 100);
+  }, [handleTabChange]);
+
+  const handleApplyCurrent = useCallback((st?: number, et?: number) => {
+    if (wallpaper.currentVideo) {
+      wallpaper.applyWallpaper(wallpaper.currentVideo, st, et);
+    }
+  }, [wallpaper.currentVideo, wallpaper.applyWallpaper]);
+
+  const handleToggleFavoriteCurrent = useCallback(() => {
+    if (wallpaper.currentVideo) {
+      wallpaper.toggleFavorite(wallpaper.currentVideo);
+    }
+  }, [wallpaper.currentVideo, wallpaper.toggleFavorite]);
+
+  const handleToggleHideCurrent = useCallback(() => {
+    if (wallpaper.currentVideo) {
+      wallpaper.toggleHideVideo(wallpaper.currentVideo.id);
+    }
+  }, [wallpaper.currentVideo, wallpaper.toggleHideVideo]);
+
+  const handleEditEffectsCurrent = useCallback(() => {
+    if (wallpaper.currentVideo) {
+      handleTabChange("editor");
+      setTimeout(() => window.dispatchEvent(new CustomEvent('load-profile', {detail: wallpaper.currentVideo!.id})), 100);
+    }
+  }, [wallpaper.currentVideo, handleTabChange]);
+
+  const handleClosePreview = useCallback(() => {
+    wallpaper.dismissPreview();
+  }, [wallpaper.dismissPreview]);
+
+  const titleBarElement = useMemo(() => {
+    return <TitleBar minimizeToTray={wallpaper.minimizeToTray} />;
+  }, [wallpaper.minimizeToTray]);
+
+  const dependencyCheckerElement = useMemo(() => {
+    return <DependencyChecker />;
+  }, []);
+
+  const heroPanelElement = useMemo(() => {
+    if (!wallpaper.currentVideo) return null;
+    return (
+      <HeroPanel 
+        wallpaper={wallpaper} 
+        activeTab={activeTab} 
+        onEditEffects={handleEditEffects} 
+      />
+    );
+  }, [
+    wallpaper.currentVideo,
+    wallpaper.isPlaying,
+    wallpaper.volumePercent,
+    wallpaper.theme,
+    activeTab,
+    handleEditEffects
+  ]);
+
+  const masterHudElement = useMemo(() => {
+    return <MasterHUD wallpaper={wallpaper} />;
+  }, [
+    wallpaper.isPlaying,
+    wallpaper.currentVideo,
+    wallpaper.paused,
+    wallpaper.volumePercent,
+    wallpaper.stopWallpaper,
+    wallpaper.setPaused,
+    wallpaper.setVolumePercent
+  ]);
+
+  const isCurrentHidden = wallpaper.currentVideo ? wallpaper.hiddenVideos.includes(wallpaper.currentVideo.id) : false;
+  const isCurrentFavorite = wallpaper.currentVideo ? wallpaper.isFavorite(wallpaper.currentVideo) : false;
+  const isCurrentQueued = wallpaper.currentVideo ? wallpaper.isQueued(wallpaper.currentVideo) : false;
+
+  const floatingPreviewElement = useMemo(() => {
+    if (!wallpaper.currentVideo || activeTab === "preview" || wallpaper.previewDismissed) return null;
+    return (
+      <FloatingPreview
+        video={wallpaper.currentVideo}
+        volumePercent={wallpaper.volumePercent}
+        filterPreset={wallpaper.videoFilter}
+        isFavorite={isCurrentFavorite}
+        isQueued={isCurrentQueued}
+        playbackSpeed={wallpaper.playbackSpeed}
+        blurStrength={wallpaper.blurStrength}
+        onApply={handleApplyCurrent}
+        onToggleFavorite={handleToggleFavoriteCurrent}
+        onToggleQueue={toggleCurrentQueue}
+        onSetSpeed={wallpaper.setPlaybackSpeed}
+        onSetBlur={wallpaper.setBlurStrength}
+        onClose={handleClosePreview}
+        isLoading={wallpaper.isLoading}
+        isHidden={isCurrentHidden}
+        onToggleHide={handleToggleHideCurrent}
+        onEditEffects={handleEditEffectsCurrent}
+      />
+    );
+  }, [
+    wallpaper.currentVideo,
+    activeTab,
+    wallpaper.previewDismissed,
+    wallpaper.volumePercent,
+    wallpaper.videoFilter,
+    isCurrentFavorite,
+    isCurrentQueued,
+    wallpaper.playbackSpeed,
+    wallpaper.blurStrength,
+    handleApplyCurrent,
+    handleToggleFavoriteCurrent,
+    toggleCurrentQueue,
+    wallpaper.setPlaybackSpeed,
+    wallpaper.setBlurStrength,
+    handleClosePreview,
+    wallpaper.isLoading,
+    isCurrentHidden,
+    handleToggleHideCurrent,
+    handleEditEffectsCurrent
+  ]);
+
+  const downloadProgressOverlayElement = useMemo(() => {
+    return <DownloadProgressOverlay />;
+  }, []);
 
   if (isOverlayMode) {
     return (
@@ -233,6 +642,9 @@ function Home() {
           onUpdateParam={handleOverlayParamUpdate}
           onRemoveLayer={handleOverlayRemoveLayer}
           isPaused={wallpaper.paused && !wallpaper.keepEffectsRunningOnPause}
+          bgMode={overlayConfig?.bgMode}
+          bgBlur={overlayConfig?.bgBlur}
+          bgBrightness={overlayConfig?.bgBrightness}
         />
       </main>
     );
@@ -336,204 +748,37 @@ function Home() {
           ` }} />
         </div>
       )}
-      <TitleBar minimizeToTray={wallpaper.minimizeToTray} />
+      {titleBarElement}
       <div className="shell__backdrop" />
 
       <div className={`shell__body ${isSidebarCollapsed ? "shell__body--collapsed" : ""}`}>
         <Sidebar 
           activeTab={activeTab} 
-          setActiveTab={setActiveTab} 
+          setActiveTab={handleTabChange} 
           isSidebarCollapsed={isSidebarCollapsed} 
           setIsSidebarCollapsed={setIsSidebarCollapsed} 
         />
 
         <main className="workspace">
-          <DependencyChecker />
+          {dependencyCheckerElement}
 
-          {wallpaper.currentVideo && <HeroPanel 
-            wallpaper={wallpaper} 
-            activeTab={activeTab} 
-            onEditEffects={(video) => {
-              setActiveTab("editor");
-              setTimeout(() => window.dispatchEvent(new CustomEvent('load-profile', {detail: video.id})), 100);
-            }} 
-          />}
+          {heroPanelElement}
 
-          {activeTab === "discover" && (
-            <section className="panel panel--main">
-              <ControlBar
-                source={wallpaper.source} query={wallpaper.query} isLoading={wallpaper.isLoading}
-                onSourceChange={wallpaper.setSource} onQueryChange={wallpaper.setQuery}
-                onCategoryChange={wallpaper.setCategory} onBrowseLocalFile={wallpaper.browseLocalVideo}
-                onFetch={() => wallpaper.fetchVideosList()} onFetchAndApply={handleFetchAndApply}
-                onStop={wallpaper.stopWallpaper}
-                pinterestUrls={wallpaper.pinterestUrls}
-                onSetPinterestUrls={wallpaper.setPinterestUrls}
-                category={wallpaper.category}
-                colorFilter={wallpaper.colorFilter}
-                onColorFilterChange={wallpaper.setColorFilter}
-                resolutions={wallpaper.resolutions}
-                ratios={wallpaper.ratios}
-                colors={wallpaper.colors}
-                onResolutionsChange={wallpaper.setResolutions}
-                onRatiosChange={wallpaper.setRatios}
-                onColorsChange={wallpaper.setColors}
-                categoriesFilter={wallpaper.categoriesFilter}
-                purityFilter={wallpaper.purityFilter}
-                onCategoriesFilterChange={wallpaper.setCategoriesFilter}
-                onPurityFilterChange={wallpaper.setPurityFilter}
-              />
-              <SearchResults
-                results={wallpaper.searchResults} onSelect={wallpaper.selectVideo}
-                page={wallpaper.page} onPageChange={wallpaper.setPage}
-                isLoading={wallpaper.isLoading}
-                hasMore={wallpaper.hasMore ?? true}
-                duplicateNotice={wallpaper.duplicateNotice}
-                onEditEffects={(video) => {
-                  setEditorPreviewVideo(video);
-                  setActiveTab("editor");
-                }}
-              />
-              {wallpaper.isLoading && wallpaper.page === 1 && <div className="skeleton skeleton-preview" />}
-            </section>
-          )}
+          {discoverPanel}
+          {libraryPanel}
+          {communityPanel}
+          {settingsPanel}
+          {directPanel}
+          {previewPanel}
+          {youtubePanel}
+          {editorPanel}
+          {parallaxPanel}
 
-          {activeTab === "library" && (
-            <UnifiedLibrary
-              favorites={wallpaper.favorites} recents={wallpaper.recents}
-              imports={wallpaper.imports} favoriteIds={favoriteIds} queueIds={queueIds}
-              hiddenVideos={wallpaper.hiddenVideos}
-              onApply={(item) => wallpaper.applyWallpaper(item.video)}
-              onPreview={(item) => wallpaper.selectVideo(item.video)}
-              onToggleFavorite={(item) => wallpaper.toggleFavorite(item.video)}
-              onToggleQueue={(item) => queueIds.has(`${item.video.id}:${item.video.local_path}`) ? wallpaper.removeFromQueue(item.video) : wallpaper.addToQueue(item.video)}
-              onRemoveRecent={(item) => wallpaper.removeRecentVideo(item.video)}
-              onRemoveImport={(item) => wallpaper.removeImportedVideo(item.video)}
-              onUploadMedia={wallpaper.browseLocalVideo}
-            />
-          )}
-
-          {activeTab === "community" && (
-            <CommunityPanel currentWallpaper={wallpaper.currentVideo} />
-          )}
-
-          {activeTab === "settings" && (
-            <section className="panel" style={{ padding: "16px", marginTop: "1rem" }}>
-              <div className="section-head" style={{ marginBottom: "1.5rem" }}>
-                <span className="eyebrow">Controls & Appearance</span>
-                <h2>Application Settings</h2>
-              </div>
-              <div className="support-grid">
-                <ThemeSelector currentTheme={wallpaper.theme} onThemeChange={wallpaper.setTheme} />
-                <WallpaperSourcePanel wallpaper={wallpaper} />
-                <AutomationPanel wallpaper={wallpaper} />
-                <QueuePanel wallpaper={wallpaper} />
-              </div>
-            </section>
-          )}
-
-          {activeTab === "direct" && (
-            <section className="panel panel--main">
-              <ControlBar
-                source={wallpaper.source} query={wallpaper.query} isLoading={wallpaper.isLoading}
-                onSourceChange={wallpaper.setSource} onQueryChange={wallpaper.setQuery}
-                onCategoryChange={wallpaper.setCategory} onBrowseLocalFile={wallpaper.browseLocalVideo}
-                onFetch={() => wallpaper.fetchVideosList()} onFetchAndApply={handleFetchAndApply}
-                onStop={wallpaper.stopWallpaper}
-              />
-              <div className="hud-ready-zone">
-                <div className="hud-ring" />
-                <div className="hud-center">
-                  <span className="eyebrow">Ready to Deploy</span>
-                  <p className="muted">Paste a stream URL or browse for a local file to override the current desktop scene.</p>
-                </div>
-              </div>
-            </section>
-          )}
-
-          {activeTab === "preview" && (
-            <section className="panel preview-deck">
-              <div className="section-head">
-                <span className="eyebrow">Dedicated Preview</span>
-                <h2>Wallpaper Playback</h2>
-              </div>
-              {wallpaper.currentVideo && !wallpaper.isLoading ? (
-                <VideoPreview
-                  video={wallpaper.currentVideo}
-                  volumePercent={wallpaper.volumePercent}
-                  filterPreset={wallpaper.videoFilter}
-                  isFavorite={wallpaper.isFavorite(wallpaper.currentVideo)}
-                  isQueued={wallpaper.isQueued(wallpaper.currentVideo)}
-                  playbackSpeed={wallpaper.playbackSpeed}
-                  blurStrength={wallpaper.blurStrength}
-                  onApply={(st?: number, et?: number) => wallpaper.applyWallpaper(wallpaper.currentVideo!, st, et)}
-                  onToggleFavorite={() => wallpaper.toggleFavorite(wallpaper.currentVideo!)}
-                  onToggleQueue={toggleCurrentQueue}
-                  onSetSpeed={wallpaper.setPlaybackSpeed}
-                  onSetBlur={wallpaper.setBlurStrength}
-                  isHidden={wallpaper.hiddenVideos.includes(wallpaper.currentVideo.id)}
-                  onToggleHide={() => wallpaper.toggleHideVideo(wallpaper.currentVideo!.id)}
-                  onEditEffects={() => {
-                    setActiveTab("editor");
-                    setTimeout(() => window.dispatchEvent(new CustomEvent('load-profile', {detail: wallpaper.currentVideo!.id})), 100);
-                  }}
-                />
-              ) : !wallpaper.isLoading ? (
-                <div className="preview-empty">
-                  <span className="eyebrow">No Media Loaded</span>
-                  <h3>Fetch a wallpaper from the Studio tab</h3>
-                </div>
-              ) : null}
-            </section>
-          )}
-
-          {activeTab === "youtube" && (
-            <YouTubePanel onApplyWallpaper={(v) => wallpaper.applyWallpaper(v)} onStop={wallpaper.stopWallpaper} isPlaying={wallpaper.isPlaying} />
-          )}
-
-          {activeTab === "editor" && (
-            <EditorWorkspace 
-              currentVideo={wallpaper.currentVideo} 
-              onSelectVideo={(video) => wallpaper.selectVideo(video)}
-              onApplyWallpaper={async (v) => { await wallpaper.applyWallpaper(v); }} 
-              onUploadMedia={wallpaper.browseLocalVideo}
-              onStopWallpaper={wallpaper.stopWallpaper}
-              recentWallpapers={wallpaper.recents}
-            />
-          )}
-
-          {activeTab === "parallax" && (
-            <ParallaxWorkspace />
-          )}
-
-          <MasterHUD wallpaper={wallpaper} />
+          {masterHudElement}
         </main>
       </div>
 
-      {wallpaper.currentVideo && activeTab !== "preview" && !wallpaper.previewDismissed && (
-        <FloatingPreview
-          video={wallpaper.currentVideo}
-          volumePercent={wallpaper.volumePercent}
-          filterPreset={wallpaper.videoFilter}
-          isFavorite={wallpaper.isFavorite(wallpaper.currentVideo)}
-          isQueued={wallpaper.isQueued(wallpaper.currentVideo)}
-          playbackSpeed={wallpaper.playbackSpeed}
-          blurStrength={wallpaper.blurStrength}
-          onApply={(st?: number, et?: number) => wallpaper.applyWallpaper(wallpaper.currentVideo!, st, et)}
-          onToggleFavorite={() => wallpaper.toggleFavorite(wallpaper.currentVideo!)}
-          onToggleQueue={toggleCurrentQueue}
-          onSetSpeed={wallpaper.setPlaybackSpeed}
-          onSetBlur={wallpaper.setBlurStrength}
-          onClose={() => wallpaper.dismissPreview()}
-          isLoading={wallpaper.isLoading}
-          isHidden={wallpaper.hiddenVideos.includes(wallpaper.currentVideo.id)}
-          onToggleHide={() => wallpaper.toggleHideVideo(wallpaper.currentVideo!.id)}
-          onEditEffects={() => {
-            setActiveTab("editor");
-            setTimeout(() => window.dispatchEvent(new CustomEvent('load-profile', {detail: wallpaper.currentVideo!.id})), 100);
-          }}
-        />
-      )}
+      {floatingPreviewElement}
 
       {/* Floating Error Toast */}
       {wallpaper.error && isErrorVisible && (
@@ -561,7 +806,7 @@ function Home() {
           </button>
         </div>
       )}
-      <DownloadProgressOverlay />
+      {downloadProgressOverlayElement}
     </div>
   );
 }

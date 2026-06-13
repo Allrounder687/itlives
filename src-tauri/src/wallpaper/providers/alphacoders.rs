@@ -50,18 +50,11 @@ impl VideoProvider for AlphaCodersProvider {
         let query = config.query.trim().to_lowercase();
         let page = if config.page == 0 { 1 } else { config.page };
 
-        // For alphacoders, the search parameter is simply search=...
-        // and pagination is page=...
         let url = if query.is_empty() || query == "all" {
             format!("https://alphacoders.com/live-wallpapers?page={}", page)
         } else {
-            // NOTE: AlphaCoders search usually goes to the search endpoint.
-            // But we will try to restrict it to live-wallpapers using the search query parameter.
-            format!(
-                "https://alphacoders.com/search?search={}&page={}&type=live-wallpapers",
-                urlencoding::encode(&query),
-                page
-            )
+            let slug = query.replace(' ', "-").to_lowercase();
+            format!("https://alphacoders.com/{}?type=live-wallpapers&page={}", slug, page)
         };
 
         log::info!("[AlphaCoders] Fetching url: {}", url);
@@ -82,6 +75,10 @@ impl VideoProvider for AlphaCodersProvider {
             .map_err(|e| format!("AlphaCoders search failed: {}", e))?;
 
         log::info!("[AlphaCoders] Response Status: {}", resp.status());
+
+        if resp.status() == reqwest::StatusCode::NOT_FOUND {
+            return Ok(Vec::new());
+        }
 
         let text = resp
             .text()
@@ -110,6 +107,28 @@ impl VideoProvider for AlphaCodersProvider {
             // Typical picture thumb: https://images2.alphacoders.com/140/thumb-350-1407175.webp
             let thumbnail_url = format!("https://{}thumb-{}.jpg", prefix, id);
 
+            let mut tags_list = vec!["alphacoders".to_string()];
+            let mut is_people = false;
+            let is_anime = true;
+
+            // Extract tags from query and path details
+            for part in query.split_whitespace().chain(prefix.split('/')) {
+                let p = part.to_lowercase();
+                if p.len() > 1 && p != "images" && p != "images2" && p != "alphacoders" && p != "com" {
+                    tags_list.push(p.clone());
+                    if p == "girl" || p == "girls" || p == "woman" || p == "women" || p == "catgirl" || p == "succubus" || p == "waifu" || p == "maid" || p == "beauty" || p == "pretty" || p == "cute" {
+                        is_people = true;
+                    }
+                }
+            }
+            if is_people {
+                tags_list.push("girl".to_string());
+                tags_list.push("people".to_string());
+            }
+            if is_anime {
+                tags_list.push("anime".to_string());
+            }
+
             let result = VideoResult {
                 id: id.clone(),
                 video_url,
@@ -121,7 +140,7 @@ impl VideoProvider for AlphaCodersProvider {
                 source: "alphacoders".to_string(),
                 start_time: None,
                 end_time: None,
-                tags: None,
+                tags: Some(tags_list),
             };
 
             items.push(result);

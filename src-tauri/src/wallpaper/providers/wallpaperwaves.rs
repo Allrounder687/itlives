@@ -143,6 +143,27 @@ impl VideoProvider for WallpaperWavesProvider {
                     }
                 }
 
+                let mut tags_list = vec!["wallpaperwaves".to_string()];
+                let mut is_people = false;
+                let is_anime = true;
+
+                for part in id.split('-') {
+                    let p = part.to_lowercase();
+                    if p.len() > 1 {
+                        tags_list.push(p.clone());
+                        if p == "girl" || p == "girls" || p == "woman" || p == "women" || p == "catgirl" || p == "succubus" || p == "waifu" || p == "maid" || p == "beauty" || p == "pretty" || p == "cute" {
+                            is_people = true;
+                        }
+                    }
+                }
+                if is_people {
+                    tags_list.push("girl".to_string());
+                    tags_list.push("people".to_string());
+                }
+                if is_anime {
+                    tags_list.push("anime".to_string());
+                }
+
                 results.push(VideoResult {
                     id,
                     video_url, // Used in Discover page video preview element
@@ -154,7 +175,7 @@ impl VideoProvider for WallpaperWavesProvider {
                     source: "wallpaperwaves".to_string(),
                     start_time: None,
                     end_time: None,
-                    tags: None,
+                    tags: Some(tags_list),
                 });
             }
         }

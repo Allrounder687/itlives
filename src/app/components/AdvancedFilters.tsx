@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { useNsfw } from "@/hooks/useNsfw";
 
 interface AdvancedFiltersProps {
   resolutionFilter?: string | null;
@@ -91,6 +92,7 @@ export function AdvancedFilters({
   onPurityChange,
   showColorFilter = false,
 }: AdvancedFiltersProps) {
+  const { isUnlocked } = useNsfw();
   const [activeDropdown, setActiveDropdown] = useState<"resolution" | "ratio" | "color" | "categories" | "purity" | null>(null);
   const [resolutionMode, setResolutionMode] = useState<"atleast" | "exactly">("exactly");
   const [customW, setCustomW] = useState("");
@@ -343,10 +345,12 @@ export function AdvancedFilters({
                   onClick={() => togglePurityBit(1)}
                   style={gridBtnStyle((purityFilter || "100")[1] === '1')}
                 >Sketchy</button>
-                <button 
-                  onClick={() => togglePurityBit(2)}
-                  style={gridBtnStyle((purityFilter || "100")[2] === '1')}
-                >NSFW</button>
+                {isUnlocked && (
+                  <button 
+                    onClick={() => togglePurityBit(2)}
+                    style={gridBtnStyle((purityFilter || "100")[2] === '1')}
+                  >NSFW</button>
+                )}
               </div>
             </div>
           )}

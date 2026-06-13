@@ -27,31 +27,37 @@ export function useQueueManager(state: WallpaperState, setState: React.Dispatch<
     }
   }, [setState]);
 
-  useEffect(() => {
-    if (state.isHydrating || !state.rotationEnabled || state.queue.length === 0) return;
+  const clearQueue = useCallback(async () => {
+    try {
+      const { invoke } = await getCoreApi();
+      const persisted = await invoke<PersistedState>("clear_queue");
+      setState((s) => applyPersistedState(persisted, s));
+    } catch (error: any) {
+      console.error("Queue clear failed", error);
+    }
+  }, [setState]);
 
-    const timer = window.setInterval(async () => {
-      if (rotationBusyRef.current) return;
-      rotationBusyRef.current = true;
-      try {
-        const { invoke } = await getCoreApi();
-        const advanced = await invoke<{ video: VideoResult; state: PersistedState }>("advance_rotation", {
-          scalePercent: state.wallpaperScalePercent,
-        });
-        setState((s) => ({
-          ...applyPersistedState(advanced.state, s),
-          currentVideo: advanced.video,
-          paused: false,
-        }));
-      } catch (error) {
-        console.error("Rotation failure", error);
-      } finally {
-        rotationBusyRef.current = false;
-      }
-    }, Math.max(30, state.rotationIntervalSeconds) * 1000);
+  const importFolderToQueue = useCallback(async (folderPath: string) => {
+    try {
+      const { invoke } = await getCoreApi();
+      const persisted = await invoke<PersistedState>("import_folder_to_queue", { folderPath });
+      setState((s) => applyPersistedState(persisted, s));
+    } catch (error: any) {
+      console.error("Import folder failed", error);
+    }
+  }, [setState]);
 
-    return () => window.clearInterval(timer);
-  }, [state.isHydrating, state.queue.length, state.rotationEnabled, state.rotationIntervalSeconds, state.wallpaperScalePercent, setState]);
+  const reorderQueue = useCallback(async (fromIndex: number, toIndex: number) => {
+    try {
+      const { invoke } = await getCoreApi();
+      const persisted = await invoke<PersistedState>("reorder_queue", { fromIndex, toIndex });
+      setState((s) => applyPersistedState(persisted, s));
+    } catch (error: any) {
+      console.error("Queue reorder failed", error);
+    }
+  }, [setState]);
 
-  return { addToQueue, removeFromQueue };
+
+
+  return { addToQueue, removeFromQueue, clearQueue, importFolderToQueue, reorderQueue };
 }

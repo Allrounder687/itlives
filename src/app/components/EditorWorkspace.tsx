@@ -4,8 +4,6 @@ import { useState, useEffect, startTransition, useRef } from "react";
 import { EffectLayer } from "./CanvasEffectRenderer";
 import { WebGLEffectRenderer } from "./WebGLEffectRenderer";
 import { VideoResult } from "@/hooks/useWallpaper";
-import { DESKTOP_PET_ANIMATIONS } from "./DesktopPetAnimations";
-import { useOllama } from "../../hooks/pet/useOllama";
 import { LibraryItem } from "@/utils/wallpaperTypes";
 import "./editor.css";
 
@@ -51,7 +49,7 @@ const EFFECT_TEMPLATES: Record<string, Omit<EffectLayer, "id">> = {
   vhs: { type: "vhs", name: "Retro VHS", enabled: true, params: { rgbShift: 0.02, noise: 0.3, scanlines: 0.5 } },
   "liquid-ripple": { type: "liquid-ripple", name: "Screen Ripple", enabled: true, params: { intensity: 1.0, waveMode: "off", waveZoneX: 20, waveZoneY: 60, waveZoneW: 60, waveZoneH: 30, waveSpeed: 1.0, waveScale: 5.0, waveStrength: 1.0, autoRipple: false, autoInterval: 1.5, autoZoneX: 20, autoZoneY: 20, autoZoneW: 60, autoZoneH: 60, raindrops: false, rainIntensity: 1.0 } },
   "rain-on-glass": { type: "rain-on-glass", name: "Rain on Glass", enabled: true, params: { intensity: 1.0, dropSpeed: 1.0, streakCount: 15, dropletDensity: 20 } },
-  "desktop-pet": { type: "desktop-pet", name: "Desktop Pet", enabled: true, params: { color: "#00aaff", scale: 50.0, speed: 1.0, behavior: "wander", enableCracks: true, name: "Bot", muted: false } },
+
   "brightness-contrast": { type: "brightness-contrast", name: "Brightness / Contrast", enabled: true, params: { brightness: 0.1, contrast: 0.2 } },
   "hue-saturation": { type: "hue-saturation", name: "Hue & Saturation", enabled: true, params: { hue: 0.0, saturation: 0.2 } },
   sepia: { type: "sepia", name: "Sepia Filter", enabled: true, params: { intensity: 1.0 } },
@@ -103,9 +101,7 @@ const EFFECT_DROPDOWN: { group: string, items: { key: string, icon: string, labe
     { key: "music-player", icon: "🎧", label: "Music Player" },
     { key: "app-launcher", icon: "🚀", label: "App Launcher" },
   ]},
-  { group: "🤖 Companions", items: [
-    { key: "desktop-pet", icon: "🐾", label: "Desktop Pet" },
-  ]},
+
   { group: "📸 Pro Photo Editing", items: [
     { key: "brightness-contrast", icon: "☀️", label: "Brightness / Contrast" },
     { key: "hue-saturation", icon: "🌈", label: "Hue & Saturation" },
@@ -190,39 +186,30 @@ const DEMO_PRESETS: { key: string, name: string, thumbnail: string, path: string
 ];
 
 export function EditorWorkspace({ currentVideo, onSelectVideo, onApplyWallpaper, onUploadMedia, onStopWallpaper, recentWallpapers }: EditorWorkspaceProps) {
-  const [layers, setLayers] = useState<EffectLayer[]>(() => {
-    let petParams = { ...EFFECT_TEMPLATES["desktop-pet"].params };
-    try {
-      const savedParams = localStorage.getItem("default-pet-params");
-      if (savedParams) petParams = { ...petParams, ...JSON.parse(savedParams) };
-    } catch(e) {}
-    
-    return [
-      { id: "desktop-pet-1", type: "desktop-pet", name: "Desktop Pet", enabled: true, params: petParams }
-    ];
-  });
-  const [selectedLayerId, setSelectedLayerId] = useState<string | null>("desktop-pet-1");
+  const [layers, setLayers] = useState<EffectLayer[]>([]);
+  const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
   const [isPreviewPaused, setIsPreviewPaused] = useState(true);
 
-  const { generateResponse, isThinking } = useOllama();
-  const [chatMessage, setChatMessage] = useState("");
-  const [chatHistory, setChatHistory] = useState<{role: "user"|"pet", text: string}[]>([]);
-  const [isChatOpen, setIsChatOpen] = useState(false);
-  const chatContext = useRef<number[]>([]);
-  const chatEndRef = useRef<HTMLDivElement>(null);
 
-  const hasDesktopPet = layers.some(l => l.type === "desktop-pet" && l.enabled);
+
+  // Background Settings State
+  const [bgMode, setBgMode] = useState<"cover" | "contain" | "blur-fill" | "stretch">("blur-fill");
+  const [bgBlur, setBgBlur] = useState<number>(20);
+  const [bgBrightness, setBgBrightness] = useState<number>(0.4);
+
+  // Brush Mask State
+  const [isBrushMode, setIsBrushMode] = useState(false);
+  const [brushSize, setBrushSize] = useState(50);
+  const [brushFeather, setBrushFeather] = useState(0.5);
+  const maskCanvasRef = useRef<HTMLCanvasElement>(null);
+  const isPainting = useRef(false);
+  const lastPos = useRef<{x: number, y: number} | null>(null);
+
+
 
   const addEffect = (type: keyof typeof EFFECT_TEMPLATES) => {
     const template = EFFECT_TEMPLATES[type];
-    if (type === "desktop-pet") {
-      try {
-        const defaultParams = localStorage.getItem("default-pet-params");
-        if (defaultParams) {
-          template.params = JSON.parse(defaultParams);
-        }
-      } catch(e) {}
-    }
+
 
     const newLayer: EffectLayer = {
       ...template,
@@ -241,6 +228,73 @@ export function EditorWorkspace({ currentVideo, onSelectVideo, onApplyWallpaper,
     startTransition(() => {
       setLayers(prev => prev.map(l => l.id === id ? { ...l, params: { ...l.params, [key]: value } } : l));
     });
+  };
+
+  const initMaskCanvas = () => {
+    if (!maskCanvasRef.current) return;
+    const canvas = maskCanvasRef.current;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    
+    // Match the canvas resolution to its display size
+    canvas.width = canvas.clientWidth || 1920;
+    canvas.height = canvas.clientHeight || 1080;
+
+    const layer = layers.find(l => l.id === selectedLayerId);
+    if (layer && layer.params.maskData) {
+      const img = new Image();
+      img.onload = () => {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      };
+      img.src = layer.params.maskData;
+    } else {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+  };
+
+  useEffect(() => {
+    if (isBrushMode) {
+      initMaskCanvas();
+    }
+  }, [isBrushMode, selectedLayerId]);
+
+  const drawOnMask = (x: number, y: number, isDown: boolean) => {
+    if (!maskCanvasRef.current) return;
+    const ctx = maskCanvasRef.current.getContext("2d");
+    if (!ctx) return;
+
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.lineWidth = brushSize;
+    
+    if (brushFeather > 0) {
+      ctx.shadowBlur = brushSize * brushFeather;
+      ctx.shadowColor = "rgba(255, 0, 0, 1)";
+    } else {
+      ctx.shadowBlur = 0;
+      ctx.shadowColor = "transparent";
+    }
+
+    ctx.strokeStyle = "rgba(255, 0, 0, 1)";
+
+    if (isDown) {
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + 0.1, y + 0.1); // draw a dot
+      ctx.stroke();
+    } else if (lastPos.current) {
+      ctx.beginPath();
+      ctx.moveTo(lastPos.current.x, lastPos.current.y);
+      ctx.lineTo(x, y);
+      ctx.stroke();
+    }
+  };
+
+  const saveMaskData = () => {
+    if (!maskCanvasRef.current || !selectedLayerId) return;
+    const dataUrl = maskCanvasRef.current.toDataURL("image/png");
+    updateParam(selectedLayerId, "maskData", dataUrl);
   };
 
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
@@ -265,31 +319,7 @@ export function EditorWorkspace({ currentVideo, onSelectVideo, onApplyWallpaper,
     }
   };
 
-  const handleSendChatMessage = async () => {
-    if (!chatMessage.trim()) return;
-    const msg = chatMessage;
-    setChatMessage("");
-    setChatHistory(prev => [...prev, { role: "user", text: msg }]);
 
-    const res = await generateResponse(msg, chatContext.current);
-    if (res) {
-      chatContext.current = res.context;
-      setChatHistory(prev => [...prev, { role: "pet", text: res.text }]);
-      import("@tauri-apps/api/core").then(({ invoke }) => {
-        import("@tauri-apps/api/event").then(({ emit }) => {
-          emit("pet-chat-response", { text: res.text, sentiment: res.sentiment });
-        });
-      });
-    } else {
-      setChatHistory(prev => [...prev, { role: "pet", text: "*Failed to connect to Ollama. Make sure it is running locally.*" }]);
-    }
-  };
-
-  useEffect(() => {
-    if (chatEndRef.current) {
-      chatEndRef.current.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [chatHistory, isChatOpen]);
 
   useEffect(() => {
     const handleLoadProfileEvent = (e: any) => {
@@ -305,7 +335,13 @@ export function EditorWorkspace({ currentVideo, onSelectVideo, onApplyWallpaper,
     if (!currentVideo || !newProfileName.trim()) return;
     try {
       const { invoke } = await import("@tauri-apps/api/core");
-      const config = { videoSrc: currentVideo.local_path || currentVideo.video_url, layers };
+      const config = { 
+        videoSrc: currentVideo.local_path || currentVideo.video_url, 
+        layers,
+        bgMode,
+        bgBlur,
+        bgBrightness
+      };
       await invoke("save_profile", { name: newProfileName.trim(), configJson: JSON.stringify(config) });
       setIsProfileModalOpen(false);
     } catch (err) {
@@ -337,9 +373,20 @@ export function EditorWorkspace({ currentVideo, onSelectVideo, onApplyWallpaper,
         setLayers(config.layers);
       }
       
+      setBgMode(config.bgMode || "blur-fill");
+      setBgBlur(config.bgBlur !== undefined ? config.bgBlur : 20);
+      setBgBrightness(config.bgBrightness !== undefined ? config.bgBrightness : 0.4);
+      
       setIsProfileModalOpen(false);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to load profile:", err);
+      const errorMsg = String(err).toLowerCase();
+      if (errorMsg.includes("os error 2") || errorMsg.includes("cannot find the file") || errorMsg.includes("no such file")) {
+        console.log("No profile found for this wallpaper. Starting fresh.");
+        // We could reset layers here if we want to clear the previous wallpaper's profile,
+        // but typically a missing profile just means we leave the current state or reset to defaults.
+        return;
+      }
       alert("Failed to load profile: " + err);
     } finally {
       setIsLoadingProfile(false);
@@ -368,7 +415,7 @@ export function EditorWorkspace({ currentVideo, onSelectVideo, onApplyWallpaper,
       if (!destPath) return;
 
       const { invoke } = await import("@tauri-apps/api/core");
-      const config = { videoSrc: currentVideo.local_path || currentVideo.video_url, thumbnailUrl: currentVideo.thumbnail_url, layers };
+      const config = { videoSrc: currentVideo.local_path || currentVideo.video_url, thumbnailUrl: currentVideo.thumbnail_url, layers, bgMode, bgBlur, bgBrightness };
       await invoke("export_itl_package", { configJson: JSON.stringify(config), destPath });
       alert(`Package exported successfully to:\n${destPath}`);
       setIsProfileModalOpen(false);
@@ -505,6 +552,37 @@ export function EditorWorkspace({ currentVideo, onSelectVideo, onApplyWallpaper,
           </div>
         </div>
 
+        {/* Global Scene Properties */}
+        <div style={{ padding: "12px", borderBottom: "1px solid var(--panel-stroke)", backgroundColor: "rgba(0,0,0,0.1)" }}>
+          <span className="eyebrow" style={{ fontSize: "10px", marginBottom: "8px", display: "block" }}>🌍 Background Settings</span>
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <label style={{ fontSize: "11px", color: "var(--text-dim)" }}>Fill Mode:</label>
+              <select className="input" value={bgMode} onChange={(e) => setBgMode(e.target.value as any)} style={{ fontSize: "11px", padding: "2px 6px", width: "100px" }}>
+                <option value="blur-fill">Blur-Fill</option>
+                <option value="triptych">Triptych</option>
+                <option value="mirror">Mirror</option>
+                <option value="tiles">Tiles</option>
+                <option value="contain">Contain</option>
+                <option value="cover">Cover</option>
+                <option value="stretch">Stretch</option>
+              </select>
+            </div>
+            {bgMode === "blur-fill" && (
+              <>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <label style={{ fontSize: "11px", color: "var(--text-dim)" }}>Bg Blur:</label>
+                  <input type="range" min="0" max="50" step="1" value={bgBlur} onChange={(e) => setBgBlur(parseInt(e.target.value))} style={{ width: "100px" }} />
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <label style={{ fontSize: "11px", color: "var(--text-dim)" }}>Bg Brightness:</label>
+                  <input type="range" min="0" max="1" step="0.05" value={bgBrightness} onChange={(e) => setBgBrightness(parseFloat(e.target.value))} style={{ width: "100px" }} />
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+
         <div className="editor-layer-list" style={{ flex: 1 }}>
           {layers.length === 0 ? (
             <p style={{ textAlign: "center", color: "var(--text-dim)", padding: "20px" }}>No effects added yet</p>
@@ -637,9 +715,12 @@ export function EditorWorkspace({ currentVideo, onSelectVideo, onApplyWallpaper,
             style={{ padding: "10px 16px", borderRadius: "12px", fontWeight: "600", boxShadow: "0 4px 12px rgba(0,0,0,0.2)" }}
             onClick={async () => {
               if (typeof window !== "undefined") {
-                const emptyConfig = { videoSrc: currentVideo?.local_path || currentVideo?.video_url || "", layers: [] };
+                const emptyConfig = { videoSrc: currentVideo?.local_path || currentVideo?.video_url || "", layers: [], bgMode: "blur-fill", bgBlur: 20, bgBrightness: 0.4 };
                 localStorage.setItem("desktop_effects", JSON.stringify(emptyConfig));
                 setLayers([]);
+                setBgMode("blur-fill");
+                setBgBlur(20);
+                setBgBrightness(0.4);
                 try {
                   const { invoke } = await import("@tauri-apps/api/core");
                   await invoke("apply_desktop_effects", { layersJson: JSON.stringify(emptyConfig) });
@@ -689,7 +770,10 @@ export function EditorWorkspace({ currentVideo, onSelectVideo, onApplyWallpaper,
               if (typeof window !== "undefined" && currentVideo) {
                 const config = {
                   videoSrc: currentVideo.local_path || currentVideo.video_url,
-                  layers: layers
+                  layers: layers,
+                  bgMode,
+                  bgBlur,
+                  bgBrightness
                 };
                 console.log("[Editor] Saving config to localStorage & invoking tauri:", config);
                 localStorage.setItem("desktop_effects", JSON.stringify(config));
@@ -717,7 +801,7 @@ export function EditorWorkspace({ currentVideo, onSelectVideo, onApplyWallpaper,
         </div>
         
         {/* Play/Pause Overlay */}
-        {isPreviewPaused && (
+        {isPreviewPaused && !isBrushMode && (
           <div 
             style={{ position: "absolute", inset: 0, zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "rgba(0,0,0,0.4)", backdropFilter: "blur(2px)", cursor: "pointer" }}
             onClick={() => setIsPreviewPaused(false)}
@@ -728,7 +812,7 @@ export function EditorWorkspace({ currentVideo, onSelectVideo, onApplyWallpaper,
           </div>
         )}
         
-        {!isPreviewPaused && (
+        {!isPreviewPaused && !isBrushMode && (
            <button
              style={{ position: "absolute", bottom: "16px", left: "16px", zIndex: 60, padding: "8px 16px", borderRadius: "8px", backgroundColor: "rgba(0,0,0,0.6)", color: "white", border: "1px solid rgba(255,255,255,0.2)", cursor: "pointer" }}
              onClick={() => setIsPreviewPaused(true)}
@@ -737,6 +821,50 @@ export function EditorWorkspace({ currentVideo, onSelectVideo, onApplyWallpaper,
            </button>
         )}
 
+        {/* Brush Mask Drawing Canvas */}
+        <canvas
+          ref={maskCanvasRef}
+          className="mask-paint-canvas"
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            zIndex: 100,
+            pointerEvents: isBrushMode ? "auto" : "none",
+            display: isBrushMode ? "block" : "none",
+            cursor: "crosshair"
+          }}
+          onPointerDown={(e) => {
+            if (!isBrushMode) return;
+            isPainting.current = true;
+            const rect = e.currentTarget.getBoundingClientRect();
+            const x = (e.clientX - rect.left) * (e.currentTarget.width / rect.width);
+            const y = (e.clientY - rect.top) * (e.currentTarget.height / rect.height);
+            lastPos.current = { x, y };
+            drawOnMask(x, y, true);
+            e.currentTarget.setPointerCapture(e.pointerId);
+          }}
+          onPointerMove={(e) => {
+            if (!isPainting.current || !isBrushMode) return;
+            const rect = e.currentTarget.getBoundingClientRect();
+            const x = (e.clientX - rect.left) * (e.currentTarget.width / rect.width);
+            const y = (e.clientY - rect.top) * (e.currentTarget.height / rect.height);
+            drawOnMask(x, y, false);
+            lastPos.current = { x, y };
+          }}
+          onPointerUp={(e) => {
+            if (!isPainting.current) return;
+            isPainting.current = false;
+            e.currentTarget.releasePointerCapture(e.pointerId);
+            saveMaskData();
+          }}
+          onPointerCancel={(e) => {
+            isPainting.current = false;
+            e.currentTarget.releasePointerCapture(e.pointerId);
+          }}
+        />
+
         <WebGLEffectRenderer 
           videoSrc={currentVideo ? (currentVideo.local_path || currentVideo.video_url) : ""} 
           effects={layers} 
@@ -744,6 +872,9 @@ export function EditorWorkspace({ currentVideo, onSelectVideo, onApplyWallpaper,
           onUpdateParam={updateParam}
           onRemoveLayer={removeEffect}
           isPaused={isPreviewPaused}
+          bgMode={bgMode}
+          bgBlur={bgBlur}
+          bgBrightness={bgBrightness}
         />
 
       </div>
@@ -761,6 +892,53 @@ export function EditorWorkspace({ currentVideo, onSelectVideo, onApplyWallpaper,
               <label>Layer Name</label>
               <input type="text" className="input" value={selectedLayer.name} disabled />
             </div>
+
+            {/* Brush Mask UI for supported effects */}
+            {["brightness-contrast", "hue-saturation", "sepia", "pixelation", "noise"].includes(selectedLayer.type) && (
+              <div style={{ padding: "12px", border: "1px solid var(--accent)", borderRadius: "8px", backgroundColor: "rgba(154, 230, 0, 0.05)", display: "flex", flexDirection: "column", gap: "8px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span className="eyebrow" style={{ margin: 0, color: "var(--accent)" }}>🖌️ Effect Mask</span>
+                  <div style={{ display: "flex", gap: "4px" }}>
+                    {selectedLayer.params.maskData && (
+                      <button 
+                        type="button" 
+                        className="action-btn action-btn--danger-ghost" 
+                        style={{ padding: "4px 8px", fontSize: "10px", minHeight: "24px" }}
+                        onClick={() => updateParam(selectedLayer.id, "maskData", null)}
+                      >
+                        Clear
+                      </button>
+                    )}
+                    <button 
+                      type="button" 
+                      className={`action-btn ${isBrushMode ? "action-btn--primary" : "action-btn--secondary"}`}
+                      style={{ padding: "4px 8px", fontSize: "10px", minHeight: "24px" }}
+                      onClick={() => {
+                        const newMode = !isBrushMode;
+                        setIsBrushMode(newMode);
+                        if (newMode) initMaskCanvas();
+                      }}
+                    >
+                      {isBrushMode ? "Done Drawing" : (selectedLayer.params.maskData ? "Edit Mask" : "Draw Mask")}
+                    </button>
+                  </div>
+                </div>
+
+                {isBrushMode && (
+                  <>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <label style={{ fontSize: "11px", color: "var(--text-dim)" }}>Brush Size:</label>
+                      <input type="range" min="5" max="200" step="5" value={brushSize} onChange={(e) => setBrushSize(parseInt(e.target.value))} style={{ width: "120px" }} />
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <label style={{ fontSize: "11px", color: "var(--text-dim)" }}>Feather:</label>
+                      <input type="range" min="0" max="1" step="0.1" value={brushFeather} onChange={(e) => setBrushFeather(parseFloat(e.target.value))} style={{ width: "120px" }} />
+                    </div>
+                    <p style={{ fontSize: "10px", color: "var(--text-dim)", margin: 0 }}>Paint directly on the image to restrict this effect.</p>
+                  </>
+                )}
+              </div>
+            )}
 
             {selectedLayer.type === "vignette" && (
               <>
@@ -1546,107 +1724,7 @@ export function EditorWorkspace({ currentVideo, onSelectVideo, onApplyWallpaper,
               </>
             )}
             
-            {selectedLayer.type === "desktop-pet" && (
-              <>
-                <div className="property-group">
-                  <label>Primary Skin</label>
-                  <select className="input" value={selectedLayer.params.skin || "Knight"} onChange={(e) => updateParam(selectedLayer.id, "skin", e.target.value)}>
-                    <option value="Knight">Knight</option>
-                    <option value="Barbarian">Barbarian</option>
-                    <option value="Mage">Mage</option>
-                    <option value="Rogue">Rogue</option>
-                    <option value="Rogue Hooded">Rogue Hooded</option>
-                  </select>
-                </div>
-                <div className="property-group">
-                  <label className="checkbox-label">
-                    <input type="checkbox" checked={selectedLayer.params.enableCompanion === true} onChange={(e) => updateParam(selectedLayer.id, "enableCompanion", e.target.checked)} />
-                    Enable Companion Pet
-                  </label>
-                </div>
-                {selectedLayer.params.enableCompanion && (
-                  <>
-                    <div className="property-group">
-                      <label>Companion Skin</label>
-                      <select className="input" value={selectedLayer.params.companionSkin || "Mage"} onChange={(e) => updateParam(selectedLayer.id, "companionSkin", e.target.value)}>
-                        <option value="Knight">Knight</option>
-                        <option value="Barbarian">Barbarian</option>
-                        <option value="Mage">Mage</option>
-                        <option value="Rogue">Rogue</option>
-                        <option value="Rogue Hooded">Rogue Hooded</option>
-                      </select>
-                    </div>
-                    <div className="property-group">
-                      <label className="checkbox-label">
-                        <input type="checkbox" checked={selectedLayer.params.mayhemMode === true} onChange={(e) => updateParam(selectedLayer.id, "mayhemMode", e.target.checked)} />
-                        Enable Mayhem (Battles & Throwing)
-                      </label>
-                    </div>
-                  </>
-                )}
-                <div className="property-group">
-                  <label>Behavior</label>
-                  <select className="input" value={selectedLayer.params.behavior || "wander"} onChange={(e) => updateParam(selectedLayer.id, "behavior", e.target.value)}>
-                    <optgroup label="AI Behaviors">
-                      <option value="wander">Wander Automatically</option>
-                      <option value="follow-cursor">Follow Mouse</option>
-                      <option value="idle-only">Just Sleep/Idle</option>
-                    </optgroup>
-                    <optgroup label="Static Animations (Looping)">
-                      {DESKTOP_PET_ANIMATIONS.map(anim => (
-                        <option key={anim} value={anim}>{anim}</option>
-                      ))}
-                    </optgroup>
-                  </select>
-                </div>
-                <div className="property-group">
-                  <label className="checkbox-label">
-                    <input type="checkbox" checked={selectedLayer.params.enableCracks !== false} onChange={(e) => updateParam(selectedLayer.id, "enableCracks", e.target.checked)} />
-                    Enable Screen Cracks
-                  </label>
-                </div>
-                <div className="property-group">
-                  <label className="checkbox-label">
-                    <input type="checkbox" checked={selectedLayer.params.muted === true} onChange={(e) => updateParam(selectedLayer.id, "muted", e.target.checked)} />
-                    Mute All Voice Lines
-                  </label>
-                </div>
-                <div className="property-group">
-                  <label className="checkbox-label">
-                    <input type="checkbox" checked={selectedLayer.params.aiVoiceOnly === true} onChange={(e) => updateParam(selectedLayer.id, "aiVoiceOnly", e.target.checked)} />
-                    AI Voice Lines Only (No Default Phrases)
-                  </label>
-                </div>
-                <div className="property-group">
-                  <label>Pet Name</label>
-                  <input type="text" className="input" value={selectedLayer.params.name || ""} onChange={(e) => updateParam(selectedLayer.id, "name", e.target.value)} placeholder="Bot" />
-                </div>
-                <div className="property-group">
-                  <label>Speed ({selectedLayer.params.speed || 1.0})</label>
-                  <input type="range" min="0.2" max="3" step="0.1" className="property-control" value={selectedLayer.params.speed || 1.0} onChange={(e) => updateParam(selectedLayer.id, "speed", parseFloat(e.target.value))} />
-                </div>
-                <div className="property-group">
-                  <label>Size / Scale ({selectedLayer.params.scale || 50})</label>
-                  <input type="range" min="10" max="150" step="5" className="property-control" value={selectedLayer.params.scale || 50} onChange={(e) => updateParam(selectedLayer.id, "scale", parseFloat(e.target.value))} />
-                </div>
-                <div className="property-group">
-                  <label>Pet Color (Fallback)</label>
-                  <input type="color" value={selectedLayer.params.color || "#00aaff"} onChange={(e) => updateParam(selectedLayer.id, "color", e.target.value)} style={{ width: "100%", height: "36px", border: "none", borderRadius: "8px", cursor: "pointer" }} />
-                </div>
-                <div className="property-group" style={{ marginTop: "16px" }}>
-                  <button 
-                    className="action-btn action-btn--secondary" 
-                    style={{ width: "100%", background: "rgba(154, 230, 0, 0.1)", color: "#9ae600", borderColor: "rgba(154, 230, 0, 0.3)" }}
-                    onClick={() => {
-                      localStorage.setItem("default-pet-params", JSON.stringify(selectedLayer.params));
-                      alert("Saved as default Pet settings!");
-                    }}
-                  >
-                    💾 Save as Default Pet Settings
-                  </button>
-                </div>
-              </>
-            )}
+
 
             {selectedLayer.type === "clock" && (
               <>
@@ -2234,111 +2312,7 @@ export function EditorWorkspace({ currentVideo, onSelectVideo, onApplyWallpaper,
         </div>
       )}
 
-      {/* Floating Pet Chat UI */}
-      {hasDesktopPet && (
-        <div style={{
-          position: "fixed",
-          bottom: "30px",
-          right: "30px",
-          zIndex: 1000,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "flex-end"
-        }}>
-          {isChatOpen && (
-            <div style={{
-              width: "300px",
-              height: "400px",
-              background: "rgba(15, 15, 20, 0.95)",
-              border: "1px solid rgba(255,255,255,0.1)",
-              borderRadius: "16px",
-              boxShadow: "0 10px 40px rgba(0,0,0,0.5)",
-              marginBottom: "16px",
-              display: "flex",
-              flexDirection: "column",
-              overflow: "hidden",
-              backdropFilter: "blur(10px)"
-            }}>
-              <div style={{ padding: "12px 16px", background: "rgba(255,255,255,0.05)", borderBottom: "1px solid rgba(255,255,255,0.1)", fontWeight: "bold", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span>🤖 Chat with Pet</span>
-                <span style={{ fontSize: "12px", opacity: 0.5 }}>llama3.2:3b</span>
-              </div>
-              <div style={{ flex: 1, padding: "16px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "12px" }}>
-                <div style={{ fontSize: "12px", opacity: 0.5, textAlign: "center" }}>Connected to local Ollama</div>
-                {chatHistory.map((msg, i) => (
-                  <div key={i} style={{
-                    alignSelf: msg.role === "user" ? "flex-end" : "flex-start",
-                    background: msg.role === "user" ? "#0066ff" : "rgba(255,255,255,0.1)",
-                    padding: "8px 12px",
-                    borderRadius: "12px",
-                    maxWidth: "85%",
-                    fontSize: "14px",
-                    lineHeight: 1.4
-                  }}>
-                    {msg.text}
-                  </div>
-                ))}
-                {isThinking && (
-                  <div style={{ alignSelf: "flex-start", opacity: 0.5, fontSize: "12px" }}>Pet is thinking...</div>
-                )}
-                <div ref={chatEndRef} />
-              </div>
-              <div style={{ padding: "12px", borderTop: "1px solid rgba(255,255,255,0.1)", display: "flex", gap: "8px" }}>
-                <input 
-                  type="text" 
-                  value={chatMessage}
-                  onChange={e => setChatMessage(e.target.value)}
-                  onKeyDown={e => e.key === "Enter" && handleSendChatMessage()}
-                  placeholder="Say something..."
-                  style={{
-                    flex: 1,
-                    background: "rgba(0,0,0,0.5)",
-                    border: "1px solid rgba(255,255,255,0.2)",
-                    borderRadius: "8px",
-                    padding: "8px 12px",
-                    color: "white",
-                    outline: "none"
-                  }}
-                />
-                <button 
-                  onClick={handleSendChatMessage}
-                  disabled={isThinking || !chatMessage.trim()}
-                  style={{
-                    background: "#0066ff",
-                    border: "none",
-                    borderRadius: "8px",
-                    padding: "0 16px",
-                    color: "white",
-                    cursor: "pointer",
-                    opacity: (isThinking || !chatMessage.trim()) ? 0.5 : 1
-                  }}
-                >
-                  Send
-                </button>
-              </div>
-            </div>
-          )}
-          <button 
-            onClick={() => setIsChatOpen(!isChatOpen)}
-            style={{
-              width: "60px",
-              height: "60px",
-              borderRadius: "30px",
-              background: isChatOpen ? "#ff4444" : "#0066ff",
-              border: "none",
-              color: "white",
-              fontSize: "24px",
-              cursor: "pointer",
-              boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
-              transition: "transform 0.2s"
-            }}
-            onMouseEnter={e => e.currentTarget.style.transform = "scale(1.1)"}
-            onMouseLeave={e => e.currentTarget.style.transform = "scale(1)"}
-          >
-            {isChatOpen ? "✕" : "💬"}
-          </button>
-        </div>
-      )}
+
 
     </div>
   );

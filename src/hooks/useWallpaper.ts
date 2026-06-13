@@ -26,7 +26,7 @@ export function useWallpaper() {
     setWallpaperFilter,
     fetchVideoTags
   } = useWallpaperActions(state, setState);
-  const { addToQueue, removeFromQueue } = useQueueManager(state, setState);
+  const { addToQueue, removeFromQueue, clearQueue, importFolderToQueue, reorderQueue } = useQueueManager(state, setState);
   const { toggleFavorite, removeRecentVideo, removeImportedVideo } = useLibraryActions(state, setState);
 
   const setTheme = useCallback(async (theme: string) => {
@@ -82,6 +82,15 @@ export function useWallpaper() {
     } catch (e) { console.error("Browse failed", e); }
   }, [setState]);
 
+  const browseFolderToQueue = useCallback(async () => {
+    try {
+      const { open } = await getDialogApi();
+      const selected = await open({ directory: true, multiple: false });
+      if (typeof selected !== "string" || !selected) return;
+      await importFolderToQueue(selected);
+    } catch (e) { console.error("Browse folder failed", e); }
+  }, [importFolderToQueue]);
+
   const toggleHideVideo = useCallback(async (videoId: string) => {
     try {
       const { invoke } = await getCoreApi();
@@ -133,13 +142,7 @@ export function useWallpaper() {
     } catch (e) { console.error("setAutostartEnabled failed", e); }
   }, [setState]);
 
-  const setRotationConfig = useCallback(async (enabled: boolean, intervalSeconds: number) => {
-    try {
-      const { invoke } = await getCoreApi();
-      const persisted = await invoke<PersistedState>("set_rotation", { enabled, intervalSeconds });
-      setState((s) => applyPersistedState(persisted, s));
-    } catch (e) { console.error("setRotationConfig failed", e); }
-  }, [setState]);
+
 
   const isFavorite = useCallback((video: VideoResult) => {
     return state.favorites.some((f) => f.video.id === video.id || f.video.local_path === video.local_path);
@@ -164,6 +167,9 @@ export function useWallpaper() {
     setWallpaperFilter,
     addToQueue,
     removeFromQueue,
+    clearQueue,
+    importFolderToQueue,
+    reorderQueue,
     toggleFavorite,
     removeRecentVideo,
     removeImportedVideo,
@@ -178,8 +184,8 @@ export function useWallpaper() {
     setAutoPauseEnabled,
     setWindowBehavior,
     setAutostartEnabled,
-    setRotationConfig,
     browseLocalVideo,
+    browseFolderToQueue,
     isFavorite,
     isQueued,
     // Add missing simple state setters as needed for the UI
@@ -189,8 +195,20 @@ export function useWallpaper() {
     setResolutions: (resolutions: string | null) => setState(s => ({ ...s, resolutions, page: 1 })),
     setRatios: (ratios: string | null) => setState(s => ({ ...s, ratios, page: 1 })),
     setColors: (colors: string | null) => setState(s => ({ ...s, colors, page: 1 })),
-    setCategoriesFilter: (categoriesFilter: string) => setState(s => ({ ...s, categoriesFilter, page: 1 })),
-    setPurityFilter: (purityFilter: string) => setState(s => ({ ...s, purityFilter, page: 1 })),
+    setCategoriesFilter: async (categoriesFilter: string) => {
+      try {
+        const { invoke } = await getCoreApi();
+        const persisted = await invoke<PersistedState>("set_categories_filter", { categories: categoriesFilter });
+        setState((s) => ({ ...applyPersistedState(persisted, s), page: 1 }));
+      } catch (e) { console.error("Categories filter failed", e); }
+    },
+    setPurityFilter: async (purityFilter: string) => {
+      try {
+        const { invoke } = await getCoreApi();
+        const persisted = await invoke<PersistedState>("set_purity_filter", { purity: purityFilter });
+        setState((s) => ({ ...applyPersistedState(persisted, s), page: 1 }));
+      } catch (e) { console.error("Purity filter failed", e); }
+    },
     setSelectedMonitor: (monitor: DisplayMonitor | null) => setState(s => ({ ...s, selectedMonitor: monitor })),
     setColorFilter: (colorFilter: string) => setState(s => {
       // Keep old colorFilter logic just in case it's used elsewhere, but we map to colors

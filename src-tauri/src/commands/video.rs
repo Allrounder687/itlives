@@ -62,6 +62,179 @@ fn clean_search_query(q: &str) -> String {
     cleaned.trim().to_string()
 }
 
+fn normalize_query_for_provider(query: &str, provider: &str) -> String {
+    let q = query.trim().to_lowercase();
+    if q.is_empty() || q == "all" || q == "wallpaper" || q == "wallpapers" {
+        return q;
+    }
+
+    match provider.to_lowercase().as_str() {
+        "motionbgs" => {
+            match q.as_str() {
+                "women" | "woman" | "girls" | "girl" | "anime girl" | "anime girls" |
+                "cleavage" | "boobs" | "breasts" | "chest" | "ass" | "butt" | "sexy" | "hot" |
+                "naked" | "nude" | "ecchi" | "hentai" | "waifu" | "bikini" | "swimsuit" |
+                "lingerie" | "undergarment" | "underwear" | "panties" | "lewd" | "nsfw" |
+                "cosplay" | "model" | "models" | "beauty" | "beautiful" | "cute" | "pretty" |
+                "girlfriend" => "girl".to_string(),
+                "cars" | "car" | "vehicles" | "vehicle" | "bike" | "bikes" | "motorcycle" |
+                "motorcycles" | "plane" | "planes" | "supercar" | "supercars" | "hypercar" |
+                "hypercars" | "racing" | "f1" | "drift" => "car".to_string(),
+                "animals" | "animal" | "pets" | "pet" | "dogs" | "dog" | "cats" | "cat" |
+                "wolf" | "wolves" | "fox" | "foxes" => "animal".to_string(),
+                "games" | "game" | "gaming" | "playstation" | "xbox" | "nintendo" => "games".to_string(),
+                "landscapes" | "landscape" | "nature" | "scenery" => "landscape".to_string(),
+                "cities" | "city" | "urban" | "street" | "streets" => "city".to_string(),
+                "scifi" | "sci-fi" | "future" | "futuristic" | "space" | "universe" | "galaxy" |
+                "cosmic" | "nebula" | "astronaut" => "space".to_string(),
+                "sea" | "seas" | "ocean" | "oceans" | "water" | "beach" | "beaches" => "ocean".to_string(),
+                "pixel" | "pixelart" | "pixel-art" => "pixel".to_string(),
+                "retro" | "retrowave" | "synthwave" | "lofi" | "vintage" => "synthwave".to_string(),
+                "anime" | "animes" => "anime".to_string(),
+                "cyberpunk" => "cyberpunk".to_string(),
+                "fantasy" => "fantasy".to_string(),
+                "cartoon" | "cartoons" | "animated" => "cartoon".to_string(),
+                "abstract" | "shapes" | "minimalist" | "minimal" => "abstract".to_string(),
+                _ => q,
+            }
+        }
+        "wallpaperwaves" => {
+            // WallpaperWaves category matchers:
+            // "anime", "abstract", "animal", "cartoon", "fantasy", "games", "landscape", "memes", "pixel-art", "retro", "sci-fi", "tv-movies", "vehicle"
+            match q.as_str() {
+                "anime" | "animes" => "anime".to_string(),
+                "abstract" | "shapes" | "minimalist" | "minimal" => "abstract".to_string(),
+                "animal" | "animals" | "pets" | "pet" | "dog" | "dogs" | "cat" | "cats" |
+                "wolf" | "wolves" | "fox" | "foxes" => "animal".to_string(),
+                "cartoon" | "cartoons" | "animated" => "cartoon".to_string(),
+                "fantasy" => "fantasy".to_string(),
+                "games" | "game" | "gaming" | "playstation" | "xbox" | "nintendo" => "games".to_string(),
+                "landscape" | "landscapes" | "nature" | "scenery" | "forest" | "forests" | "mountain" | "mountains" => "landscape".to_string(),
+                "memes" | "meme" | "funny" => "memes".to_string(),
+                "pixel-art" | "pixel" | "pixelart" => "pixel-art".to_string(),
+                "retro" | "retrowave" | "synthwave" | "lofi" | "vintage" => "retro".to_string(),
+                "sci-fi" | "scifi" | "space" | "future" | "futuristic" | "universe" | "galaxy" |
+                "cosmic" | "nebula" | "astronaut" => "sci-fi".to_string(),
+                "tv-movies" | "movies" | "movie" | "tv" | "shows" | "show" => "tv-movies".to_string(),
+                "vehicle" | "vehicles" | "car" | "cars" | "bike" | "bikes" | "motorcycle" |
+                "motorcycles" | "plane" | "planes" | "supercar" | "supercars" | "hypercar" |
+                "hypercars" | "racing" | "f1" | "drift" => "vehicle".to_string(),
+                // For general girl search queries, map to "girl"
+                "women" | "woman" | "girls" | "anime girl" | "anime girls" | "girlfriend" => "girl".to_string(),
+                _ => q, // Search specifically for "cleavage", "boobs", "bikini", "sexy", etc.
+            }
+        }
+        "alphacoders" => {
+            match q.as_str() {
+                "women" | "woman" | "girls" | "anime girl" | "anime girls" | "girlfriend" => "girl".to_string(),
+                "cars" | "car" | "vehicles" | "vehicle" | "bike" | "bikes" | "motorcycle" |
+                "motorcycles" | "plane" | "planes" | "supercar" | "supercars" | "hypercar" |
+                "hypercars" | "racing" | "f1" | "drift" => "car".to_string(),
+                "animals" | "animal" | "pets" | "pet" | "dogs" | "dog" | "cats" | "cat" |
+                "wolf" | "wolves" | "fox" | "foxes" => "animal".to_string(),
+                "games" | "game" | "gaming" | "playstation" | "xbox" | "nintendo" => "game".to_string(),
+                _ => q,
+            }
+        }
+        "wallhaven" => {
+            match q.as_str() {
+                "women" | "woman" | "girls" | "anime girl" | "anime girls" | "girlfriend" => "girl".to_string(),
+                _ => q,
+            }
+        }
+        _ => q,
+    }
+}
+
+fn score_item_for_query(item: &VideoResult, query: &str) -> i32 {
+    let q = query.trim().to_lowercase();
+    if q.is_empty() || q == "all" || q == "wallpaper" || q == "wallpapers" {
+        return 0;
+    }
+
+    let mut score = 0;
+
+    // Rule 1: Baseline boost if the provider was searched with the exact query (no normalization happened)
+    let normalized = normalize_query_for_provider(&q, &item.source);
+    if normalized == q {
+        score += 200;
+    }
+
+    // Extract text for matching
+    let mut text_to_search = String::new();
+    if let Some(ref tags) = item.tags {
+        for tag in tags {
+            text_to_search.push_str(&tag.to_lowercase());
+            text_to_search.push(' ');
+        }
+    }
+    text_to_search.push_str(&item.id.to_lowercase());
+    text_to_search.push(' ');
+    text_to_search.push_str(&item.video_url.to_lowercase());
+    text_to_search.push(' ');
+    text_to_search.push_str(&item.thumbnail_url.to_lowercase());
+    text_to_search.push(' ');
+
+    // Replace hyphens and underscores to improve word boundaries
+    let text_to_search = text_to_search.replace('-', " ").replace('_', " ");
+
+    // Rule 2: Exact query match in text
+    if text_to_search.contains(&q) {
+        score += 300;
+    }
+
+    // Rule 3: Individual word matches
+    let query_words: Vec<&str> = q.split_whitespace().collect();
+    for word in &query_words {
+        if word.len() > 2 && text_to_search.contains(word) {
+            score += 50;
+        }
+    }
+
+    // Rule 4: Adult/sexy theme boosts if query is adult-themed
+    let adult_keywords = vec![
+        "cleavage", "boob", "boobs", "breast", "breasts", "chest", "ass", "butt", "sexy", "hot", 
+        "naked", "nude", "ecchi", "hentai", "waifu", "bikini", "swimsuit", "lingerie", 
+        "undergarment", "underwear", "panties", "lewd", "nsfw", "cosplay", "model", 
+        "models", "beauty", "beautiful", "cute", "pretty", "girl", "girls", "woman", 
+        "women", "succubus", "maid"
+    ];
+
+    let query_is_adult = query_words.iter().any(|w| adult_keywords.contains(w));
+
+    if query_is_adult {
+        // Boost if the item text contains the exact query words that are adult keywords
+        for word in &query_words {
+            if adult_keywords.contains(word) && text_to_search.contains(word) {
+                score += 500;
+            }
+        }
+
+        // Secondary sketchy terms boost
+        let sketchy_keywords = vec![
+            "cleavage", "boobs", "breasts", "bikini", "swimsuit", "lingerie", 
+            "underwear", "panties", "sexy", "ass", "butt", "lewd", "succubus", "maid"
+        ];
+        for word in sketchy_keywords {
+            if text_to_search.contains(word) {
+                score += 150;
+            }
+        }
+
+        // General girl terms boost
+        let general_girl_keywords = vec![
+            "girl", "girls", "woman", "women", "cosplay", "waifu"
+        ];
+        for word in general_girl_keywords {
+            if text_to_search.contains(word) {
+                score += 50;
+            }
+        }
+    }
+
+    score
+}
+
 #[tauri::command]
 pub async fn fetch_video(
     state: State<'_, AppStateStore>,
@@ -108,7 +281,7 @@ pub async fn fetch_video(
         };
         let provider = providers::get_provider(chosen)?;
         let config = SearchConfig {
-            query: cleaned_query,
+            query: normalize_query_for_provider(&cleaned_query, chosen),
             order,
             count: 40,
             page: 1,
@@ -123,7 +296,7 @@ pub async fn fetch_video(
     }
     let provider = providers::get_provider(&source)?;
     let config = SearchConfig {
-        query: cleaned_query,
+        query: normalize_query_for_provider(&cleaned_query, &source),
         order,
         count: 40,
         page: 0,
@@ -214,6 +387,7 @@ pub async fn fetch_videos_list(
         let mut tasks = Vec::new();
         for p_name in providers_list {
             let mut config_clone = config.clone();
+            config_clone.query = normalize_query_for_provider(&config_clone.query, p_name);
             if p_name != "wallhaven" {
                 if let Some(ref hex) = config.colors {
                     if let Some(name) = hex_to_color_name(hex) {
@@ -247,10 +421,18 @@ pub async fn fetch_videos_list(
         // Apply post-fetch filters to the unified results
         providers::apply_post_fetch_filters(&mut all_results, &config);
 
-        // Sort by ID or shuffle? Shuffling makes it feel more "unified"
+        // Shuffle first to ensure randomized order for items with the same score
         use rand::seq::SliceRandom;
         let mut rng = rand::thread_rng();
         all_results.shuffle(&mut rng);
+
+        // Score and sort results based on relevance to the user's actual query
+        let query_str = config.query.clone();
+        all_results.sort_by(|a, b| {
+            let score_a = score_item_for_query(a, &query_str);
+            let score_b = score_item_for_query(b, &query_str);
+            score_b.cmp(&score_a)
+        });
 
         return Ok(all_results);
     }
@@ -266,7 +448,7 @@ pub async fn fetch_videos_list(
     }
 
     let mut config = SearchConfig {
-        query: cleaned_query,
+        query: normalize_query_for_provider(&cleaned_query, &source),
         order,
         count: 40,
         page: fetch_page,
@@ -295,10 +477,18 @@ pub async fn fetch_videos_list(
     // Apply post-fetch filters for all providers
     providers::apply_post_fetch_filters(&mut results, &config);
 
-    // Shuffle the results to guarantee freshness even on specific searches
+    // Shuffle the results first
     use rand::seq::SliceRandom;
     let mut rng = rand::thread_rng();
     results.shuffle(&mut rng);
+
+    // Score and sort results based on relevance to the user's actual query
+    let query_str = cleaned_query.clone();
+    results.sort_by(|a, b| {
+        let score_a = score_item_for_query(a, &query_str);
+        let score_b = score_item_for_query(b, &query_str);
+        score_b.cmp(&score_a)
+    });
 
     Ok(results)
 }
@@ -542,4 +732,109 @@ pub async fn fetch_wallhaven_collections(username: String) -> Result<String, Str
     resp.text()
         .await
         .map_err(|e| format!("Failed to parse response: {}", e))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_normalization() {
+        assert_eq!(normalize_query_for_provider("women", "motionbgs"), "girl");
+        assert_eq!(normalize_query_for_provider("woman", "motionbgs"), "girl");
+        assert_eq!(normalize_query_for_provider("girls", "motionbgs"), "girl");
+        assert_eq!(normalize_query_for_provider("girl", "motionbgs"), "girl");
+
+        assert_eq!(normalize_query_for_provider("women", "wallpaperwaves"), "girl");
+        assert_eq!(normalize_query_for_provider("woman", "wallpaperwaves"), "girl");
+        assert_eq!(normalize_query_for_provider("girls", "wallpaperwaves"), "girl");
+        assert_eq!(normalize_query_for_provider("girl", "wallpaperwaves"), "girl");
+        assert_eq!(normalize_query_for_provider("cleavage", "motionbgs"), "girl");
+        assert_eq!(normalize_query_for_provider("cleavage", "wallpaperwaves"), "cleavage");
+
+        assert_eq!(normalize_query_for_provider("cars", "motionbgs"), "car");
+        assert_eq!(normalize_query_for_provider("vehicles", "motionbgs"), "car");
+        assert_eq!(normalize_query_for_provider("vehicle", "motionbgs"), "car");
+
+        assert_eq!(normalize_query_for_provider("cars", "wallpaperwaves"), "vehicle");
+        assert_eq!(normalize_query_for_provider("vehicles", "wallpaperwaves"), "vehicle");
+        assert_eq!(normalize_query_for_provider("vehicle", "wallpaperwaves"), "vehicle");
+
+        assert_eq!(normalize_query_for_provider("animals", "motionbgs"), "animal");
+        assert_eq!(normalize_query_for_provider("animals", "wallpaperwaves"), "animal");
+    }
+
+    #[test]
+    fn test_scoring() {
+        let cleavage_item = VideoResult {
+            id: "123".to_string(),
+            video_url: "https://example.com/girl-cleavage-showcase.mp4".to_string(),
+            thumbnail_url: "https://example.com/thumb.jpg".to_string(),
+            local_path: "".to_string(),
+            duration: 0.0,
+            width: 1920,
+            height: 1080,
+            source: "motionbgs".to_string(),
+            start_time: None,
+            end_time: None,
+            tags: Some(vec!["girl".to_string(), "cleavage".to_string(), "sexy".to_string()]),
+        };
+
+        let generic_item = VideoResult {
+            id: "456".to_string(),
+            video_url: "https://example.com/nature-landscape.mp4".to_string(),
+            thumbnail_url: "https://example.com/thumb2.jpg".to_string(),
+            local_path: "".to_string(),
+            duration: 0.0,
+            width: 1920,
+            height: 1080,
+            source: "motionbgs".to_string(),
+            start_time: None,
+            end_time: None,
+            tags: Some(vec!["landscape".to_string(), "nature".to_string()]),
+        };
+
+        let score_cleavage = score_item_for_query(&cleavage_item, "cleavage");
+        let score_generic = score_item_for_query(&generic_item, "cleavage");
+
+        assert!(score_cleavage > score_generic, "Cleavage query should score cleavage item higher");
+        assert!(score_cleavage > 500, "Cleavage item should get a high relevance score");
+    }
+
+    #[tokio::test]
+    async fn test_provider_fetches() {
+        // Test MotionBGs with normalized "women" query -> "girl"
+        let p_motion = providers::get_provider("motionbgs").unwrap();
+        let config_motion = SearchConfig {
+            query: normalize_query_for_provider("women", "motionbgs"),
+            order: "latest".to_string(),
+            count: 10,
+            page: 1,
+            api_key: None,
+            resolutions: None,
+            ratios: None,
+            colors: None,
+            categories: None,
+            purity: None,
+        };
+        let results_motion = p_motion.fetch_videos_list(&config_motion).await.unwrap();
+        assert!(!results_motion.is_empty(), "MotionBGs girl search should return results");
+
+        // Test WallpaperWaves with normalized "women" query -> "girl"
+        let p_waves = providers::get_provider("wallpaperwaves").unwrap();
+        let config_waves = SearchConfig {
+            query: normalize_query_for_provider("women", "wallpaperwaves"),
+            order: "latest".to_string(),
+            count: 10,
+            page: 1,
+            api_key: None,
+            resolutions: None,
+            ratios: None,
+            colors: None,
+            categories: None,
+            purity: None,
+        };
+        let results_waves = p_waves.fetch_videos_list(&config_waves).await.unwrap();
+        assert!(!results_waves.is_empty(), "WallpaperWaves girl search should return results");
+    }
 }

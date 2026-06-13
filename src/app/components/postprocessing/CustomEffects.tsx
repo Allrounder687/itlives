@@ -608,3 +608,227 @@ export const RainOnGlass = forwardRef(({ params }: { params: any }, ref) => {
 
   return <primitive ref={ref} object={effect} dispose={null} />;
 });
+
+// ─────────────────────────────────────────────────────────────
+// 5. Masked Post-Processing Effects
+// ─────────────────────────────────────────────────────────────
+
+// Shared logic to sample mask
+const maskSampleLogic = `
+uniform sampler2D tMask;
+uniform bool uHasMask;
+
+float getMaskAlpha(vec2 uv) {
+  if (!uHasMask) return 1.0;
+  vec4 maskColor = texture2D(tMask, vec2(uv.x, 1.0 - uv.y)); // WebGL vs Canvas Y-axis flip
+  return maskColor.r * maskColor.a; // Red channel + alpha
+}
+`;
+
+const useMaskTexture = (maskData?: string) => {
+  const [texture, setTexture] = React.useState<THREE.Texture | null>(null);
+  React.useEffect(() => {
+    if (!maskData) {
+      setTexture(null);
+      return;
+    }
+    const img = new Image();
+    img.onload = () => {
+      const tex = new THREE.Texture(img);
+      tex.needsUpdate = true;
+      setTexture(tex);
+    };
+    img.src = maskData;
+  }, [maskData]);
+  return texture;
+};
+
+// -- Brightness & Contrast --
+const maskedBrightnessContrastShader = `
+uniform float uBrightness;
+uniform float uContrast;
+${maskSampleLogic}
+
+void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor) {
+  vec4 color = inputColor;
+  if (uBrightness != 0.0 || uContrast != 0.0) {
+    color.rgb = (color.rgb - 0.5) * (1.0 + uContrast) + 0.5 + uBrightness;
+  }
+  float mask = getMaskAlpha(uv);
+  outputColor = mix(inputColor, color, mask);
+}
+`;
+class MaskedBrightnessContrastImpl extends Effect {
+  constructor() {
+    super("MaskedBrightnessContrast", maskedBrightnessContrastShader, {
+      uniforms: new Map<string, THREE.Uniform<any>>([
+        ["uBrightness", new THREE.Uniform(0.0)],
+        ["uContrast", new THREE.Uniform(0.0)],
+        ["tMask", new THREE.Uniform(null)],
+        ["uHasMask", new THREE.Uniform(false)]
+      ])
+    });
+  }
+}
+export const MaskedBrightnessContrast = forwardRef(({ params }: { params: any }, ref) => {
+  const effect = useMemo(() => new MaskedBrightnessContrastImpl(), []);
+  const maskTex = useMaskTexture(params.maskData);
+  useFrame(() => {
+    effect.uniforms.get("uBrightness")!.value = params.brightness || 0.0;
+    effect.uniforms.get("uContrast")!.value = params.contrast || 0.0;
+    effect.uniforms.get("tMask")!.value = maskTex;
+    effect.uniforms.get("uHasMask")!.value = !!maskTex;
+  });
+  return <primitive ref={ref} object={effect} dispose={null} />;
+});
+
+// -- Hue & Saturation --
+const maskedHueSaturationShader = `
+uniform float uHue;
+uniform float uSaturation;
+${maskSampleLogic}
+
+vec3 hueShift(vec3 color, float hue) {
+  const vec3 k = vec3(0.57735, 0.57735, 0.57735);
+  float cosAngle = cos(hue);
+  return color * cosAngle + cross(k, color) * sin(hue) + k * dot(k, color) * (1.0 - cosAngle);
+}
+
+void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor) {
+  vec3 color = inputColor.rgb;
+  if (uHue != 0.0) color = hueShift(color, uHue);
+  if (uSaturation != 0.0) {
+    float luminance = dot(color, vec3(0.299, 0.587, 0.114));
+    color = mix(vec3(luminance), color, 1.0 + uSaturation);
+  }
+  float mask = getMaskAlpha(uv);
+  outputColor = vec4(mix(inputColor.rgb, color, mask), inputColor.a);
+}
+`;
+class MaskedHueSaturationImpl extends Effect {
+  constructor() {
+    super("MaskedHueSaturation", maskedHueSaturationShader, {
+      uniforms: new Map<string, THREE.Uniform<any>>([
+        ["uHue", new THREE.Uniform(0.0)],
+        ["uSaturation", new THREE.Uniform(0.0)],
+        ["tMask", new THREE.Uniform(null)],
+        ["uHasMask", new THREE.Uniform(false)]
+      ])
+    });
+  }
+}
+export const MaskedHueSaturation = forwardRef(({ params }: { params: any }, ref) => {
+  const effect = useMemo(() => new MaskedHueSaturationImpl(), []);
+  const maskTex = useMaskTexture(params.maskData);
+  useFrame(() => {
+    effect.uniforms.get("uHue")!.value = params.hue || 0.0;
+    effect.uniforms.get("uSaturation")!.value = params.saturation || 0.0;
+    effect.uniforms.get("tMask")!.value = maskTex;
+    effect.uniforms.get("uHasMask")!.value = !!maskTex;
+  });
+  return <primitive ref={ref} object={effect} dispose={null} />;
+});
+
+// -- Sepia --
+const maskedSepiaShader = `
+uniform float uIntensity;
+${maskSampleLogic}
+
+void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor) {
+  vec3 color = inputColor.rgb;
+  vec3 sepiaColor;
+  sepiaColor.r = dot(color, vec3(0.393, 0.769, 0.189));
+  sepiaColor.g = dot(color, vec3(0.349, 0.686, 0.168));
+  sepiaColor.b = dot(color, vec3(0.272, 0.534, 0.131));
+  vec3 finalColor = mix(color, sepiaColor, uIntensity);
+  float mask = getMaskAlpha(uv);
+  outputColor = vec4(mix(inputColor.rgb, finalColor, mask), inputColor.a);
+}
+`;
+class MaskedSepiaImpl extends Effect {
+  constructor() {
+    super("MaskedSepia", maskedSepiaShader, {
+      uniforms: new Map<string, THREE.Uniform<any>>([
+        ["uIntensity", new THREE.Uniform(1.0)],
+        ["tMask", new THREE.Uniform(null)],
+        ["uHasMask", new THREE.Uniform(false)]
+      ])
+    });
+  }
+}
+export const MaskedSepia = forwardRef(({ params }: { params: any }, ref) => {
+  const effect = useMemo(() => new MaskedSepiaImpl(), []);
+  const maskTex = useMaskTexture(params.maskData);
+  useFrame(() => {
+    effect.uniforms.get("uIntensity")!.value = params.intensity || 1.0;
+    effect.uniforms.get("tMask")!.value = maskTex;
+    effect.uniforms.get("uHasMask")!.value = !!maskTex;
+  });
+  return <primitive ref={ref} object={effect} dispose={null} />;
+});
+
+// -- Pixelation --
+const maskedPixelationShader = `
+uniform float uGranularity;
+uniform vec2 uResolution;
+${maskSampleLogic}
+
+void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor) {
+  float mask = getMaskAlpha(uv);
+  if (mask > 0.0 && uGranularity > 1.0) {
+    vec2 size = uResolution / uGranularity;
+    vec2 pixelatedUv = floor(uv * size) / size;
+    // We cannot sample inputBuffer directly in custom effects without a texture, 
+    // but in Effect framework, we can cheat if we don't have inputBuffer by using inputColor (only works for 1 pass)
+    // Actually, postprocessing doesn't allow sampling inputBuffer at different UVs without a texture uniform.
+    // Pixelation is best handled by built-in if we need texture displacement. But we'll do an approximation.
+  }
+  outputColor = inputColor; // Fallback since Pixelation requires inputBuffer access
+}
+`;
+// Let's just wrap Pixelation with a custom pass later, or skip Pixelation masking for now.
+
+// -- Noise --
+const maskedNoiseShader = `
+uniform float uTime;
+uniform float uOpacity;
+${maskSampleLogic}
+
+float rand(vec2 co){
+  return fract(sin(dot(co.xy ,vec2(12.9898,78.233))) * 43758.5453);
+}
+
+void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor) {
+  float mask = getMaskAlpha(uv);
+  if (mask > 0.0 && uOpacity > 0.0) {
+    float noiseVal = rand(uv * uTime) * uOpacity;
+    vec3 noisyColor = inputColor.rgb + noiseVal - (uOpacity * 0.5);
+    outputColor = vec4(mix(inputColor.rgb, noisyColor, mask), inputColor.a);
+  } else {
+    outputColor = inputColor;
+  }
+}
+`;
+class MaskedNoiseImpl extends Effect {
+  constructor() {
+    super("MaskedNoise", maskedNoiseShader, {
+      uniforms: new Map<string, THREE.Uniform<any>>([
+        ["uTime", new THREE.Uniform(0.0)],
+        ["uOpacity", new THREE.Uniform(0.5)],
+        ["tMask", new THREE.Uniform(null)],
+        ["uHasMask", new THREE.Uniform(false)]
+      ])
+    });
+  }
+}
+export const MaskedNoise = forwardRef(({ params }: { params: any }, ref) => {
+  const effect = useMemo(() => new MaskedNoiseImpl(), []);
+  const maskTex = useMaskTexture(params.maskData);
+  useFrame((state) => {
+    effect.uniforms.get("uTime")!.value = state.clock.elapsedTime;
+    effect.uniforms.get("uOpacity")!.value = params.opacity || 0.5;
+    effect.uniforms.get("tMask")!.value = maskTex;
+    effect.uniforms.get("uHasMask")!.value = !!maskTex;
+  });
+  return <primitive ref={ref} object={effect} dispose={null} />;
+});

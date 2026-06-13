@@ -7,6 +7,7 @@ license = ""
 repository = ""
 edition = "2021"
 rust-version = "1.77.2"
+default-run = "app"
 
 [lib]
 name = "app_lib"
@@ -35,7 +36,7 @@ lazy_static = "1.4"
 image = "0.24"
 cpal = "0.17.1"
 rustfft = "6.4.1"
-windows = { version = "0.58", features = ["Media_Control", "Foundation", "Storage_Streams", "Win32_Foundation", "Win32_System_LibraryLoader", "Win32_UI_Controls"] }
+windows = { version = "0.58", features = ["Media_Control", "Foundation", "Storage_Streams", "Win32_Foundation", "Win32_System_LibraryLoader", "Win32_UI_Controls", "Win32_UI_WindowsAndMessaging"] }
 tauri-plugin-http = "2"
 
 [target.'cfg(windows)'.dependencies]

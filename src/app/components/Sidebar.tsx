@@ -1,6 +1,8 @@
 "use client";
 
-import React from "react";
+import React, { useState, useRef } from "react";
+import { createPortal } from "react-dom";
+import { useNsfw } from "@/hooks/useNsfw";
 
 const ICONS = {
   discover: (
@@ -62,7 +64,33 @@ interface SidebarProps {
   setIsSidebarCollapsed: (v: boolean) => void;
 }
 
-export function Sidebar({ activeTab, setActiveTab, isSidebarCollapsed, setIsSidebarCollapsed }: SidebarProps) {
+export const Sidebar = React.memo(function Sidebar({ activeTab, setActiveTab, isSidebarCollapsed, setIsSidebarCollapsed }: SidebarProps) {
+  const { isUnlocked, unlockNsfw } = useNsfw();
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [pin, setPin] = useState("");
+  const [pinError, setPinError] = useState(false);
+
+  const settingsClickCount = useRef(0);
+  const settingsClickTimer = useRef<NodeJS.Timeout | null>(null);
+
+  const handleSettingsClick = () => {
+    setActiveTab("settings");
+    
+    if (!isUnlocked) {
+      settingsClickCount.current += 1;
+      if (settingsClickTimer.current) clearTimeout(settingsClickTimer.current);
+      
+      settingsClickTimer.current = setTimeout(() => {
+        settingsClickCount.current = 0;
+      }, 1000); // 1 second window for triple click
+      
+      if (settingsClickCount.current >= 3) {
+        settingsClickCount.current = 0;
+        setShowPinModal(true);
+      }
+    }
+  };
+
   return (
     <aside className={`sidebar panel ${isSidebarCollapsed ? "sidebar--collapsed" : ""}`}>
       <div className="brand-block">
@@ -157,7 +185,7 @@ export function Sidebar({ activeTab, setActiveTab, isSidebarCollapsed, setIsSide
           <button
             type="button"
             className={`sidebar-list__item sidebar-list__item--clickable ${activeTab === "settings" ? "sidebar-list__item--active" : ""}`}
-            onClick={() => setActiveTab("settings")}
+            onClick={handleSettingsClick}
             title="Settings"
           >
             <div className="tab-icon">{ICONS.settings}</div>
@@ -165,6 +193,71 @@ export function Sidebar({ activeTab, setActiveTab, isSidebarCollapsed, setIsSide
           </button>
         </div>
       </div>
+
+      {showPinModal && typeof document !== "undefined" && createPortal(
+        <div className="modal-overlay" style={{
+          position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", backdropFilter: "blur(8px)",
+          display: "flex", alignItems: "center", justifyContent: "center", zIndex: 999999
+        }}>
+
+          <div className="panel" style={{ padding: "32px", maxWidth: "340px", width: "100%", textAlign: "center", border: "1px solid rgba(255,107,107,0.3)", boxShadow: "0 20px 40px rgba(0,0,0,0.8)" }}>
+            <div style={{ marginBottom: "20px" }}>
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ filter: "drop-shadow(0 0 8px rgba(154,230,0,0.5))" }}>
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+              </svg>
+            </div>
+            <h3 style={{ marginBottom: "8px", color: "#fff", letterSpacing: "1px" }}>Restricted Access</h3>
+            <p style={{ fontSize: "12px", color: "var(--text-soft)", marginBottom: "24px" }}>
+              Enter PIN to unlock sensitive content and settings.
+            </p>
+            <input 
+              type="password" 
+              className="input input--hud" 
+              style={{ width: "100%", textAlign: "center", letterSpacing: "12px", fontSize: "28px", marginBottom: "16px", padding: "12px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: pinError ? "1px solid #ff6b6b" : "1px solid rgba(255,255,255,0.1)" }}
+              value={pin}
+              onChange={(e) => {
+                setPin(e.target.value);
+                setPinError(false);
+              }}
+              autoFocus
+              maxLength={4}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  if (pin === "3747") {
+                    unlockNsfw();
+                    setShowPinModal(false);
+                    setPin("");
+                  } else {
+                    setPinError(true);
+                    setPin("");
+                  }
+                }
+                if (e.key === "Escape") {
+                  setShowPinModal(false);
+                  setPin("");
+                  setPinError(false);
+                }
+              }}
+            />
+            {pinError && <div style={{ color: "#ff6b6b", fontSize: "12px", marginBottom: "16px", animation: "shake 0.4s" }}>Incorrect PIN. Access Denied.</div>}
+            <div style={{ display: "flex", gap: "12px", justifyContent: "center", marginTop: pinError ? "0" : "16px" }}>
+              <button className="action-btn action-btn--ghost" style={{ flex: 1 }} onClick={() => { setShowPinModal(false); setPin(""); setPinError(false); }}>Cancel</button>
+              <button className="action-btn action-btn--primary" style={{ flex: 1 }} onClick={() => {
+                if (pin === "3747") {
+                  unlockNsfw();
+                  setShowPinModal(false);
+                  setPin("");
+                } else {
+                  setPinError(true);
+                  setPin("");
+                }
+              }}>Unlock</button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </aside>
   );
-}
+});

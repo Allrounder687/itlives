@@ -6,7 +6,7 @@ use std::sync::{Arc, RwLock};
 
 const MAX_RECENTS: usize = 12;
 const MAX_FAVORITES: usize = 24;
-const MAX_QUEUE: usize = 32;
+const MAX_QUEUE: usize = 100_000;
 const MAX_IMPORTED_FILES: usize = 48;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -29,8 +29,6 @@ pub struct WallpaperState {
     pub imports: Vec<LibraryItem>,
     pub queue: Vec<LibraryItem>,
     pub queue_cursor: usize,
-    pub rotation_enabled: bool,
-    pub rotation_interval_seconds: u64,
     pub auto_pause_enabled: bool,
     pub paused: bool,
     pub volume_percent: u64,
@@ -43,6 +41,8 @@ pub struct WallpaperState {
     pub pinterest_urls: Vec<String>,
     pub hidden_videos: Vec<String>,
     pub keep_effects_running_on_pause: bool,
+    pub categories_filter: String,
+    pub purity_filter: String,
 }
 
 impl Default for WallpaperState {
@@ -59,8 +59,6 @@ impl Default for WallpaperState {
             imports: Vec::new(),
             queue: Vec::new(),
             queue_cursor: 0,
-            rotation_enabled: false,
-            rotation_interval_seconds: 300,
             auto_pause_enabled: false,
             paused: false,
             volume_percent: 0,
@@ -75,6 +73,8 @@ impl Default for WallpaperState {
             ],
             hidden_videos: Vec::new(),
             keep_effects_running_on_pause: false,
+            categories_filter: "111".to_string(),
+            purity_filter: "100".to_string(),
         }
     }
 }
@@ -304,6 +304,26 @@ pub fn set_theme(store: &AppStateStore, theme: String) -> Result<WallpaperState,
     })
 }
 
+pub fn set_categories_filter(
+    store: &AppStateStore,
+    categories_filter: String,
+) -> Result<WallpaperState, String> {
+    store.update(|state| {
+        state.categories_filter = categories_filter;
+        Ok(())
+    })
+}
+
+pub fn set_purity_filter(
+    store: &AppStateStore,
+    purity_filter: String,
+) -> Result<WallpaperState, String> {
+    store.update(|state| {
+        state.purity_filter = purity_filter;
+        Ok(())
+    })
+}
+
 pub fn toggle_favorite(
     store: &AppStateStore,
     video: VideoResult,
@@ -377,6 +397,29 @@ pub fn add_to_queue(store: &AppStateStore, video: VideoResult) -> Result<Wallpap
     })
 }
 
+pub fn add_multiple_to_queue(store: &AppStateStore, videos: Vec<VideoResult>) -> Result<WallpaperState, String> {
+    store.update(|state| {
+        for video in videos {
+            state.queue.retain(|item| !same_video(&item.video, &video));
+            state.queue.push(LibraryItem {
+                video,
+                saved_at: now_ts(),
+            });
+        }
+        if state.queue.len() > MAX_QUEUE {
+            let overflow = state.queue.len() - MAX_QUEUE;
+            state.queue.drain(0..overflow);
+            state.queue_cursor = state.queue_cursor.saturating_sub(overflow);
+        }
+        if !state.queue.is_empty() {
+            state.queue_cursor %= state.queue.len();
+        } else {
+            state.queue_cursor = 0;
+        }
+        Ok(())
+    })
+}
+
 pub fn remove_from_queue(
     store: &AppStateStore,
     video: VideoResult,
@@ -386,7 +429,6 @@ pub fn remove_from_queue(
         state.queue.retain(|item| !same_video(&item.video, &video));
         if state.queue.is_empty() {
             state.queue_cursor = 0;
-            state.rotation_enabled = false;
         } else if previous_len != state.queue.len() {
             state.queue_cursor %= state.queue.len();
         }
@@ -398,7 +440,6 @@ pub fn clear_queue(store: &AppStateStore) -> Result<WallpaperState, String> {
     store.update(|state| {
         state.queue.clear();
         state.queue_cursor = 0;
-        state.rotation_enabled = false;
         Ok(())
     })
 }
@@ -452,17 +493,7 @@ pub fn set_thumbnail(
     })
 }
 
-pub fn set_rotation(
-    store: &AppStateStore,
-    enabled: bool,
-    interval_seconds: u64,
-) -> Result<WallpaperState, String> {
-    store.update(|state| {
-        state.rotation_enabled = enabled && !state.queue.is_empty();
-        state.rotation_interval_seconds = interval_seconds.max(30);
-        Ok(())
-    })
-}
+
 
 pub fn set_wallhaven_api_key(store: &AppStateStore, key: String) -> Result<WallpaperState, String> {
     store.update(|state| {
@@ -503,6 +534,36 @@ pub fn advance_queue(store: &AppStateStore) -> Result<QueueAdvanceResult, String
 
     let len = state.queue.len();
     let index = state.queue_cursor % len;
+    let video = state.queue[index].video.clone();
+    state.queue_cursor = (index + 1) % len;
+    store.persist(&state)?;
+
+    Ok(QueueAdvanceResult {
+        video,
+        state: state.clone(),
+    })
+}
+
+pub fn retreat_queue(store: &AppStateStore) -> Result<QueueAdvanceResult, String> {
+    let mut state = store
+        .inner
+        .write()
+        .map_err(|_| "state lock poisoned".to_string())?;
+
+    if state.queue.is_empty() {
+        return Err("Queue is empty".to_string());
+    }
+
+    let len = state.queue.len();
+    // Move to previous video:
+    // If state.queue_cursor is pointing to the next index, the current index is (queue_cursor - 1).
+    // The previous index is (queue_cursor - 2).
+    let index = if state.queue_cursor >= 2 {
+        state.queue_cursor - 2
+    } else {
+        (state.queue_cursor + len - 2) % len
+    };
+
     let video = state.queue[index].video.clone();
     state.queue_cursor = (index + 1) % len;
     store.persist(&state)?;
@@ -594,9 +655,6 @@ mod tests {
 
         add_to_queue(&store, sample_video("one")).expect("queue one");
         add_to_queue(&store, sample_video("two")).expect("queue two");
-        let state = set_rotation(&store, true, 45).expect("rotation config");
-        assert!(state.rotation_enabled);
-        assert_eq!(state.rotation_interval_seconds, 45);
 
         let first = advance_queue(&store).expect("advance 1");
         let second = advance_queue(&store).expect("advance 2");

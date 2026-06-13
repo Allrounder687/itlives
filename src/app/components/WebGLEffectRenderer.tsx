@@ -5,13 +5,11 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { EffectComposer, Bloom, Vignette, Glitch, ChromaticAberration, Noise, Scanline, BrightnessContrast, HueSaturation, Sepia, Pixelation, ColorAverage, ColorDepth, DotScreen, TiltShift2, WaterEffect } from "@react-three/postprocessing";
 import { GlitchMode, BlendFunction } from "postprocessing";
-import { LiquidRipple, ScreenSpaceGodRays, RainOnGlass } from "./postprocessing/CustomEffects";
+import { LiquidRipple, ScreenSpaceGodRays, RainOnGlass, MaskedBrightnessContrast, MaskedHueSaturation, MaskedSepia, MaskedNoise } from "./postprocessing/CustomEffects";
 import { EffectLayer } from "./CanvasEffectRenderer";
 import { RibbonTrail } from "./RibbonTrail";
 import { WaterCaustics } from "./WaterCaustics";
 import { BlowingLeaves } from "./BlowingLeaves";
-import { DesktopPet } from "./DesktopPet";
-import { ScreenCracks } from "./ScreenCracks";
 import { getCoreApi } from "@/utils/tauriApis";
 
 // ─────────────────────────────────────────────────────────────
@@ -1161,7 +1159,7 @@ function SpriteLayer({ params }: { params: any }) {
 // full image is visible (contain) while filling the screen (cover) 
 // with a blurred version to eliminate black bars.
 // ─────────────────────────────────────────────────────────────
-function BackgroundQuad({ src, isImage }: { src: string; isImage: boolean }) {
+function BackgroundQuad({ src, isImage, bgMode, bgBlur, bgBrightness }: { src: string; isImage: boolean; bgMode?: "cover"| "contain"| "blur-fill"| "stretch"| "triptych"| "mirror"| "tiles"; bgBlur?: number; bgBrightness?: number }) {
   const { viewport } = useThree();
   const meshRef = useRef<THREE.Mesh>(null);
   const textureRef = useRef<THREE.Texture | null>(null);
@@ -1221,8 +1219,26 @@ function BackgroundQuad({ src, isImage }: { src: string; isImage: boolean }) {
   const uniforms = useMemo(() => ({
     tDiffuse: { value: null },
     bgScale: { value: new THREE.Vector2(1, 1) },
-    fgScale: { value: new THREE.Vector2(1, 1) }
+    fgScale: { value: new THREE.Vector2(1, 1) },
+    uBgMode: { value: 0 }, // 0: blur-fill, 1: cover, 2: contain, 3: stretch
+    uBgBlur: { value: 0.015 },
+    uBgBrightness: { value: 0.4 }
   }), []);
+
+  useEffect(() => {
+    if (!meshRef.current) return;
+    const mat = meshRef.current.material as THREE.ShaderMaterial;
+    if (bgMode === "cover") mat.uniforms.uBgMode.value = 1;
+    else if (bgMode === "contain") mat.uniforms.uBgMode.value = 2;
+    else if (bgMode === "stretch") mat.uniforms.uBgMode.value = 3;
+    else if (bgMode === "triptych") mat.uniforms.uBgMode.value = 4;
+    else if (bgMode === "mirror") mat.uniforms.uBgMode.value = 5;
+    else if (bgMode === "tiles") mat.uniforms.uBgMode.value = 6;
+    else mat.uniforms.uBgMode.value = 0; // blur-fill
+    
+    mat.uniforms.uBgBlur.value = (bgBlur !== undefined ? bgBlur : 20) / 1000.0; // scale to UV space
+    mat.uniforms.uBgBrightness.value = bgBrightness !== undefined ? bgBrightness : 0.4;
+  }, [bgMode, bgBlur, bgBrightness]);
 
   useEffect(() => {
     if (!mediaAspect || !meshRef.current) return;
@@ -1258,13 +1274,75 @@ function BackgroundQuad({ src, isImage }: { src: string; isImage: boolean }) {
     uniform sampler2D tDiffuse;
     uniform vec2 bgScale;
     uniform vec2 fgScale;
+    uniform int uBgMode;
+    uniform float uBgBlur;
+    uniform float uBgBrightness;
 
     void main() {
+      if (uBgMode == 3) {
+        // Stretch
+        gl_FragColor = texture2D(tDiffuse, vUv);
+        return;
+      }
+      if (uBgMode == 1) {
+        // Cover
+        vec2 uvCover = (vUv - 0.5) * bgScale + 0.5;
+        gl_FragColor = texture2D(tDiffuse, uvCover);
+        return;
+      }
+      if (uBgMode == 2) {
+        // Contain
+        vec2 uvContain = (vUv - 0.5) * fgScale + 0.5;
+        if (uvContain.x >= 0.0 && uvContain.x <= 1.0 && uvContain.y >= 0.0 && uvContain.y <= 1.0) {
+          gl_FragColor = texture2D(tDiffuse, uvContain);
+        } else {
+          gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+        }
+        return;
+      }
+
+      if (uBgMode == 4) {
+        // Triptych
+        vec2 uvCenter = (vUv - 0.5) * fgScale + 0.5;
+        vec2 uvLeft = uvCenter + vec2(1.0, 0.0);
+        vec2 uvRight = uvCenter - vec2(1.0, 0.0);
+        
+        vec4 color = vec4(0.0, 0.0, 0.0, 1.0);
+        if (uvCenter.x >= 0.0 && uvCenter.x <= 1.0 && uvCenter.y >= 0.0 && uvCenter.y <= 1.0) {
+          color = texture2D(tDiffuse, uvCenter);
+        } else if (uvLeft.x >= 0.0 && uvLeft.x <= 1.0 && uvLeft.y >= 0.0 && uvLeft.y <= 1.0) {
+          color = texture2D(tDiffuse, uvLeft);
+          color.rgb *= uBgBrightness; // dim side panes
+        } else if (uvRight.x >= 0.0 && uvRight.x <= 1.0 && uvRight.y >= 0.0 && uvRight.y <= 1.0) {
+          color = texture2D(tDiffuse, uvRight);
+          color.rgb *= uBgBrightness; // dim side panes
+        }
+        gl_FragColor = color;
+        return;
+      }
+      
+      if (uBgMode == 5) {
+        // Mirror
+        vec2 uvContain = (vUv - 0.5) * fgScale + 0.5;
+        vec2 uvMirrored = 1.0 - abs(1.0 - mod(uvContain, 2.0));
+        gl_FragColor = texture2D(tDiffuse, uvMirrored);
+        return;
+      }
+      
+      if (uBgMode == 6) {
+        // Tiles
+        vec2 uvContain = (vUv - 0.5) * fgScale + 0.5;
+        vec2 uvTiles = fract(uvContain);
+        gl_FragColor = texture2D(tDiffuse, uvTiles);
+        return;
+      }
+
+      // 0: Blur-Fill (Default)
       // Background (Cover with Blur)
       vec2 bgUv = (vUv - 0.5) * bgScale + 0.5;
       vec4 bgColor = vec4(0.0);
       
-      float blurSize = 0.015;
+      float blurSize = max(0.001, uBgBlur);
       bgColor += texture2D(tDiffuse, bgUv + vec2(-blurSize, -blurSize));
       bgColor += texture2D(tDiffuse, bgUv + vec2(blurSize, -blurSize));
       bgColor += texture2D(tDiffuse, bgUv + vec2(-blurSize, blurSize));
@@ -1276,7 +1354,7 @@ function BackgroundQuad({ src, isImage }: { src: string; isImage: boolean }) {
       bgColor += texture2D(tDiffuse, bgUv) * 2.0;
       bgColor /= 10.0;
       
-      bgColor.rgb *= 0.35; // Dim the blurred background
+      bgColor.rgb *= uBgBrightness; // Dim the blurred background
       
       // Foreground (Contain)
       vec2 fgUv = (vUv - 0.5) * fgScale + 0.5;
@@ -1316,9 +1394,12 @@ interface WebGLEffectRendererProps {
   onRemoveLayer?: (id: string) => void;
   isOverlay?: boolean;
   isPaused?: boolean;
+  bgMode?: "cover" | "contain" | "blur-fill" | "stretch" | "triptych" | "mirror" | "tiles";
+  bgBlur?: number;
+  bgBrightness?: number;
 }
 
-export function WebGLEffectRenderer({ videoSrc, effects, selectedLayerId, onUpdateParam, onRemoveLayer, isOverlay = false, isPaused = false }: WebGLEffectRendererProps) {
+export function WebGLEffectRenderer({ videoSrc, effects, selectedLayerId, onUpdateParam, onRemoveLayer, isOverlay = false, isPaused = false, bgMode = "blur-fill", bgBlur = 20, bgBrightness = 0.4 }: WebGLEffectRendererProps) {
   const [liveEffects, setLiveEffects] = useState<EffectLayer[]>(effects);
   const [src, setSrc] = useState<string>("");
   const isImage = videoSrc.match(/\.(jpeg|jpg|gif|png|webp)$/i) != null;
@@ -1328,14 +1409,24 @@ export function WebGLEffectRenderer({ videoSrc, effects, selectedLayerId, onUpda
   const autoColor = useDominantColor(mediaRef, true);
 
   useEffect(() => {
-    if (autoColor && localStorage.getItem("syncWindowsAccent") !== "false") {
+    if (isOverlay && autoColor && localStorage.getItem("syncWindowsAccent") !== "false") {
       getCoreApi().then(({ invoke }) => {
         invoke("sync_windows_accent_color", { hexColor: autoColor }).catch(console.error);
       });
     }
-  }, [autoColor]);
+  }, [autoColor, isOverlay]);
 
   useEffect(() => { setLiveEffects(effects); }, [effects]);
+
+  // Pause or play the underlying HTML5 video when isPaused changes
+  useEffect(() => {
+    if (!mediaRef.current || typeof mediaRef.current.pause !== "function") return;
+    if (isPaused) {
+      mediaRef.current.pause();
+    } else {
+      mediaRef.current.play().catch(() => {});
+    }
+  }, [isPaused, src]);
 
   useEffect(() => {
     if (!videoSrc) {
@@ -1454,7 +1545,7 @@ export function WebGLEffectRenderer({ videoSrc, effects, selectedLayerId, onUpda
   const vhs = currentEffects.find(e => e.type === "vhs" && e.enabled);
   const liquidRipple = currentEffects.find(e => e.type === "liquid-ripple" && e.enabled);
   const rainOnGlass = currentEffects.find(e => e.type === "rain-on-glass" && e.enabled);
-  const desktopPet = currentEffects.find(e => e.type === "desktop-pet" && e.enabled);
+
 
   const brightnessContrast = currentEffects.find(e => e.type === "brightness-contrast" && e.enabled);
   const hueSaturation = currentEffects.find(e => e.type === "hue-saturation" && e.enabled);
@@ -1469,11 +1560,12 @@ export function WebGLEffectRenderer({ videoSrc, effects, selectedLayerId, onUpda
   const tiltShift = currentEffects.find(e => e.type === "tilt-shift" && e.enabled);
   const waterEffect = currentEffects.find(e => e.type === "water-effect" && e.enabled);
 
+  const isComplexBg = ["triptych", "mirror", "tiles"].includes(bgMode || "");
   // Post-processing effects need the background rendered inside the Canvas
-  const hasPostProcessing = !!(godRays || vhs || liquidRipple || rainOnGlass || vignette || bloomEffect || glitchEffect || brightnessContrast || hueSaturation || sepia || pixelation || noise || chromaticAberration || colorAverage || colorDepth || dotScreen || tiltShift || waterEffect);
+  const hasPostProcessing = isComplexBg || !!(godRays || vhs || liquidRipple || rainOnGlass || vignette || bloomEffect || glitchEffect || brightnessContrast || hueSaturation || sepia || pixelation || noise || chromaticAberration || colorAverage || colorDepth || dotScreen || tiltShift || waterEffect);
 
   // Check if any WebGL effect is active — skip Canvas entirely if none
-  const hasWebGLEffects = desktopPet || foodWidgets.length > 0 || sprites.length > 0 || snow || rain || audioVis || trail || ripple || ribbonTrail || fireflies || particleEmitter || stars || fog || waterCaustics || blowingLeaves || parallax || hasPostProcessing;
+  const hasWebGLEffects = foodWidgets.length > 0 || sprites.length > 0 || snow || rain || audioVis || trail || ripple || ribbonTrail || fireflies || particleEmitter || stars || fog || waterCaustics || blowingLeaves || parallax || hasPostProcessing;
 
   const resolveParams = (p: any) => {
     if (!p) return p;
@@ -1533,21 +1625,29 @@ export function WebGLEffectRenderer({ videoSrc, effects, selectedLayerId, onUpda
     >
       {/* Background Media — hidden when post-processing renders it inside Canvas */}
       {src && (
-        <div style={{ position: "absolute", inset: 0, display: (isOverlay || hasPostProcessing) ? "none" : "block", overflow: "hidden" }}>
+        <div style={{ position: "absolute", inset: 0, display: hasPostProcessing ? "none" : "block", overflow: "hidden" }}>
           {isImage ? (
-            <>
-              {/* Blurred Background Layer (Cover) */}
-              <img src={src} style={{ objectFit: "cover", position: "absolute", inset: -50, width: "calc(100% + 100px)", height: "calc(100% + 100px)", filter: "blur(20px) brightness(0.4)", zIndex: 1 }} alt="" />
-              {/* Sharp Foreground Layer (Contain) */}
-              <img ref={mediaRef} src={src} className="editor-bg-video" style={{ objectFit: "contain", position: "absolute", inset: 0, width: "100%", height: "100%", zIndex: 2 }} alt="" />
-            </>
+            bgMode === "blur-fill" ? (
+              <>
+                {/* Blurred Background Layer (Cover) */}
+                <img src={src} style={{ objectFit: "cover", position: "absolute", inset: -50, width: "calc(100% + 100px)", height: "calc(100% + 100px)", filter: `blur(${bgBlur !== undefined ? bgBlur : 20}px) brightness(${bgBrightness !== undefined ? bgBrightness : 0.4})`, zIndex: 1 }} alt="" />
+                {/* Sharp Foreground Layer (Contain) */}
+                <img ref={mediaRef} src={src} className="editor-bg-video" style={{ objectFit: "contain", position: "absolute", inset: 0, width: "100%", height: "100%", zIndex: 2 }} alt="" />
+              </>
+            ) : (
+              <img ref={mediaRef} src={src} className="editor-bg-video" style={{ objectFit: bgMode === "stretch" ? "fill" : (["triptych", "mirror", "tiles"].includes(bgMode || "") ? "contain" : bgMode as any), position: "absolute", inset: 0, width: "100%", height: "100%", zIndex: 2 }} alt="" />
+            )
           ) : (
-            <>
-              {/* Blurred Background Layer (Cover) */}
-              <video src={src} autoPlay loop muted playsInline style={{ objectFit: "cover", position: "absolute", inset: -50, width: "calc(100% + 100px)", height: "calc(100% + 100px)", filter: "blur(20px) brightness(0.4)", zIndex: 1 }} />
-              {/* Sharp Foreground Layer (Contain) */}
-              <video ref={mediaRef} src={src} className="editor-bg-video" autoPlay loop muted playsInline style={{ objectFit: "contain", position: "absolute", inset: 0, width: "100%", height: "100%", zIndex: 2 }} />
-            </>
+            bgMode === "blur-fill" ? (
+              <>
+                {/* Blurred Background Layer (Cover) */}
+                <video src={src} autoPlay loop muted playsInline style={{ objectFit: "cover", position: "absolute", inset: -50, width: "calc(100% + 100px)", height: "calc(100% + 100px)", filter: `blur(${bgBlur !== undefined ? bgBlur : 20}px) brightness(${bgBrightness !== undefined ? bgBrightness : 0.4})`, zIndex: 1 }} />
+                {/* Sharp Foreground Layer (Contain) */}
+                <video ref={mediaRef} src={src} className="editor-bg-video" autoPlay loop muted playsInline style={{ objectFit: "contain", position: "absolute", inset: 0, width: "100%", height: "100%", zIndex: 2 }} />
+              </>
+            ) : (
+              <video ref={mediaRef} src={src} className="editor-bg-video" autoPlay loop muted playsInline style={{ objectFit: bgMode === "stretch" ? "fill" : (["triptych", "mirror", "tiles"].includes(bgMode || "") ? "contain" : bgMode as any), position: "absolute", inset: 0, width: "100%", height: "100%", zIndex: 2 }} />
+            )
           )}
         </div>
       )}
@@ -1590,8 +1690,6 @@ export function WebGLEffectRenderer({ videoSrc, effects, selectedLayerId, onUpda
         <AppLauncherWidget params={appLauncher.params} layerId={appLauncher.id} isOverlay={isOverlay} />
       )}
 
-      {/* Screen Cracks from Desktop Pet */}
-      <ScreenCracks color={autoColor || "#ffffff"} />
 
       {/* WebGL Canvas — only mounted when effects are active */}
       {hasWebGLEffects && (
@@ -1608,7 +1706,7 @@ export function WebGLEffectRenderer({ videoSrc, effects, selectedLayerId, onUpda
             style={{ width: "100%", height: "100%", pointerEvents: "none" }}
           >
             {/* When post-processing is active, render background inside Canvas */}
-            {hasPostProcessing && src && <BackgroundQuad src={src} isImage={isImage} />}
+            {hasPostProcessing && src && <BackgroundQuad src={src} isImage={isImage} bgMode={bgMode} bgBlur={bgBlur} bgBrightness={bgBrightness} />}
             {parallax && <ParallaxShift intensity={parallax.params.intensity || 1.0} />}
             {snow && <FallingParticles type="snow" params={resolveParams(snow.params)} />}
             {rain && <FallingParticles type="rain" params={resolveParams(rain.params)} />}
@@ -1619,17 +1717,7 @@ export function WebGLEffectRenderer({ videoSrc, effects, selectedLayerId, onUpda
             {audioVis && <AudioVisualizer params={resolveParams(audioVis.params)} layerId={audioVis.id} />}
             {waterCaustics && <WaterCaustics params={resolveParams(waterCaustics.params)} />}
             {blowingLeaves && <BlowingLeaves params={resolveParams(blowingLeaves.params)} />}
-            {desktopPet && (
-              <DesktopPet 
-                key={desktopPet.id}
-                params={resolveParams(desktopPet.params)} 
-                isOverlay={isOverlay} 
-                widgets={[clock, musicPlayer, appLauncher, audioVis, ...foodWidgets].filter(Boolean)} 
-                onUpdateParam={onUpdateParam}
-                onRemoveLayer={onRemoveLayer}
-                isPaused={isPaused}
-              />
-            )}
+
             <InteractiveParticles
               trailEnabled={!!trail}
               rippleEnabled={!!ripple}
@@ -1687,11 +1775,11 @@ export function WebGLEffectRenderer({ videoSrc, effects, selectedLayerId, onUpda
                 passes.push(<Scanline key="vhs-scan" density={vhs.params.scanlines || 1.0} opacity={0.5} blendFunction={BlendFunction.OVERLAY} />);
               }
 
-              if (brightnessContrast) passes.push(<BrightnessContrast key="brightness" brightness={brightnessContrast.params.brightness || 0} contrast={brightnessContrast.params.contrast || 0} />);
-              if (hueSaturation) passes.push(<HueSaturation key="hue" hue={hueSaturation.params.hue || 0} saturation={hueSaturation.params.saturation || 0} />);
-              if (sepia) passes.push(<Sepia key="sepia" intensity={sepia.params.intensity || 0} />);
+              if (brightnessContrast) passes.push(<MaskedBrightnessContrast key="brightness" params={resolveParams(brightnessContrast.params)} />);
+              if (hueSaturation) passes.push(<MaskedHueSaturation key="hue" params={resolveParams(hueSaturation.params)} />);
+              if (sepia) passes.push(<MaskedSepia key="sepia" params={resolveParams(sepia.params)} />);
               if (pixelation) passes.push(<Pixelation key="pixelation" granularity={pixelation.params.granularity || 5} />);
-              if (noise) passes.push(<Noise key="noise" opacity={noise.params.opacity || 0.5} premultiply={noise.params.premultiply !== false} blendFunction={BlendFunction.OVERLAY} />);
+              if (noise) passes.push(<MaskedNoise key="noise" params={resolveParams(noise.params)} />);
               if (chromaticAberration) passes.push(<ChromaticAberration key="chroma" offset={new THREE.Vector2(chromaticAberration.params.offsetX || 0, chromaticAberration.params.offsetY || 0)} blendFunction={BlendFunction.NORMAL} />);
 
               if (colorAverage) passes.push(<ColorAverage key="color-average" blendFunction={BlendFunction.NORMAL} />);

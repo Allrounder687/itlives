@@ -171,7 +171,7 @@ pub fn run() {
 
     // integrations server is started inside .setup() once the AppHandle is available
 
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_autostart::init(
@@ -241,8 +241,7 @@ pub fn run() {
             commands::queue::add_to_queue,
             commands::queue::remove_from_queue,
             commands::queue::clear_queue,
-            commands::queue::set_rotation,
-            commands::queue::advance_rotation,
+            commands::queue::import_folder_to_queue,
             commands::settings::set_restore_on_launch,
             commands::settings::set_window_behavior,
             commands::settings::set_auto_pause,
@@ -267,6 +266,8 @@ pub fn run() {
             commands::wallpaper_control::set_wallpaper_speed,
             commands::wallpaper_control::set_wallpaper_blur,
             commands::settings::set_theme,
+            commands::settings::set_categories_filter,
+            commands::settings::set_purity_filter,
             commands::settings::check_dependencies,
             commands::settings::install_mpv,
             commands::settings::launch_external_app,
@@ -290,6 +291,12 @@ pub fn run() {
             commands::shell_control::toggle_desktop_icons,
             commands::shell_control::set_taskbar_state,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application");
+
+    app.run(move |_app_handle, event| {
+        if let tauri::RunEvent::Exit = event {
+            let _ = wallpaper::desktop::stop_video();
+        }
+    });
 }

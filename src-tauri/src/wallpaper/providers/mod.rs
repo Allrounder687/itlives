@@ -174,6 +174,8 @@ pub async fn download_to_cache(
                 let mut bytes_data = Vec::new();
                 let mut failed = false;
 
+                let mut last_emit = std::time::Instant::now();
+
                 // Instead of StreamExt, we use the built-in chunk() method
                 while let Some(chunk_res) = resp.chunk().await.transpose() {
                     match chunk_res {
@@ -181,15 +183,25 @@ pub async fn download_to_cache(
                             downloaded += chunk.len() as u64;
                             bytes_data.extend_from_slice(&chunk);
                             if let Some(app) = &app_handle {
-                                use tauri::Emitter;
-                                let _ = app.emit(
-                                    "download-progress",
-                                    DownloadProgress {
-                                        id: video_id.to_string(),
-                                        progress: downloaded,
-                                        total: total_size,
-                                    },
-                                );
+                                let now = std::time::Instant::now();
+                                // Emit at most once per 100ms, or if we hit exactly total_size to ensure 100% is emitted
+                                if now.duration_since(last_emit).as_millis() > 100 || (total_size > 0 && downloaded >= total_size) {
+                                    use tauri::Emitter;
+                                    let _ = app.emit(
+                                        "download-progress",
+                                        DownloadProgress {
+                                            id: video_id.to_string(),
+                                            progress: downloaded,
+                                            total: total_size,
+                                        },
+                                    );
+                                    last_emit = now;
+                                }
+                            }
+                            
+                            // Break early if we've downloaded all bytes (prevents hanging on keep-alive connections)
+                            if total_size > 0 && downloaded >= total_size {
+                                break;
                             }
                         }
                         Err(e) => {
@@ -317,14 +329,28 @@ pub fn apply_post_fetch_filters(results: &mut Vec<VideoResult>, config: &SearchC
         // Apply fallback Purity filter
         if let Some(ref purity) = config.purity {
             // purity bits: [0] SFW, [1] Sketchy, [2] NSFW (from left, 100 is SFW)
-            // If NSFW (001) is not allowed, filter out tags.
-            // SFW only (100) -> exclude nsfw, nude, 18+
-            if !purity.ends_with('1') {
+            let chars: Vec<char> = purity.chars().collect();
+            if chars.len() >= 3 {
+                let _allow_sfw = chars[0] == '1';
+                let allow_sketchy = chars[1] == '1';
+                let allow_nsfw = chars[2] == '1';
+
                 if let Some(ref tags) = item.tags {
                     for tag in tags {
                         let t = tag.to_lowercase();
-                        if t.contains("nsfw") || t.contains("nude") || t.contains("18+") || t.contains("hentai") || t.contains("porn") {
-                            return false;
+                        
+                        // NSFW check
+                        if !allow_nsfw {
+                            if t.contains("nsfw") || t.contains("nude") || t.contains("18+") || t.contains("hentai") || t.contains("porn") || t.contains("naked") || t == "sex" || t.contains("xxx") {
+                                return false;
+                            }
+                        }
+                        
+                        // Sketchy check
+                        if !allow_sketchy {
+                            if t.contains("sketchy") || t.contains("bikini") || t.contains("swimsuit") || t.contains("lingerie") || t.contains("underwear") || t.contains("cleavage") || t.contains("boobs") || t.contains("sexy") || t.contains("semi-nude") || t.contains("ass") || t.contains("butt") || t.contains("breasts") || t.contains("ecchi") || t.contains("lewd") {
+                                return false;
+                            }
                         }
                     }
                 }
@@ -336,6 +362,7 @@ pub fn apply_post_fetch_filters(results: &mut Vec<VideoResult>, config: &SearchC
             // categories bits: [0] General, [1] Anime, [2] People (100, 010, 001)
             let chars: Vec<char> = categories.chars().collect();
             if chars.len() >= 3 {
+                let allow_general = chars[0] == '1';
                 let allow_anime = chars[1] == '1';
                 let allow_people = chars[2] == '1';
 
@@ -343,7 +370,7 @@ pub fn apply_post_fetch_filters(results: &mut Vec<VideoResult>, config: &SearchC
                     if let Some(ref tags) = item.tags {
                         for tag in tags {
                             let t = tag.to_lowercase();
-                            if t.contains("anime") || t.contains("manga") || t.contains("weeb") || t.contains("vocaloid") {
+                            if t.contains("anime") || t.contains("manga") || t.contains("weeb") || t.contains("vocaloid") || t.contains("fanart") || t.contains("artwork") || t.contains("illustration") {
                                 return false;
                             }
                         }
@@ -354,9 +381,26 @@ pub fn apply_post_fetch_filters(results: &mut Vec<VideoResult>, config: &SearchC
                     if let Some(ref tags) = item.tags {
                         for tag in tags {
                             let t = tag.to_lowercase();
-                            if t == "people" || t == "person" || t == "girl" || t == "boy" || t == "woman" || t == "man" {
+                            if t == "people" || t == "person" || t == "girl" || t == "boy" || t == "woman" || t == "man" || t.contains("cosplay") || t.contains("model") || t.contains("actress") {
                                 return false;
                             }
+                        }
+                    }
+                }
+
+                if !allow_general {
+                    if let Some(ref tags) = item.tags {
+                        let has_anime = tags.iter().any(|tag| {
+                            let t = tag.to_lowercase();
+                            t.contains("anime") || t.contains("manga") || t.contains("weeb") || t.contains("vocaloid") || t.contains("fanart") || t.contains("artwork") || t.contains("illustration")
+                        });
+                        let has_people = tags.iter().any(|tag| {
+                            let t = tag.to_lowercase();
+                            t == "people" || t == "person" || t == "girl" || t == "boy" || t == "woman" || t == "man" || t.contains("cosplay") || t.contains("model") || t.contains("actress")
+                        });
+                        if !has_anime && !has_people {
+                            // If it's neither anime nor people, it is categorized as General, so filter it out
+                            return false;
                         }
                     }
                 }

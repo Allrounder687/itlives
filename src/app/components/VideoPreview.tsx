@@ -219,6 +219,7 @@ export function VideoPreview({
               videoSrc={videoSrc}
               effects={effects}
               isOverlay={true}
+              isPaused={localPaused}
             />
           </div>
         )}

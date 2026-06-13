@@ -13,6 +13,7 @@ use std::collections::HashMap;
 lazy_static! {
     static ref CURRENT_VIDEO: Mutex<HashMap<String, String>> = Mutex::new(HashMap::new());
     static ref LAST_CONFIG: Mutex<HashMap<String, WallpaperConfig>> = Mutex::new(HashMap::new());
+    static ref WALLPAPER_SET_LOCK: Mutex<()> = Mutex::new(());
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -299,7 +300,7 @@ pub fn set_video(
             "--input-default-bindings=no".to_string(),
             "--input-vo-keyboard=no".to_string(),
             "--show-in-taskbar=no".to_string(),
-            "--keepaspect=no".to_string(),
+            "--keepaspect=yes".to_string(),
             "--force-window=yes".to_string(),
             format!("--geometry={}x{}+{}+{}", width, height, x, y),
             "--ontop=no".to_string(),
@@ -664,6 +665,13 @@ pub fn stop_video() -> Result<String, String> {
             let _ = std::fs::remove_file(entry.path());
         }
     }
+    // Safety cleanup: Kill any and all mpv.exe instances running to prevent ghost processes and overlapping audio
+    let mut cmd = Command::new("taskkill");
+    cmd.args(&["/F", "/IM", "mpv.exe"]);
+    #[cfg(windows)]
+    cmd.creation_flags(0x08000000);
+    let _ = cmd.output();
+
     if let Ok(mut m) = CURRENT_VIDEO.lock() {
         m.clear();
     }
@@ -698,8 +706,13 @@ pub fn set_speed(speed: f64) -> Result<(), String> {
 }
 
 pub fn set_paused(paused: bool) -> Result<(), String> {
-    if LAST_CONFIG.lock().map(|l| l.is_empty()).unwrap_or(true) {
-        return Ok(());
+    if let Ok(mut last) = LAST_CONFIG.lock() {
+        if last.is_empty() {
+            return Ok(());
+        }
+        for config in last.values_mut() {
+            config.paused = paused;
+        }
     }
     send_ipc_command(&format!(
         "{{\"command\": [\"set_property\", \"pause\", {}]}}\n",
@@ -948,6 +961,7 @@ fn process_static_image_if_needed(path: &str) -> Result<String, String> {
 
 /// Sets a static image file as the desktop background using the native Windows API.
 pub fn set_static_image(path: &str) -> Result<String, String> {
+    let _lock = WALLPAPER_SET_LOCK.lock().unwrap();
     let resolved_path = path.to_string();
     let img_path = std::path::Path::new(&resolved_path);
     if !img_path.exists() {

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { formatSavedAt } from "./LibraryList";
 import { isStaticWallpaper } from "@/utils/wallpaperTypes";
+import { HoverVideo } from "./HoverVideo";
 
 interface QueuePanelProps {
   wallpaper: any; // mapping wallpaper module from hook feeds.
@@ -35,18 +36,27 @@ export function QueuePanel({ wallpaper }: QueuePanelProps) {
           <span className="eyebrow">Queue</span>
           <h2>Playback Order</h2>
         </div>
-        <button
-          type="button"
-          className="mini-btn"
-          disabled={wallpaper.queue.length === 0}
-          onClick={() => wallpaper.clearQueue()}
-        >
-          Clear Queue
-        </button>
+        <div style={{ display: "flex", gap: "8px" }}>
+          <button
+            type="button"
+            className="mini-btn mini-btn--primary"
+            onClick={() => wallpaper.browseFolderToQueue()}
+          >
+            + Add Folder
+          </button>
+          <button
+            type="button"
+            className="mini-btn"
+            disabled={wallpaper.queue.length === 0}
+            onClick={() => wallpaper.clearQueue()}
+          >
+            Clear Queue
+          </button>
+        </div>
       </div>
 
       {wallpaper.queue.length === 0 ? (
-        <p className="library-empty">Queue wallpapers from preview, recents, or favorites to enable rotation.</p>
+        <p className="library-empty">Queue wallpapers from preview, recents, or favorites to play them.</p>
       ) : (
         <div className="library-list">
           {wallpaper.queue.map((item: any, index: number) => (
@@ -64,11 +74,16 @@ export function QueuePanel({ wallpaper }: QueuePanelProps) {
                 transition: "opacity 0.2s ease"
               }}
             >
-              <div className="library-item__copy" style={{ pointerEvents: "none" }}>
-                <strong>{index + 1}. {item.video.id}</strong>
-                <span>{isStaticWallpaper(item.video) ? "STATIC IMAGE" : "LIVE WALLPAPER"} - queued {formatSavedAt(item.saved_at)}</span>
+              <div style={{ display: "flex", alignItems: "center", gap: "12px", width: "100%" }}>
+                <div style={{ width: "64px", height: "38px", flexShrink: 0, borderRadius: "4px", overflow: "hidden", border: "1px solid rgba(255, 255, 255, 0.1)" }}>
+                  <HoverVideo video={item.video} />
+                </div>
+                <div className="library-item__copy" style={{ pointerEvents: "none", flexGrow: 1 }}>
+                  <strong>{index + 1}. {item.video.id}</strong>
+                  <span>{isStaticWallpaper(item.video) ? "STATIC IMAGE" : "LIVE WALLPAPER"} - queued {formatSavedAt(item.saved_at)}</span>
+                </div>
               </div>
-              <div className="library-item__actions">
+              <div className="library-item__actions" style={{ flexShrink: 0, marginLeft: "12px" }}>
                 <button
                   type="button"
                   className="mini-btn mini-btn--accent"

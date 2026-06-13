@@ -29,7 +29,8 @@ pub async fn apply_wallpaper(
     }
 
     let current = wallpaper::state::get(&state);
-    let _ = wallpaper::state::set_rotation(&state, false, current.rotation_interval_seconds);
+    // Keep rotation setting intact when manually applying a wallpaper, per user preference
+    // let _ = wallpaper::state::set_rotation(&state, false, current.rotation_interval_seconds);
 
     let path_lower = video.local_path.to_lowercase();
     let is_web = path_lower.ends_with(".html");
