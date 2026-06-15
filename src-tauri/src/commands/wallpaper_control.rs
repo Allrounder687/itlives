@@ -48,6 +48,7 @@ pub async fn apply_wallpaper_inner(
 
     if is_web {
         wallpaper::desktop::set_web_wallpaper(app.clone(), &video.local_path, monitor.clone())?;
+        start_mouse_tracking(app.clone());
     } else if is_static_image {
         // If applying static image, close webviews
         let m_key = monitor
@@ -256,6 +257,7 @@ pub fn set_wallpaper_filter(
     if persisted.is_playing {
         if let Some(video) = persisted.current_video.as_ref() {
             let path_lower = video.local_path.to_lowercase();
+            let is_interactive = path_lower.ends_with(".html") || video.source == "interactive";
             let is_static = path_lower.ends_with(".jpg")
                 || path_lower.ends_with(".jpeg")
                 || path_lower.ends_with(".png")
@@ -263,7 +265,9 @@ pub fn set_wallpaper_filter(
                 || video.source == "wallhaven"
                 || video.source == "pinterest";
 
-            if is_static {
+            if is_interactive {
+                // Interactive wallpapers don't support mpv video filters yet
+            } else if is_static {
                 if let Err(e) = wallpaper::desktop::set_static_image(&video.local_path) {
                     log::warn!("Failed to set static image filter: {}", e);
                 }
@@ -299,6 +303,7 @@ pub fn set_wallpaper_scale(
     if persisted.is_playing {
         if let Some(video) = persisted.current_video.as_ref() {
             let path_lower = video.local_path.to_lowercase();
+            let is_interactive = path_lower.ends_with(".html") || video.source == "interactive";
             let is_static = path_lower.ends_with(".jpg")
                 || path_lower.ends_with(".jpeg")
                 || path_lower.ends_with(".png")
@@ -306,7 +311,9 @@ pub fn set_wallpaper_scale(
                 || video.source == "wallhaven"
                 || video.source == "pinterest";
 
-            if is_static {
+            if is_interactive {
+                // Interactive wallpapers don't support mpv scaling
+            } else if is_static {
                 if let Err(e) = wallpaper::desktop::set_static_image(&video.local_path) {
                     log::warn!("Failed to set static image scale: {}", e);
                 }
@@ -339,8 +346,14 @@ pub fn set_wallpaper_speed(
 ) -> Result<WallpaperState, String> {
     let persisted = wallpaper::state::set_playback_speed(&state, speed)?;
     if persisted.is_playing {
-        if let Err(e) = wallpaper::desktop::set_speed(persisted.playback_speed) {
-            log::warn!("Failed to apply speed: {}", e);
+        let is_interactive = persisted.current_video.as_ref().map_or(false, |v| {
+            let path_lower = v.local_path.to_lowercase();
+            path_lower.ends_with(".html") || v.source == "interactive"
+        });
+        if !is_interactive {
+            if let Err(e) = wallpaper::desktop::set_speed(persisted.playback_speed) {
+                log::warn!("Failed to apply speed: {}", e);
+            }
         }
     }
     Ok(persisted)
@@ -356,6 +369,7 @@ pub fn set_wallpaper_blur(
     if persisted.is_playing {
         if let Some(video) = persisted.current_video.as_ref() {
             let path_lower = video.local_path.to_lowercase();
+            let is_interactive = path_lower.ends_with(".html") || video.source == "interactive";
             let is_static = path_lower.ends_with(".jpg")
                 || path_lower.ends_with(".jpeg")
                 || path_lower.ends_with(".png")
@@ -363,7 +377,9 @@ pub fn set_wallpaper_blur(
                 || video.source == "wallhaven"
                 || video.source == "pinterest";
 
-            if is_static {
+            if is_interactive {
+                // Interactive wallpapers don't support mpv blur
+            } else if is_static {
                 if let Err(e) = wallpaper::desktop::set_static_image(&video.local_path) {
                     log::warn!("Failed to set static image blur: {}", e);
                 }
@@ -558,16 +574,52 @@ pub fn start_mouse_tracking(app_handle: tauri::AppHandle) {
                         button: None,
                     };
 
-                    let _ = app_handle.emit("cursor-moved", payload.clone());
+                    // Dispatch mousemove to all active interactive webviews safely without __TAURI__
+                    use tauri::Manager;
+                    for (label, window) in app_handle.webview_windows() {
+                        if label.starts_with("web_wallpaper_") {
+                            let mut client_pt = pt;
+                            if let Ok(hwnd) = window.hwnd() {
+                                let mut rect = windows::Win32::Foundation::RECT::default();
+                                unsafe {
+                                    let _ = windows::Win32::UI::WindowsAndMessaging::GetWindowRect(
+                                        windows::Win32::Foundation::HWND(hwnd.0 as _),
+                                        &mut rect,
+                                    );
+                                }
+                                let width = (rect.right - rect.left) as f64;
+                                let height = (rect.bottom - rect.top) as f64;
+                                let rx = if width > 0.0 { (pt.x - rect.left) as f64 / width } else { 0.0 };
+                                let ry = if height > 0.0 { (pt.y - rect.top) as f64 / height } else { 0.0 };
+                                let _ = window.eval(&format!("if (window.__dispatch_mouse_event) window.__dispatch_mouse_event('mousemove', {}, {}, null);", rx, ry));
+                            }
+                        }
+                    }
 
                     // Track left mouse button clicks
                     let lbtn_state = GetAsyncKeyState(VK_LBUTTON.0 as i32);
                     let is_l_down = (lbtn_state as u16 & 0x8000) != 0;
 
                     if is_l_down && !was_l_down {
-                        let mut click_payload = payload.clone();
-                        click_payload.button = Some("left".to_string());
-                        let _ = app_handle.emit("cursor-click", click_payload);
+                        for (label, window) in app_handle.webview_windows() {
+                            if label.starts_with("web_wallpaper_") {
+                                let mut client_pt = pt;
+                                if let Ok(hwnd) = window.hwnd() {
+                                    let mut rect = windows::Win32::Foundation::RECT::default();
+                                    unsafe {
+                                        let _ = windows::Win32::UI::WindowsAndMessaging::GetWindowRect(
+                                            windows::Win32::Foundation::HWND(hwnd.0 as _),
+                                            &mut rect,
+                                        );
+                                    }
+                                    let width = (rect.right - rect.left) as f64;
+                                    let height = (rect.bottom - rect.top) as f64;
+                                    let rx = if width > 0.0 { (pt.x - rect.left) as f64 / width } else { 0.0 };
+                                    let ry = if height > 0.0 { (pt.y - rect.top) as f64 / height } else { 0.0 };
+                                    let _ = window.eval(&format!("if (window.__dispatch_mouse_event) window.__dispatch_mouse_event('click', {}, {}, 'left');", rx, ry));
+                                }
+                            }
+                        }
                     }
                     was_l_down = is_l_down;
 
@@ -576,9 +628,25 @@ pub fn start_mouse_tracking(app_handle: tauri::AppHandle) {
                     let is_r_down = (rbtn_state as u16 & 0x8000) != 0;
 
                     if is_r_down && !was_r_down {
-                        let mut click_payload = payload.clone();
-                        click_payload.button = Some("right".to_string());
-                        let _ = app_handle.emit("cursor-click", click_payload);
+                        for (label, window) in app_handle.webview_windows() {
+                            if label.starts_with("web_wallpaper_") {
+                                let mut client_pt = pt;
+                                if let Ok(hwnd) = window.hwnd() {
+                                    let mut rect = windows::Win32::Foundation::RECT::default();
+                                    unsafe {
+                                        let _ = windows::Win32::UI::WindowsAndMessaging::GetWindowRect(
+                                            windows::Win32::Foundation::HWND(hwnd.0 as _),
+                                            &mut rect,
+                                        );
+                                    }
+                                    let width = (rect.right - rect.left) as f64;
+                                    let height = (rect.bottom - rect.top) as f64;
+                                    let rx = if width > 0.0 { (pt.x - rect.left) as f64 / width } else { 0.0 };
+                                    let ry = if height > 0.0 { (pt.y - rect.top) as f64 / height } else { 0.0 };
+                                    let _ = window.eval(&format!("if (window.__dispatch_mouse_event) window.__dispatch_mouse_event('click', {}, {}, 'right');", rx, ry));
+                                }
+                            }
+                        }
                     }
                     was_r_down = is_r_down;
 
@@ -587,9 +655,25 @@ pub fn start_mouse_tracking(app_handle: tauri::AppHandle) {
                     let is_m_down = (mbtn_state as u16 & 0x8000) != 0;
 
                     if is_m_down && !was_m_down {
-                        let mut click_payload = payload.clone();
-                        click_payload.button = Some("food".to_string());
-                        let _ = app_handle.emit("cursor-click", click_payload);
+                        for (label, window) in app_handle.webview_windows() {
+                            if label.starts_with("web_wallpaper_") {
+                                let mut client_pt = pt;
+                                if let Ok(hwnd) = window.hwnd() {
+                                    let mut rect = windows::Win32::Foundation::RECT::default();
+                                    unsafe {
+                                        let _ = windows::Win32::UI::WindowsAndMessaging::GetWindowRect(
+                                            windows::Win32::Foundation::HWND(hwnd.0 as _),
+                                            &mut rect,
+                                        );
+                                    }
+                                    let width = (rect.right - rect.left) as f64;
+                                    let height = (rect.bottom - rect.top) as f64;
+                                    let rx = if width > 0.0 { (pt.x - rect.left) as f64 / width } else { 0.0 };
+                                    let ry = if height > 0.0 { (pt.y - rect.top) as f64 / height } else { 0.0 };
+                                    let _ = window.eval(&format!("if (window.__dispatch_mouse_event) window.__dispatch_mouse_event('click', {}, {}, 'food');", rx, ry));
+                                }
+                            }
+                        }
                     }
                     was_m_down = is_m_down;
                 }
@@ -612,4 +696,9 @@ pub async fn get_current_effects(app_handle: tauri::AppHandle) -> Result<String,
     } else {
         Ok("{}".to_string())
     }
+}
+
+#[tauri::command]
+pub async fn get_builtin_interactives() -> Result<Vec<VideoResult>, String> {
+    Ok(crate::wallpaper::interactives::get_builtin_interactives())
 }

@@ -452,6 +452,7 @@ pub fn set_web_wallpaper(
     url: &str,
     monitor_name: Option<String>,
 ) -> Result<String, String> {
+    let _ = crate::wallpaper::audio::start_audio_capture(app.clone());
     use tauri::Manager;
     let monitors = app.available_monitors().unwrap_or_default();
     let mut target_m = monitors.first().cloned();
@@ -514,11 +515,27 @@ pub fn set_web_wallpaper(
         .map(|c| if c.is_alphanumeric() || c == '-' || c == '/' || c == ':' || c == '_' { c } else { '_' })
         .collect::<String>();
 
+    let parsed_url = if url.starts_with("http") {
+        tauri::Url::parse(url).map_err(|e| format!("Failed to parse URL: {}", e))?
+    } else {
+        let path = std::path::Path::new(url);
+        if !path.exists() {
+            return Err(format!("Local HTML file not found: {}", url));
+        }
+        let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+        let mut path_str = canonical.to_string_lossy().replace('\\', "/");
+        if path_str.starts_with("//?/") {
+            path_str = path_str[4..].to_string();
+        }
+        let asset_url = format!("http://asset.localhost/{}", path_str.trim_start_matches('/'));
+        tauri::Url::parse(&asset_url).map_err(|e| format!("Failed to parse asset URL: {}", e))?
+    };
+
     if let Some(window) = app.get_webview_window(&window_label) {
         window
             .eval(&format!(
                 "window.location.replace('{}');",
-                url.replace("'", "\\'")
+                parsed_url.as_str().replace("'", "\\'")
             ))
             .map_err(|e| e.to_string())?;
         if let Ok(mut current) = CURRENT_VIDEO.lock() {
@@ -527,15 +544,20 @@ pub fn set_web_wallpaper(
         return Ok(format!("Web wallpaper updated to {} on {}", url, m_key));
     }
 
-    let parsed_url = if url.starts_with("http") {
-        tauri::Url::parse(url).map_err(|e| format!("Failed to parse URL: {}", e))?
-    } else {
-        let path = std::path::Path::new(url);
-        if !path.exists() {
-            return Err(format!("Local HTML file not found: {}", url));
-        }
-        tauri::Url::from_file_path(path).map_err(|_| format!("Invalid file path: {}", url))?
-    };
+    let event_bridge_script = r#"
+        window.__dispatch_mouse_event = (type, rx, ry, button) => {
+            const btn = button === 'right' ? 2 : (button === 'food' ? 1 : 0);
+            const clientX = rx * window.innerWidth;
+            const clientY = ry * window.innerHeight;
+            if (type === 'mousemove') {
+                document.dispatchEvent(new MouseEvent('mousemove', { clientX, clientY, bubbles: true }));
+            } else if (type === 'click') {
+                document.dispatchEvent(new MouseEvent('mousedown', { clientX, clientY, button: btn, bubbles: true }));
+                setTimeout(() => document.dispatchEvent(new MouseEvent('mouseup', { clientX, clientY, button: btn, bubbles: true })), 50);
+                setTimeout(() => document.dispatchEvent(new MouseEvent('click', { clientX, clientY, button: btn, bubbles: true })), 50);
+            }
+        };
+    "#;
 
     let window = tauri::WebviewWindowBuilder::new(
         &app,
@@ -545,8 +567,12 @@ pub fn set_web_wallpaper(
     .decorations(false)
     .transparent(true)
     .skip_taskbar(true)
+    .initialization_script(event_bridge_script)
     .build()
     .map_err(|e| format!("Failed to build webview: {}", e))?;
+
+    let _ = window.set_size(tauri::PhysicalSize::new(width, height));
+    let _ = window.set_position(tauri::PhysicalPosition::new(x, y));
 
     #[cfg(windows)]
     {

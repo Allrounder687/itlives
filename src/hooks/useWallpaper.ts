@@ -144,6 +144,14 @@ export function useWallpaper() {
     } catch (e) { console.error("setAutostartEnabled failed", e); }
   }, [setState]);
 
+  const setLightweightMode = useCallback(async (enabled: boolean) => {
+    try {
+      const { invoke } = await getCoreApi();
+      const persisted = await invoke<PersistedState>("set_lightweight_mode", { enabled });
+      setState((s) => applyPersistedState(persisted, s));
+    } catch (e) { console.error("setLightweightMode failed", e); }
+  }, [setState]);
+
 
 
   const isFavorite = useCallback((video: VideoResult) => {
@@ -190,6 +198,7 @@ export function useWallpaper() {
     setAutoPauseEnabled,
     setWindowBehavior,
     setAutostartEnabled,
+    setLightweightMode,
     browseLocalVideo,
     browseFolderToQueue,
     isFavorite,

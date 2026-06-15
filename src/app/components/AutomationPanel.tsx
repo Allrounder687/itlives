@@ -114,6 +114,14 @@ export function AutomationPanel({ wallpaper }: AutomationPanelProps) {
             <h3 style={{fontSize: "14px", opacity: 0.8, marginBottom: "15px", borderBottom: "1px solid rgba(255,255,255,0.1)", paddingBottom: "5px"}}>General Behaviors</h3>
         </div>
         <label className="toggle-row">
+          <span>Enable Lightweight Mode (Pentium Processors / Low Battery)</span>
+          <input
+            type="checkbox"
+            checked={wallpaper.lightweightMode}
+            onChange={(event) => wallpaper.setLightweightMode(event.target.checked)}
+          />
+        </label>
+        <label className="toggle-row">
           <span>Sync Windows Accent Color (Taskbar/Windows) with Wallpaper</span>
           <input
             type="checkbox"

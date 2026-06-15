@@ -45,6 +45,7 @@ pub struct WallpaperState {
     pub purity_filter: String,
     pub slideshow_source: String,
     pub discover_provider: String,
+    pub lightweight_mode: bool,
 }
 
 impl Default for WallpaperState {
@@ -79,6 +80,7 @@ impl Default for WallpaperState {
             purity_filter: "100".to_string(),
             slideshow_source: "local".to_string(),
             discover_provider: "unified".to_string(),
+            lightweight_mode: false,
         }
     }
 }
@@ -727,6 +729,16 @@ pub fn toggle_hide_video(
         Ok(())
     })?;
     Ok(state)
+}
+
+pub fn set_lightweight_mode(
+    store: &AppStateStore,
+    enabled: bool,
+) -> Result<WallpaperState, String> {
+    store.update(|state| {
+        state.lightweight_mode = enabled;
+        Ok(())
+    })
 }
 
 #[cfg(test)]

@@ -4,7 +4,7 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
 };
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 
 lazy_static::lazy_static! {
     static ref AUDIO_RUNNING: Arc<AtomicBool> = Arc::new(AtomicBool::new(false));
@@ -104,7 +104,16 @@ pub fn start_audio_capture(app_handle: AppHandle) -> Result<(), String> {
                     }
 
                     // Emit to frontend
-                    let _ = app_handle.emit("audio-fft", bins);
+                    let _ = app_handle.emit("audio-fft", &bins);
+
+                    // Dispatch to web wallpapers
+                    if let Ok(json_bins) = serde_json::to_string(&bins) {
+                        for (label, window) in app_handle.webview_windows() {
+                            if label.starts_with("web_wallpaper_") {
+                                let _ = window.eval(&format!("if (window.__dispatch_audio) window.__dispatch_audio({});", json_bins));
+                            }
+                        }
+                    }
 
                     // Keep any leftover samples (sliding window could be better but this is fine for basic vis)
                     sample_buffer.drain(0..(fft_size * channels));

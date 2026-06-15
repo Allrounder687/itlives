@@ -76,6 +76,16 @@ function Home() {
   }, [wallpaper.theme]);
 
   useEffect(() => {
+    if (typeof document !== "undefined") {
+      if (wallpaper.lightweightMode) {
+        document.body.classList.add("lightweight-mode");
+      } else {
+        document.body.classList.remove("lightweight-mode");
+      }
+    }
+  }, [wallpaper.lightweightMode]);
+
+  useEffect(() => {
     if (typeof window !== "undefined" && window.location.search.includes("mode=desktop-overlay")) {
       setIsOverlayMode(true);
     }

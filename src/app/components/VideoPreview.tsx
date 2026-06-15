@@ -186,7 +186,7 @@ export const VideoPreview = memo(function VideoPreview({
           <iframe 
             src={videoSrc} 
             className="preview-video"
-            style={{ filter: previewFilter, border: "none", width: "100%", height: "100%", position: "absolute", inset: 0 }}
+            style={{ filter: previewFilter, border: "none", width: "100%", aspectRatio: "16/9" }}
           />
         ) : (
           <video

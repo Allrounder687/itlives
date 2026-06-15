@@ -56,6 +56,7 @@ export function useAppState() {
     keepEffectsRunningOnPause: false,
     slideshowSource: "local",
     discoverProvider: "unified",
+    lightweightMode: false,
   });
 
   useEffect(() => {

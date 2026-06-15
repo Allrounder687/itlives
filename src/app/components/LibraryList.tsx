@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, memo } from "react";
+import { useState, memo, useEffect } from "react";
+import { getCoreApi } from "@/utils/tauriApis";
 import { LibraryItem } from "@/hooks/useWallpaper";
 import { isStaticWallpaper } from "@/utils/wallpaperTypes";
 import { HoverVideo } from "./HoverVideo";
@@ -42,8 +43,22 @@ export const UnifiedLibrary = memo(function UnifiedLibrary({
   onRemoveImport,
   onUploadMedia,
 }: UnifiedLibraryProps) {
-  const [filter, setFilter] = useState<"all" | "favorites" | "recents" | "local">("all");
+  const [filter, setFilter] = useState<"all" | "favorites" | "recents" | "local" | "interactive">("all");
   const [typeFilter, setTypeFilter] = useState<"all" | "live" | "static">("all");
+  const [interactives, setInteractives] = useState<LibraryItem[]>([]);
+
+  useEffect(() => {
+    getCoreApi().then(({ invoke }) => {
+      invoke<{id: string, local_path: string}[]>("get_builtin_interactives")
+        .then((items: any[]) => {
+          setInteractives(items.map(video => ({
+            video,
+            saved_at: Date.now() / 1000
+          } as LibraryItem)));
+        })
+        .catch(console.error);
+    });
+  }, []);
 
   const getCombinedItems = () => {
     const map = new Map<string, LibraryItem & { isFavorite?: boolean; isRecent?: boolean; isLocal?: boolean }>();
@@ -71,6 +86,13 @@ export const UnifiedLibrary = memo(function UnifiedLibrary({
       }
     });
 
+    interactives.forEach(item => {
+      const key = `${item.video.id}:${item.video.local_path}`;
+      if (!map.has(key)) {
+        map.set(key, { ...item, isLocal: true, saved_at: item.saved_at || Date.now() / 1000 });
+      }
+    });
+
     return Array.from(map.values()).sort((a, b) => (b.saved_at || 0) - (a.saved_at || 0));
   };
 
@@ -79,7 +101,8 @@ export const UnifiedLibrary = memo(function UnifiedLibrary({
   const filteredItems = combinedItems.filter(item => {
     if (filter === "favorites" && !item.isFavorite) return false;
     if (filter === "recents" && !item.isRecent) return false;
-    if (filter === "local" && !item.isLocal) return false;
+    if (filter === "local" && !item.isLocal && item.video.source !== "interactive") return false;
+    if (filter === "interactive" && item.video.source !== "interactive") return false;
 
     if (hiddenVideos.includes(item.video.id)) return false;
 
@@ -112,7 +135,7 @@ export const UnifiedLibrary = memo(function UnifiedLibrary({
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem", flexWrap: "wrap", gap: "10px" }}>
         <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", flex: 1 }}>
           <div className="library-filter-bar" style={{ marginBottom: 0 }}>
-            {(["all", "favorites", "recents", "local"] as const).map((f) => (
+            {(["all", "favorites", "recents", "local", "interactive"] as const).map((f) => (
               <button
                 key={f}
                 type="button"

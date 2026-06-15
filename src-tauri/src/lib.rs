@@ -215,6 +215,10 @@ pub fn run() {
 
             wallpaper::performance::start_monitor(monitor_store.clone(), app.handle().clone());
 
+            let _ = crate::wallpaper::interactives::init_interactives().map_err(|e| {
+                log::error!("[Startup] Failed to initialize interactives: {}", e);
+            });
+
             // Start local API server for Raycast & Rainmeter integrations (needs AppHandle)
             integrations::start(state_store.clone(), app.handle().clone());
             // set_video contains Win32 calls and sleeps that block the main thread.
@@ -250,10 +254,12 @@ pub fn run() {
             commands::wallpaper_control::stop_wallpaper,
             commands::desktop_icons::invoke_throw_random_desktop_icon,
             commands::wallpaper_control::get_wallpaper_status,
+            commands::wallpaper_control::get_builtin_interactives,
             commands::settings::list_sources,
             commands::settings::cleanup_cache,
             commands::wallpaper_control::toggle_favorite,
             commands::settings::get_app_state,
+            commands::settings::set_lightweight_mode,
             commands::queue::add_to_queue,
             commands::queue::remove_from_queue,
             commands::queue::clear_queue,

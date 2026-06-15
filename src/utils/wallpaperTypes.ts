@@ -58,6 +58,7 @@ export interface PersistedState {
   purity_filter: string;
   slideshow_source: string;
   discover_provider: string;
+  lightweight_mode: boolean;
 }
 
 export interface WallpaperState {
@@ -108,6 +109,7 @@ export interface WallpaperState {
   purityFilter: string;
   slideshowSource: string;
   discoverProvider: string;
+  lightweightMode: boolean;
 }
 
 export function applyPersistedState(persisted: PersistedState, current: WallpaperState): WallpaperState {
@@ -147,6 +149,7 @@ export function applyPersistedState(persisted: PersistedState, current: Wallpape
     purityFilter: persisted.purity_filter ?? "100",
     slideshowSource: persisted.slideshow_source ?? "local",
     discoverProvider: persisted.discover_provider ?? "unified",
+    lightweightMode: persisted.lightweight_mode ?? false,
   };
 }
 

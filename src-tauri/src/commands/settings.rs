@@ -19,6 +19,14 @@ pub fn get_app_state(state: State<'_, AppStateStore>) -> WallpaperState {
 }
 
 #[tauri::command]
+pub fn set_lightweight_mode(
+    state: State<'_, AppStateStore>,
+    enabled: bool,
+) -> Result<WallpaperState, String> {
+    wallpaper::state::set_lightweight_mode(&state, enabled)
+}
+
+#[tauri::command]
 pub fn set_restore_on_launch(
     state: State<'_, AppStateStore>,
     enabled: bool,
