@@ -96,44 +96,6 @@ pub fn set_purity_filter(
     wallpaper::state::set_purity_filter(&state, purity)
 }
 
-#[tauri::command]
-pub fn check_dependencies() -> Vec<String> {
-    let mut missing = Vec::new();
-    if wallpaper::desktop::find_mpv().is_none() {
-        missing.push("mpv".to_string());
-    }
-    missing
-}
-
-#[tauri::command]
-pub async fn install_mpv() -> Result<(), String> {
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        let mut cmd = std::process::Command::new("powershell");
-        // We use powershell to run winget so we can capture output or handle it better if needed,
-        // but mostly to ensure we can run it minimized/hidden.
-        cmd.args(&[
-            "-NoProfile",
-            "-Command",
-            "winget install shinchiro.mpv --accept-package-agreements --accept-source-agreements",
-        ]);
-        cmd.creation_flags(0x08000000);
-
-        let status = cmd
-            .status()
-            .map_err(|e| format!("Failed to spawn winget process: {}", e))?;
-        if status.success() {
-            Ok(())
-        } else {
-            Err("Winget exited with an error code. Please try 'winget install shinchiro.mpv' manually in a terminal.".to_string())
-        }
-    }
-    #[cfg(not(windows))]
-    {
-        Err("Auto-install is only supported on Windows.".to_string())
-    }
-}
 
 #[tauri::command]
 pub fn set_wallhaven_api_key(

@@ -219,7 +219,6 @@ pub fn set_video(
 
     #[cfg(windows)]
     {
-        let mpv_path = find_mpv().ok_or("mpv not found. Install: winget install shinchiro.mpv")?;
         let workerw = win32::get_desktop_workerw().unwrap_or(0);
 
         let mut width = target_m.as_ref().map(|m| m.size().width).unwrap_or(1920);
@@ -323,12 +322,10 @@ pub fn set_video(
         ];
 
         // Enable ytdl-hook so mpv can natively stream YouTube URLs directly!
-        if let Ok(ytdlp_path) = crate::wallpaper::providers::youtube::find_ytdlp() {
-            args.push(format!("--script-opts=ytdl_hook-ytdl_path={}", ytdlp_path));
-            args.push("--ytdl=yes".to_string());
-            // Target 1080p for streaming performance
-            args.push("--ytdl-format=bestvideo[height<=?1080]+bestaudio/best".to_string());
-        }
+        // The sidecar mpv will automatically find the yt-dlp sidecar extracted next to it.
+        args.push("--ytdl=yes".to_string());
+        // Target 1080p for streaming performance
+        args.push("--ytdl-format=bestvideo[height<=?1080]+bestaudio/best".to_string());
 
         if workerw == 0 {
             args.push("--wid=0".to_string());
@@ -343,15 +340,14 @@ pub fn set_video(
 
         args.push(resolved_path.clone());
 
-        let mut cmd = Command::new(mpv_path);
-        cmd.args(&args);
-        #[cfg(windows)]
-        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+        use tauri_plugin_shell::ShellExt;
+        let mut cmd = app.shell().sidecar("mpv").map_err(|e| format!("Failed to configure mpv sidecar: {}", e))?;
+        cmd = cmd.args(&args);
 
-        let child = cmd
+        let (_rx, child) = cmd
             .spawn()
-            .map_err(|e| format!("Failed to spawn mpv: {}", e))?;
-        let pid = child.id();
+            .map_err(|e| format!("Failed to spawn mpv sidecar: {}", e))?;
+        let pid = child.pid();
 
         // Save PID for this monitor
         save_mpv_pid(&m_key, pid);
@@ -1070,38 +1066,4 @@ fn send_ipc_command(payload: &str) -> Result<(), String> {
     } else {
         Err(format!("Failed to connect to any mpv IPC: {}", last_err))
     }
-}
-
-/// Finds mpv.exe on the system.
-pub(crate) fn find_mpv() -> Option<String> {
-    for p in &[
-        "C:\\Program Files\\MPV Player\\mpv.exe",
-        "C:\\Program Files\\mpv\\mpv.exe",
-        "C:\\Program Files (x86)\\mpv\\mpv.exe",
-        "C:\\tools\\mpv\\mpv.exe",
-    ] {
-        if std::path::Path::new(p).exists() {
-            return Some(p.to_string());
-        }
-    }
-    if let Ok(out) = {
-        let mut cmd = Command::new("where");
-        cmd.arg("mpv");
-        #[cfg(windows)]
-        cmd.creation_flags(0x08000000);
-        cmd.output()
-    } {
-        if out.status.success() {
-            let p = String::from_utf8_lossy(&out.stdout)
-                .lines()
-                .next()
-                .unwrap_or("")
-                .trim()
-                .to_string();
-            if !p.is_empty() {
-                return Some(p);
-            }
-        }
-    }
-    None
 }

@@ -290,8 +290,7 @@ pub fn run() {
             commands::settings::show_mini_player,
             commands::settings::hide_mini_player,
             commands::settings::toggle_mini_player,
-            commands::settings::check_dependencies,
-            commands::settings::install_mpv,
+
             commands::settings::launch_external_app,
             commands::settings::extract_icon_base64,
             commands::settings::set_wallhaven_api_key,

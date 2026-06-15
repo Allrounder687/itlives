@@ -13,7 +13,7 @@ const SearchResults = dynamic(() => import("./components/SearchResults").then((m
 const AutomationPanel = dynamic(() => import("./components/AutomationPanel").then((m) => m.AutomationPanel), { ssr: false });
 const QueuePanel = dynamic(() => import("./components/QueuePanel").then((m) => m.QueuePanel), { ssr: false });
 const ThemeSelector = dynamic(() => import("./components/ThemeSelector").then((m) => m.ThemeSelector), { ssr: false });
-const DependencyChecker = dynamic(() => import("./components/DependencyChecker").then((m) => m.DependencyChecker), { ssr: false });
+
 const WallpaperSourcePanel = dynamic(() => import("./components/WallpaperSourcePanel").then((m) => m.WallpaperSourcePanel), { ssr: false });
 const DownloadProgressOverlay = dynamic(() => import("./components/DownloadProgressOverlay").then((m) => m.DownloadProgressOverlay), { ssr: false });
 
@@ -557,9 +557,7 @@ function Home() {
     return <TitleBar minimizeToTray={wallpaper.minimizeToTray} />;
   }, [wallpaper.minimizeToTray]);
 
-  const dependencyCheckerElement = useMemo(() => {
-    return <DependencyChecker />;
-  }, []);
+
 
 
 
@@ -764,8 +762,6 @@ function Home() {
         />
 
         <main className="workspace">
-          {dependencyCheckerElement}
-
           {discoverPanel}
           {libraryPanel}
           {communityPanel}

@@ -75,6 +75,13 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "externalBin": [
+      "binaries/mpv",
+      "binaries/yt-dlp"
+    ],
+    "resources": [
+      "binaries/d3dcompiler_43.dll"
+    ],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
