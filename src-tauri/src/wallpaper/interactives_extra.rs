@@ -120,6 +120,14 @@ const HEXAGON_GRID_HTML: &str = r#"
         let h = c.height = window.innerHeight;
         let mouseX = -1000, mouseY = -1000;
         document.addEventListener('mousemove', e => { mouseX = e.clientX; mouseY = e.clientY; });
+
+        let hueOffset = 0;
+        document.addEventListener('click', () => { hueOffset = (hueOffset + 45) % 360; });
+
+        let audioBins = [];
+        window.__dispatch_audio = (bins) => {
+            audioBins = bins;
+        };
         const hexSize = 30;
         const hexW = Math.sqrt(3) * hexSize;
         const hexH = 2 * hexSize;
@@ -130,11 +138,19 @@ const HEXAGON_GRID_HTML: &str = r#"
                 ctx.lineTo(x + r * Math.cos(angle), y + r * Math.sin(angle));
             }
             ctx.closePath();
-            ctx.strokeStyle = `rgba(0, 255, 255, ${alpha})`;
+            ctx.strokeStyle = `hsla(${(180 + hueOffset) % 360}, 100%, 50%, ${alpha})`;
             ctx.stroke();
         }
         function draw() {
-            ctx.clearRect(0,0,w,h);
+            let bass = 0;
+            if (audioBins.length >= 64) {
+                for(let i=0; i<6; i++) bass += audioBins[i];
+                bass /= 6;
+            }
+
+            ctx.fillStyle = `rgba(17, 17, 17, ${0.1 + bass * 0.2})`;
+            ctx.fillRect(0,0,w,h);
+
             for(let y=0; y<h+hexH; y+=hexH*0.75) {
                 for(let x=0; x<w+hexW; x+=hexW) {
                     let cx = x + ((y/(hexH*0.75))%2===0 ? 0 : hexW/2);
@@ -142,8 +158,10 @@ const HEXAGON_GRID_HTML: &str = r#"
                     let dx = cx - mouseX;
                     let dy = cy - mouseY;
                     let dist = Math.sqrt(dx*dx + dy*dy);
-                    let alpha = Math.max(0.1, 1 - dist/200);
-                    drawHex(cx, cy, hexSize*0.9, alpha);
+                    let alpha = Math.max(0.1 + bass, 1 - dist/200 + bass);
+                    
+                    ctx.lineWidth = 1 + bass * 5;
+                    drawHex(cx, cy, hexSize*0.9 + bass * 10, alpha);
                 }
             }
             requestAnimationFrame(draw);
@@ -1025,6 +1043,326 @@ const FIREFLY_REST_HTML: &str = r#"
 </html>
 "#;
 
+const QUANTUM_NEXUS_HTML: &str = r#"
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <style>body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000; } canvas { display: block; }</style>
+</head>
+<body>
+    <canvas id="c"></canvas>
+    <script>
+        const c = document.getElementById('c');
+        const ctx = c.getContext('2d');
+        let w = c.width = window.innerWidth;
+        let h = c.height = window.innerHeight;
+        let mouseX = -1000, mouseY = -1000;
+        
+        let hueOffset = 0;
+        document.addEventListener('click', () => { hueOffset = (hueOffset + 45) % 360; });
+        
+        let audioBins = [];
+        window.__dispatch_audio = (bins) => { audioBins = bins; };
+        
+        document.addEventListener('mousemove', e => { mouseX = e.clientX; mouseY = e.clientY; });
+        
+        let nodes = Array(150).fill().map(() => ({x: Math.random()*w, y: Math.random()*h, vx: (Math.random()-0.5)*2, vy: (Math.random()-0.5)*2}));
+        
+        function draw() {
+            let bass = 0;
+            if (audioBins.length >= 64) {
+                for(let i=0; i<6; i++) bass += audioBins[i];
+                bass /= 6;
+            }
+            
+            ctx.fillStyle = `rgba(0, 5, 10, ${0.2 - bass*0.1})`;
+            ctx.fillRect(0,0,w,h);
+            
+            for(let i=0; i<nodes.length; i++) {
+                let n = nodes[i];
+                n.x += n.vx; n.y += n.vy;
+                if(n.x<0 || n.x>w) n.vx *= -1;
+                if(n.y<0 || n.y>h) n.vy *= -1;
+                
+                let dx = mouseX - n.x;
+                let dy = mouseY - n.y;
+                let dist = Math.sqrt(dx*dx + dy*dy);
+                if (dist < 300) {
+                    n.x += dx * 0.02 * (1 + bass*5);
+                    n.y += dy * 0.02 * (1 + bass*5);
+                }
+                
+                ctx.fillStyle = `hsla(${(180 + hueOffset) % 360}, 100%, 50%, ${0.5 + bass})`;
+                ctx.beginPath();
+                ctx.arc(n.x, n.y, 2 + bass*5, 0, Math.PI*2);
+                ctx.fill();
+                
+                for(let j=i+1; j<nodes.length; j++) {
+                    let n2 = nodes[j];
+                    let dx2 = n.x - n2.x;
+                    let dy2 = n.y - n2.y;
+                    let dist2 = Math.sqrt(dx2*dx2 + dy2*dy2);
+                    if (dist2 < 150 + bass * 100) {
+                        ctx.strokeStyle = `hsla(${(180 + hueOffset) % 360}, 100%, 50%, ${(1 - dist2/(150+bass*100)) * (0.5 + bass)})`;
+                        ctx.lineWidth = 1 + bass*3;
+                        ctx.beginPath();
+                        ctx.moveTo(n.x, n.y);
+                        ctx.lineTo(n2.x, n2.y);
+                        ctx.stroke();
+                    }
+                }
+            }
+            requestAnimationFrame(draw);
+        }
+        window.addEventListener('resize', () => { w = c.width = window.innerWidth; h = c.height = window.innerHeight; });
+        draw();
+    </script>
+</body>
+</html>
+"#;
+
+const EVENT_HORIZON_HTML: &str = r#"
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <style>body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000; } canvas { display: block; }</style>
+</head>
+<body>
+    <canvas id="c"></canvas>
+    <script>
+        const c = document.getElementById('c');
+        const ctx = c.getContext('2d');
+        let w = c.width = window.innerWidth;
+        let h = c.height = window.innerHeight;
+        let mouseX = w/2, mouseY = h/2;
+        
+        let hueOffset = 0;
+        document.addEventListener('click', () => { hueOffset = (hueOffset + 45) % 360; });
+        
+        let audioBins = [];
+        window.__dispatch_audio = (bins) => { audioBins = bins; };
+        
+        document.addEventListener('mousemove', e => { mouseX = e.clientX; mouseY = e.clientY; });
+        
+        let particles = Array(1000).fill().map(() => ({a: Math.random()*Math.PI*2, r: Math.random()*w, s: Math.random()*0.02+0.005, z: Math.random()*2+0.1}));
+        let t = 0;
+        
+        function draw() {
+            let bass = 0, mid = 0;
+            if (audioBins.length >= 64) {
+                for(let i=0; i<6; i++) bass += audioBins[i];
+                for(let i=6; i<20; i++) mid += audioBins[i];
+                bass /= 6; mid /= 14;
+            }
+            
+            ctx.fillStyle = `rgba(0, 0, 0, ${0.1})`;
+            ctx.fillRect(0,0,w,h);
+            
+            t += 0.01 + bass*0.05;
+            
+            for(let p of particles) {
+                p.a += p.s * (1 + bass*2);
+                p.r -= 2 * (1 + bass*5);
+                if (p.r < 10) {
+                    p.r = w;
+                    p.a = Math.random() * Math.PI * 2;
+                }
+                
+                let cx = w/2 + Math.cos(t)*100;
+                let cy = h/2 + Math.sin(t)*100;
+                
+                // Cursor gravity
+                let dx = mouseX - (cx + Math.cos(p.a)*p.r);
+                let dy = mouseY - (cy + Math.sin(p.a)*p.r);
+                let dist = Math.sqrt(dx*dx + dy*dy);
+                
+                let pullX = 0, pullY = 0;
+                if (dist < 300) {
+                    pullX = (dx/dist) * (300-dist) * 0.1;
+                    pullY = (dy/dist) * (300-dist) * 0.1;
+                }
+                
+                let x = cx + Math.cos(p.a)*p.r + pullX;
+                let y = cy + Math.sin(p.a)*p.r*0.5 + pullY; // elliptical
+                
+                let size = (w - p.r) / w * 3 * p.z * (1 + mid*2);
+                
+                let hue = ((p.a / (Math.PI*2)) * 360 + t*50 + hueOffset) % 360;
+                ctx.fillStyle = `hsla(${hue}, 100%, 60%, ${1 - (p.r/w)})`;
+                ctx.beginPath();
+                ctx.arc(x, y, size, 0, Math.PI*2);
+                ctx.fill();
+            }
+            requestAnimationFrame(draw);
+        }
+        window.addEventListener('resize', () => { w = c.width = window.innerWidth; h = c.height = window.innerHeight; });
+        draw();
+    </script>
+</body>
+</html>
+"#;
+
+const ACOUSTIC_DUST_HTML: &str = r#"
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <style>body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #0a0a0a; } canvas { display: block; }</style>
+</head>
+<body>
+    <canvas id="c"></canvas>
+    <script>
+        const c = document.getElementById('c');
+        const ctx = c.getContext('2d');
+        let w = c.width = window.innerWidth;
+        let h = c.height = window.innerHeight;
+        
+        let hueOffset = 0;
+        document.addEventListener('click', () => { hueOffset = (hueOffset + 45) % 360; });
+        
+        let audioBins = [];
+        window.__dispatch_audio = (bins) => { audioBins = bins; };
+        
+        let dust = Array(2000).fill().map(() => ({x: Math.random()*w, y: Math.random()*h, tx: Math.random()*w, ty: Math.random()*h, vx: 0, vy: 0, c: Math.random()*360}));
+        
+        function draw() {
+            ctx.fillStyle = 'rgba(10,10,10,0.2)';
+            ctx.fillRect(0,0,w,h);
+            
+            let hasAudio = false;
+            if (audioBins.length >= 64) {
+                for(let b of audioBins) if(b > 0.1) hasAudio = true;
+            }
+            
+            if (hasAudio) {
+                // Form a circle of frequencies
+                let radius = Math.min(w,h)/3;
+                let angleStep = (Math.PI*2) / 64;
+                for(let i=0; i<dust.length; i++) {
+                    let d = dust[i];
+                    let binIndex = i % 64;
+                    let mag = audioBins.length ? audioBins[binIndex] : 0;
+                    let angle = binIndex * angleStep;
+                    
+                    let targetRadius = radius + mag * 200;
+                    
+                    // Add some noise
+                    let noiseX = (Math.random()-0.5) * 20;
+                    let noiseY = (Math.random()-0.5) * 20;
+                    
+                    d.tx = w/2 + Math.cos(angle) * targetRadius + noiseX;
+                    d.ty = h/2 + Math.sin(angle) * targetRadius + noiseY;
+                }
+            } else {
+                for(let d of dust) {
+                    if (Math.random() < 0.01) {
+                        d.tx = Math.random()*w;
+                        d.ty = Math.random()*h;
+                    }
+                }
+            }
+            
+            for(let d of dust) {
+                d.vx += (d.tx - d.x) * 0.05;
+                d.vy += (d.ty - d.y) * 0.05;
+                d.vx *= 0.8;
+                d.vy *= 0.8;
+                d.x += d.vx;
+                d.y += d.vy;
+                
+                let speed = Math.sqrt(d.vx*d.vx + d.vy*d.vy);
+                ctx.fillStyle = `hsla(${(d.c + speed*10 + hueOffset) % 360}, 100%, 60%, ${hasAudio ? 0.8 : 0.3})`;
+                ctx.fillRect(d.x, d.y, 1.5, 1.5);
+            }
+            
+            requestAnimationFrame(draw);
+        }
+        window.addEventListener('resize', () => { w = c.width = window.innerWidth; h = c.height = window.innerHeight; });
+        draw();
+    </script>
+</body>
+</html>
+"#;
+
+const RESONANCE_STRINGS_HTML: &str = r#"
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <style>body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000; } canvas { display: block; }</style>
+</head>
+<body>
+    <canvas id="c"></canvas>
+    <script>
+        const c = document.getElementById('c');
+        const ctx = c.getContext('2d');
+        let w = c.width = window.innerWidth;
+        let h = c.height = window.innerHeight;
+        
+        let hueOffset = 0;
+        document.addEventListener('click', () => { hueOffset = (hueOffset + 45) % 360; });
+        
+        let audioBins = [];
+        window.__dispatch_audio = (bins) => { audioBins = bins; };
+        
+        let mouseX = -1000, mouseY = -1000;
+        let pmouseX = -1000, pmouseY = -1000;
+        document.addEventListener('mousemove', e => { 
+            pmouseX = mouseX; pmouseY = mouseY;
+            mouseX = e.clientX; mouseY = e.clientY; 
+        });
+        
+        let strings = Array(64).fill().map((_, i) => ({ y: 0, targetY: 0, vy: 0, freq: i }));
+        
+        function draw() {
+            ctx.fillStyle = 'rgba(0,0,0,0.3)';
+            ctx.fillRect(0,0,w,h);
+            
+            let spacing = h / 64;
+            
+            for(let i=0; i<strings.length; i++) {
+                let s = strings[i];
+                s.targetY = spacing/2 + i * spacing;
+                
+                // Audio vibration
+                let mag = audioBins.length ? audioBins[i] : 0;
+                let audioVib = (Math.random()-0.5) * mag * 100;
+                
+                // Mouse pluck
+                if (mouseY > s.targetY - spacing && mouseY < s.targetY + spacing) {
+                    if (pmouseY < s.targetY && mouseY >= s.targetY) s.vy += 20;
+                    if (pmouseY > s.targetY && mouseY <= s.targetY) s.vy -= 20;
+                }
+                
+                let spring = 0.1;
+                let friction = 0.9;
+                
+                s.vy += (s.targetY - s.y) * spring;
+                s.y += s.vy;
+                s.vy *= friction;
+                
+                ctx.beginPath();
+                ctx.moveTo(0, s.targetY);
+                // Draw a curve from left to right, dipping at the center based on y
+                ctx.quadraticCurveTo(w/2, s.y + audioVib, w, s.targetY);
+                
+                let hue = (200 + i*2 + hueOffset) % 360;
+                ctx.strokeStyle = `hsla(${hue}, 100%, 50%, ${0.2 + Math.abs(s.y-s.targetY)*0.05 + mag})`;
+                ctx.lineWidth = 1 + mag*5;
+                ctx.stroke();
+            }
+            
+            requestAnimationFrame(draw);
+        }
+        window.addEventListener('resize', () => { w = c.width = window.innerWidth; h = c.height = window.innerHeight; });
+        draw();
+    </script>
+</body>
+</html>
+"#;
+
 pub fn init_extra_interactives(dir: &PathBuf) -> Result<(), String> {
     let mapping = vec![
         ("neon_waves.html", NEON_WAVES_HTML),
@@ -1044,6 +1382,10 @@ pub fn init_extra_interactives(dir: &PathBuf) -> Result<(), String> {
         ("laser_reflections.html", LASER_REFLECTIONS_HTML),
         ("magnetic_swarm.html", MAGNETIC_SWARM_HTML),
         ("firefly_rest.html", FIREFLY_REST_HTML),
+        ("quantum_nexus.html", QUANTUM_NEXUS_HTML),
+        ("event_horizon.html", EVENT_HORIZON_HTML),
+        ("acoustic_dust.html", ACOUSTIC_DUST_HTML),
+        ("resonance_strings.html", RESONANCE_STRINGS_HTML),
     ];
 
     for (filename, html) in mapping {
@@ -1074,6 +1416,10 @@ pub fn get_extra_interactives(dir: &PathBuf) -> Vec<VideoResult> {
         ("laser_reflections.html", "interactive_laser_reflections", "Laser Reflections", "https://images.unsplash.com/photo-1550684848-fac1c5b4e853?q=80&w=640&auto=format&fit=crop", vec!["physics", "icons", "laser", "icon_physics"]),
         ("magnetic_swarm.html", "interactive_magnetic_swarm", "Magnetic Swarm", "https://images.unsplash.com/photo-1518837695005-2083093ee35b?q=80&w=640&auto=format&fit=crop", vec!["physics", "icons", "swarm", "icon_physics"]),
         ("firefly_rest.html", "interactive_firefly_rest", "Firefly Rest", "https://images.unsplash.com/photo-1462331940025-496dfbfc7564?q=80&w=640&auto=format&fit=crop", vec!["physics", "icons", "firefly", "icon_physics"]),
+        ("quantum_nexus.html", "interactive_quantum_nexus", "Quantum Nexus", "https://images.unsplash.com/photo-1518837695005-2083093ee35b?q=80&w=640&auto=format&fit=crop", vec!["quantum", "nexus", "nodes", "audio"]),
+        ("event_horizon.html", "interactive_event_horizon", "Event Horizon", "https://images.unsplash.com/photo-1462331940025-496dfbfc7564?q=80&w=640&auto=format&fit=crop", vec!["vortex", "blackhole", "audio"]),
+        ("acoustic_dust.html", "interactive_acoustic_dust", "Acoustic Dust", "https://images.unsplash.com/photo-1534447677768-be436bb09401?q=80&w=640&auto=format&fit=crop", vec!["particles", "audio"]),
+        ("resonance_strings.html", "interactive_resonance_strings", "Resonance Strings", "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?q=80&w=640&auto=format&fit=crop", vec!["strings", "audio", "physics"]),
     ];
 
     let mut results = Vec::new();

@@ -99,8 +99,10 @@ pub fn start_audio_capture(app_handle: AppHandle) -> Result<(), String> {
                                 sum += mag;
                             }
                         }
-                        // Normalize slightly
-                        bins[i] = (sum / bin_size as f32) / (fft_size as f32);
+                        // Normalize slightly and apply a multiplier to make audio react visibly
+                        let raw_mag = (sum / bin_size as f32) / (fft_size as f32);
+                        // Multiply by 50.0 to bring typical music volume into the 0.0 - 1.0 range, then clamp.
+                        bins[i] = (raw_mag * 50.0).clamp(0.0, 1.0);
                     }
 
                     // Emit to frontend

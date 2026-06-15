@@ -32,19 +32,33 @@ const MATRIX_HTML: &str = r#"
             drops[x] = 1;
         }
 
-        let mouseX = 0;?
+        let mouseX = 0;
         let mouseY = 0;
+
+        let audioBins = [];
+        window.__dispatch_audio = (bins) => {
+            audioBins = bins;
+        };
 
         document.addEventListener('mousemove', (e) => {
             mouseX = e.clientX;
             mouseY = e.clientY;
         });
 
+        let hueOffset = 0;
+        document.addEventListener('click', () => { hueOffset = (hueOffset + 45) % 360; });
+
         function draw() {
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
+            let bass = 0;
+            if (audioBins.length >= 64) {
+                for(let i=0; i<6; i++) bass += audioBins[i];
+                bass /= 6;
+            }
+
+            ctx.fillStyle = `rgba(0, 0, 0, ${0.05 + bass * 0.1})`;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             
-            ctx.fillStyle = '#0F0'; 
+            ctx.fillStyle = `hsl(${(120 + hueOffset) % 360}, 100%, 50%)`; 
             ctx.font = fontSize + 'px monospace';
             
             for (let i = 0; i < drops.length; i++) {
@@ -62,14 +76,22 @@ const MATRIX_HTML: &str = r#"
                     ctx.fillStyle = '#FFF';
                     ctx.fillText(text, dropX + (dx/distance)*10, dropY + (dy/distance)*10);
                 } else {
-                    ctx.fillStyle = '#0F0';
+                    if (bass > 0.4 && Math.random() < bass) {
+                        ctx.fillStyle = '#FFF';
+                        ctx.shadowBlur = bass * 20;
+                        ctx.shadowColor = `hsl(${(120 + hueOffset) % 360}, 100%, 50%)`;
+                    } else {
+                        ctx.fillStyle = `hsl(${(120 + hueOffset) % 360}, 100%, 50%)`;
+                        ctx.shadowBlur = 0;
+                    }
                     ctx.fillText(text, dropX, dropY);
+                    ctx.shadowBlur = 0;
                 }
                 
                 if (dropY > canvas.height && Math.random() > 0.975) {
                     drops[i] = 0;
                 }
-                drops[i]++;
+                drops[i] += 1 + bass * 2;
             }
         }
         
