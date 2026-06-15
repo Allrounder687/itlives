@@ -273,3 +273,44 @@ pub fn extract_icon_base64(path: String) -> Result<String, String> {
         Err("Icon extraction is only supported on Windows".into())
     }
 }
+
+#[tauri::command]
+pub fn set_slideshow_source(
+    state: State<'_, AppStateStore>,
+    source: String,
+) -> Result<WallpaperState, String> {
+    wallpaper::state::set_slideshow_source(&state, source)
+}
+
+#[tauri::command]
+pub fn set_discover_provider(
+    state: State<'_, AppStateStore>,
+    provider: String,
+) -> Result<WallpaperState, String> {
+    wallpaper::state::set_discover_provider(&state, provider)
+}
+
+#[tauri::command]
+pub fn get_system_wallpaper() -> Result<String, String> {
+    #[cfg(target_os = "windows")]
+    {
+        use windows::Win32::UI::WindowsAndMessaging::{SystemParametersInfoW, SPI_GETDESKWALLPAPER, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS};
+        let mut buffer = [0u16; 512];
+        unsafe {
+            let res = SystemParametersInfoW(
+                SPI_GETDESKWALLPAPER,
+                buffer.len() as u32,
+                Some(buffer.as_mut_ptr() as *mut _),
+                SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS(0),
+            );
+            if res.is_ok() {
+                let path = String::from_utf16_lossy(&buffer);
+                let path = path.trim_end_matches('\0').trim().to_string();
+                if std::path::Path::new(&path).exists() {
+                    return Ok(path);
+                }
+            }
+        }
+    }
+    Err("System wallpaper not found".to_string())
+}

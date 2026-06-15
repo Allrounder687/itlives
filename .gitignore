@@ -58,3 +58,5 @@ LocaleMetaData/windowslg26_1033.MTA
 mpv_cmd_ascii.txt
 mpv_cmd.txt
 read_evtx.ps1
+/src-tauri/target-cli/
+/itlives-cli/target/

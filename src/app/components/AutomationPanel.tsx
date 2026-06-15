@@ -172,6 +172,21 @@ export function AutomationPanel({ wallpaper }: AutomationPanelProps) {
             }
           />
         </label>
+        <label className="field">
+          <span className="field__label">Slideshow/Queue Source</span>
+          <select
+            className="input input--select"
+            value={wallpaper.slideshowSource || "local"}
+            onChange={(event) => wallpaper.setSlideshowSource(event.target.value)}
+          >
+            <option value="local">Local PC Library (Imports)</option>
+            <option value="online">Online History (Favorites & Recents)</option>
+            <option value="discover">Discover New (Random Online Wallpapers)</option>
+          </select>
+          <span className="field__hint">
+            Controls which wallpapers are used to auto-fill the slideshow rotation queue when it runs empty.
+          </span>
+        </label>
         <label className="toggle-row">
           <span>Close app to tray</span>
           <input
@@ -235,7 +250,7 @@ export function AutomationPanel({ wallpaper }: AutomationPanelProps) {
           <select
             className="input input--select"
             value={wallpaper.videoFilter}
-            onChange={(event) => wallpaper.setVideoFilter(event.target.value)}
+            onChange={(event) => wallpaper.setWallpaperFilter(event.target.value)}
           >
             {FILTER_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>

@@ -14,8 +14,8 @@ export function useWallpaperActions(state: WallpaperState, setState: React.Dispa
       const persisted = await invoke<PersistedState>("apply_wallpaper", {
         video,
         scalePercent: state.wallpaperScalePercent,
-        startTime: startTime !== undefined ? startTime : null,
-        endTime: endTime !== undefined ? endTime : null,
+        startTime: startTime ?? video.start_time ?? null,
+        endTime: endTime ?? video.end_time ?? null,
         monitor: state.selectedMonitor?.name || null,
       });
       setState((s) => ({
@@ -198,6 +198,24 @@ export function useWallpaperActions(state: WallpaperState, setState: React.Dispa
     }
   }, [setState]);
 
+  const playNext = useCallback(async () => {
+    try {
+      const { invoke } = await getCoreApi();
+      await invoke("next_wallpaper");
+    } catch (error) {
+      console.error("Failed to play next", error);
+    }
+  }, []);
+
+  const playPrevious = useCallback(async () => {
+    try {
+      const { invoke } = await getCoreApi();
+      await invoke("prev_wallpaper");
+    } catch (error) {
+      console.error("Failed to play previous", error);
+    }
+  }, []);
+
   return { 
     applyWallpaper, 
     fetchVideosList, 
@@ -209,6 +227,8 @@ export function useWallpaperActions(state: WallpaperState, setState: React.Dispa
     setKeepEffectsRunningOnPause,
     setWallpaperScale,
     setWallpaperFilter,
-    fetchVideoTags
+    fetchVideoTags,
+    playNext,
+    playPrevious
   };
 }

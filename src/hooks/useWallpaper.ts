@@ -24,7 +24,9 @@ export function useWallpaper() {
     setKeepEffectsRunningOnPause,
     setWallpaperScale,
     setWallpaperFilter,
-    fetchVideoTags
+    fetchVideoTags,
+    playNext,
+    playPrevious
   } = useWallpaperActions(state, setState);
   const { addToQueue, removeFromQueue, clearQueue, importFolderToQueue, reorderQueue } = useQueueManager(state, setState);
   const { toggleFavorite, removeRecentVideo, removeImportedVideo } = useLibraryActions(state, setState);
@@ -165,6 +167,8 @@ export function useWallpaper() {
     setKeepEffectsRunningOnPause,
     setWallpaperScale,
     setWallpaperFilter,
+    playNext,
+    playPrevious,
     addToQueue,
     removeFromQueue,
     clearQueue,
@@ -208,6 +212,20 @@ export function useWallpaper() {
         const persisted = await invoke<PersistedState>("set_purity_filter", { purity: purityFilter });
         setState((s) => ({ ...applyPersistedState(persisted, s), page: 1 }));
       } catch (e) { console.error("Purity filter failed", e); }
+    },
+    setSlideshowSource: async (slideshowSource: string) => {
+      try {
+        const { invoke } = await getCoreApi();
+        const persisted = await invoke<PersistedState>("set_slideshow_source", { source: slideshowSource });
+        setState((s) => applyPersistedState(persisted, s));
+      } catch (e) { console.error("Slideshow source failed", e); }
+    },
+    setDiscoverProvider: async (provider: string) => {
+      try {
+        const { invoke } = await getCoreApi();
+        const persisted = await invoke<PersistedState>("set_discover_provider", { provider });
+        setState((s) => applyPersistedState(persisted, s));
+      } catch (e) { console.error("Discover provider failed", e); }
     },
     setSelectedMonitor: (monitor: DisplayMonitor | null) => setState(s => ({ ...s, selectedMonitor: monitor })),
     setColorFilter: (colorFilter: string) => setState(s => {

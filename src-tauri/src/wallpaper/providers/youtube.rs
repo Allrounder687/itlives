@@ -468,6 +468,8 @@ pub fn download_clip(
     cmd.args([
         "--no-playlist",
         "--no-warnings",
+        "--concurrent-fragments",
+        "4",
         "--download-sections",
         &section_arg,
         "-f",

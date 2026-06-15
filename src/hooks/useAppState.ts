@@ -54,6 +54,8 @@ export function useAppState() {
     categoriesFilter: "111",
     purityFilter: "100",
     keepEffectsRunningOnPause: false,
+    slideshowSource: "local",
+    discoverProvider: "unified",
   });
 
   useEffect(() => {

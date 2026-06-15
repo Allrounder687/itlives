@@ -227,10 +227,10 @@ pub fn set_video(
         let mut y = target_m.as_ref().map(|m| m.position().y).unwrap_or(0);
 
         // Close any web wallpaper for this monitor
-        let window_label = format!(
-            "web_wallpaper_{}",
-            m_key.replace(" ", "_").replace("\\", "_")
-        );
+        let window_label = format!("web_wallpaper_{}", m_key)
+            .chars()
+            .map(|c| if c.is_alphanumeric() || c == '-' || c == '/' || c == ':' || c == '_' { c } else { '_' })
+            .collect::<String>();
         if let Some(window) = app.get_webview_window(&window_label) {
             let _ = window.close();
         }
@@ -320,6 +320,14 @@ pub fn set_video(
             "--icc-profile-auto=no".to_string(),
             "--terminal=no".to_string(),
         ];
+
+        // Enable ytdl-hook so mpv can natively stream YouTube URLs directly!
+        if let Ok(ytdlp_path) = crate::wallpaper::providers::youtube::find_ytdlp() {
+            args.push(format!("--script-opts=ytdl_hook-ytdl_path={}", ytdlp_path));
+            args.push("--ytdl=yes".to_string());
+            // Target 1080p for streaming performance
+            args.push("--ytdl-format=bestvideo[height<=?1080]+bestaudio/best".to_string());
+        }
 
         if workerw == 0 {
             args.push("--wid=0".to_string());
@@ -504,10 +512,10 @@ pub fn set_web_wallpaper(
         }
     }
 
-    let window_label = format!(
-        "web_wallpaper_{}",
-        m_key.replace(" ", "_").replace("\\", "_")
-    );
+    let window_label = format!("web_wallpaper_{}", m_key)
+        .chars()
+        .map(|c| if c.is_alphanumeric() || c == '-' || c == '/' || c == ':' || c == '_' { c } else { '_' })
+        .collect::<String>();
 
     if let Some(window) = app.get_webview_window(&window_label) {
         window

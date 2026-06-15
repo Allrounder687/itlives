@@ -12,8 +12,15 @@ use wallpaper::state::AppStateStore;
 
 fn restore_wallpaper_if_enabled(app: tauri::AppHandle, store: &AppStateStore) {
     let state = wallpaper::state::get(store);
-    if state.restore_on_launch && state.is_playing {
-        if let Some(video) = state.current_video.as_ref() {
+    if state.restore_on_launch {
+        let in_library = |v: &crate::wallpaper::providers::VideoResult| {
+            state.favorites.iter().any(|item| item.video.local_path == v.local_path) ||
+            state.imports.iter().any(|item| item.video.local_path == v.local_path)
+        };
+        let video_to_restore = state.current_video.as_ref()
+            .filter(|v| in_library(v))
+            .or_else(|| state.recents.iter().map(|i| &i.video).find(|v| in_library(v)));
+        if let Some(video) = video_to_restore {
             let path_lower = video.local_path.to_lowercase();
             let is_static_image = path_lower.ends_with(".jpg")
                 || path_lower.ends_with(".jpeg")
@@ -33,12 +40,13 @@ fn restore_wallpaper_if_enabled(app: tauri::AppHandle, store: &AppStateStore) {
                     &state.video_filter,
                     state.playback_speed,
                     state.blur_strength,
-                    state.paused,
+                    false,
                     None,
                     None,
                     None,
                 );
             }
+            let _ = crate::wallpaper::state::mark_active(store, video.clone());
         }
 
         // Also restore desktop effects if they exist in current_effects.json
@@ -72,12 +80,13 @@ fn restore_wallpaper_if_enabled(app: tauri::AppHandle, store: &AppStateStore) {
 fn build_tray(app: &tauri::App) -> tauri::Result<()> {
     let show = MenuItemBuilder::with_id("show", "Show Window").build(app)?;
     let hide = MenuItemBuilder::with_id("hide", "Hide Window").build(app)?;
+    let mini_player = MenuItemBuilder::with_id("mini_player", "Mini Player").build(app)?;
     let restore = MenuItemBuilder::with_id("restore_last", "Restore Last Wallpaper").build(app)?;
     let stop = MenuItemBuilder::with_id("stop_wallpaper", "Stop Wallpaper").build(app)?;
     let quit = MenuItemBuilder::with_id("quit", "Quit").build(app)?;
 
     let menu = MenuBuilder::new(app)
-        .items(&[&show, &hide, &restore, &stop, &quit])
+        .items(&[&show, &hide, &mini_player, &restore, &stop, &quit])
         .build()?;
 
     let icon = app.default_window_icon().cloned();
@@ -97,6 +106,18 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
             "hide" => {
                 if let Some(window) = app_handle.get_webview_window("main") {
                     let _ = window.hide();
+                }
+            }
+            "mini_player" => {
+                if let Some(window) = app_handle.get_webview_window("mini_player") {
+                    let visible = window.is_visible().unwrap_or(false);
+                    if visible {
+                        let _ = window.hide();
+                    } else {
+                        let _ = window.show();
+                        let _ = window.unminimize();
+                        let _ = window.set_focus();
+                    }
                 }
             }
             "restore_last" => {
@@ -231,6 +252,8 @@ pub fn run() {
             crate::wallpaper::media::media_get_volume,
             crate::wallpaper::media::media_set_volume,
             commands::wallpaper_control::apply_wallpaper,
+            commands::wallpaper_control::next_wallpaper,
+            commands::wallpaper_control::prev_wallpaper,
             commands::wallpaper_control::stop_wallpaper,
             commands::desktop_icons::invoke_throw_random_desktop_icon,
             commands::wallpaper_control::get_wallpaper_status,
@@ -268,6 +291,9 @@ pub fn run() {
             commands::settings::set_theme,
             commands::settings::set_categories_filter,
             commands::settings::set_purity_filter,
+            commands::settings::set_slideshow_source,
+            commands::settings::set_discover_provider,
+            commands::settings::get_system_wallpaper,
             commands::settings::check_dependencies,
             commands::settings::install_mpv,
             commands::settings::launch_external_app,

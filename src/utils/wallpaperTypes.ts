@@ -9,6 +9,8 @@ export interface VideoResult {
   source: string;
   tags?: string[];
   preview_url?: string;
+  start_time?: number | null;
+  end_time?: number | null;
 }
 
 export interface LibraryItem {
@@ -54,6 +56,8 @@ export interface PersistedState {
   keep_effects_running_on_pause: boolean;
   categories_filter: string;
   purity_filter: string;
+  slideshow_source: string;
+  discover_provider: string;
 }
 
 export interface WallpaperState {
@@ -102,6 +106,8 @@ export interface WallpaperState {
   colors: string | null;
   categoriesFilter: string;
   purityFilter: string;
+  slideshowSource: string;
+  discoverProvider: string;
 }
 
 export function applyPersistedState(persisted: PersistedState, current: WallpaperState): WallpaperState {
@@ -139,6 +145,8 @@ export function applyPersistedState(persisted: PersistedState, current: Wallpape
     colors: current.colors ?? null,
     categoriesFilter: persisted.categories_filter ?? "111",
     purityFilter: persisted.purity_filter ?? "100",
+    slideshowSource: persisted.slideshow_source ?? "local",
+    discoverProvider: persisted.discover_provider ?? "unified",
   };
 }
 

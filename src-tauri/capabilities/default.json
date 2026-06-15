@@ -5,7 +5,8 @@
   "windows": [
     "main",
     "tray_menu",
-    "effects_overlay"
+    "effects_overlay",
+    "mini_player"
   ],
   "permissions": [
     "core:default",

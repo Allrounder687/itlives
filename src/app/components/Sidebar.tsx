@@ -168,10 +168,10 @@ export const Sidebar = React.memo(function Sidebar({ activeTab, setActiveTab, is
             type="button"
             className={`sidebar-list__item sidebar-list__item--clickable ${activeTab === "youtube" ? "sidebar-list__item--active" : ""}`}
             onClick={() => setActiveTab("youtube")}
-            title="YouTube"
+            title="Web Video"
           >
             <div className="tab-icon">{ICONS.youtube}</div>
-            {!isSidebarCollapsed && <span>YouTube</span>}
+            {!isSidebarCollapsed && <span>Web Video</span>}
           </button>
           <button
             type="button"

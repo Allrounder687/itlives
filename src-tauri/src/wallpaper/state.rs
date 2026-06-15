@@ -43,6 +43,8 @@ pub struct WallpaperState {
     pub keep_effects_running_on_pause: bool,
     pub categories_filter: String,
     pub purity_filter: String,
+    pub slideshow_source: String,
+    pub discover_provider: String,
 }
 
 impl Default for WallpaperState {
@@ -75,6 +77,8 @@ impl Default for WallpaperState {
             keep_effects_running_on_pause: false,
             categories_filter: "111".to_string(),
             purity_filter: "100".to_string(),
+            slideshow_source: "local".to_string(),
+            discover_provider: "unified".to_string(),
         }
     }
 }
@@ -97,7 +101,12 @@ impl AppStateStore {
     }
 
     pub fn from_path(path: PathBuf) -> Self {
-        let state = load_from_path(&path);
+        let mut state = load_from_path(&path);
+        if !state.queue.is_empty() {
+            state.queue_cursor %= state.queue.len();
+        } else {
+            state.queue_cursor = 0;
+        }
         Self {
             inner: Arc::new(RwLock::new(state)),
             path: Arc::new(path),
@@ -105,10 +114,10 @@ impl AppStateStore {
     }
 
     pub fn snapshot(&self) -> WallpaperState {
-        self.inner
-            .read()
-            .map(|state| state.clone())
-            .unwrap_or_default()
+        match self.inner.read() {
+            Ok(state) => state.clone(),
+            Err(poisoned) => poisoned.into_inner().clone(),
+        }
     }
 
     fn persist(&self, state: &WallpaperState) -> Result<(), String> {
@@ -121,11 +130,16 @@ impl AppStateStore {
     where
         F: FnOnce(&mut WallpaperState) -> Result<(), String>,
     {
-        let mut state = self
-            .inner
-            .write()
-            .map_err(|_| "state lock poisoned".to_string())?;
+        let mut state = match self.inner.write() {
+            Ok(guard) => guard,
+            Err(poisoned) => poisoned.into_inner(),
+        };
         mutate(&mut state)?;
+        if !state.queue.is_empty() {
+            state.queue_cursor %= state.queue.len();
+        } else {
+            state.queue_cursor = 0;
+        }
         self.persist(&state)?;
         Ok(state.clone())
     }
@@ -192,6 +206,74 @@ pub fn mark_active(store: &AppStateStore, video: VideoResult) -> Result<Wallpape
         state.paused = false;
         state.current_video = Some(video.clone());
         insert_unique_front(&mut state.recents, video, MAX_RECENTS);
+
+        if state.queue.len() <= 1 {
+            if state.slideshow_source == "discover" {
+                let provider_name = state.discover_provider.clone();
+                let categories = state.categories_filter.clone();
+                let purity = state.purity_filter.clone();
+                let store_clone = store.clone();
+                tauri::async_runtime::spawn(async move {
+                    if let Ok(provider) = crate::wallpaper::providers::get_provider(&provider_name) {
+                        let config = crate::wallpaper::providers::SearchConfig {
+                            query: "all".to_string(),
+                            order: "random".to_string(),
+                            count: 20,
+                            page: 1,
+                            api_key: None,
+                            resolutions: None,
+                            ratios: None,
+                            colors: None,
+                            categories: Some(categories),
+                            purity: Some(purity),
+                        };
+                        if let Ok(results) = provider.fetch_videos_list(&config).await {
+                            let _ = store_clone.update(|s| {
+                                s.queue.clear();
+                                for v in results {
+                                    s.queue.push(LibraryItem {
+                                        video: v,
+                                        saved_at: now_ts(),
+                                    });
+                                }
+                                s.queue_cursor = 0;
+                                Ok(())
+                            });
+                        }
+                    }
+                });
+            } else if !state.recents.is_empty() || !state.imports.is_empty() {
+                use rand::seq::SliceRandom;
+                let mut rng = rand::thread_rng();
+                let mut videos_to_add = Vec::new();
+                
+                if state.slideshow_source == "local" && !state.imports.is_empty() {
+                    videos_to_add.extend(state.imports.iter().map(|i| i.video.clone()));
+                } else if state.slideshow_source == "online" && !state.favorites.is_empty() {
+                    videos_to_add.extend(state.favorites.iter().map(|i| i.video.clone()));
+                    videos_to_add.extend(state.recents.iter().take(10).map(|i| i.video.clone()));
+                } else {
+                    // Fallback to whatever is available
+                    if !state.imports.is_empty() {
+                        videos_to_add.extend(state.imports.iter().map(|i| i.video.clone()));
+                    } else {
+                        videos_to_add.extend(state.recents.iter().take(15).map(|i| i.video.clone()));
+                    }
+                }
+                
+                videos_to_add.shuffle(&mut rng);
+                
+                state.queue.clear();
+                for v in videos_to_add {
+                    state.queue.push(LibraryItem {
+                        video: v,
+                        saved_at: now_ts(),
+                    });
+                }
+                state.queue_cursor = 0;
+            }
+        }
+
         Ok(())
     })
 }
@@ -322,6 +404,46 @@ pub fn set_purity_filter(
         state.purity_filter = purity_filter;
         Ok(())
     })
+}
+
+pub fn set_slideshow_source(
+    store: &AppStateStore,
+    slideshow_source: String,
+) -> Result<WallpaperState, String> {
+    let state = store.update(|state| {
+        state.slideshow_source = match slideshow_source.as_str() {
+            "online" => "online".to_string(),
+            "discover" => "discover".to_string(),
+            _ => "local".to_string(),
+        };
+        state.queue.clear();
+        state.queue_cursor = 0;
+        Ok(())
+    })?;
+
+    if let Some(curr) = state.current_video.clone() {
+        let _ = mark_active(store, curr);
+    }
+    
+    Ok(state)
+}
+
+pub fn set_discover_provider(
+    store: &AppStateStore,
+    provider: String,
+) -> Result<WallpaperState, String> {
+    let state = store.update(|state| {
+        state.discover_provider = provider;
+        state.queue.clear();
+        state.queue_cursor = 0;
+        Ok(())
+    })?;
+
+    if let Some(curr) = state.current_video.clone() {
+        let _ = mark_active(store, curr);
+    }
+    
+    Ok(state)
 }
 
 pub fn toggle_favorite(
@@ -523,17 +645,19 @@ pub fn set_pinterest_urls(
 }
 
 pub fn advance_queue(store: &AppStateStore) -> Result<QueueAdvanceResult, String> {
-    let mut state = store
-        .inner
-        .write()
-        .map_err(|_| "state lock poisoned".to_string())?;
+    let mut state = match store.inner.write() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    };
 
     if state.queue.is_empty() {
+        state.queue_cursor = 0;
         return Err("Queue is empty".to_string());
     }
 
+    state.queue_cursor %= state.queue.len();
     let len = state.queue.len();
-    let index = state.queue_cursor % len;
+    let index = state.queue_cursor;
     let video = state.queue[index].video.clone();
     state.queue_cursor = (index + 1) % len;
     store.persist(&state)?;
@@ -545,21 +669,20 @@ pub fn advance_queue(store: &AppStateStore) -> Result<QueueAdvanceResult, String
 }
 
 pub fn retreat_queue(store: &AppStateStore) -> Result<QueueAdvanceResult, String> {
-    let mut state = store
-        .inner
-        .write()
-        .map_err(|_| "state lock poisoned".to_string())?;
+    let mut state = match store.inner.write() {
+        Ok(guard) => guard,
+        Err(poisoned) => poisoned.into_inner(),
+    };
 
     if state.queue.is_empty() {
+        state.queue_cursor = 0;
         return Err("Queue is empty".to_string());
     }
 
+    state.queue_cursor %= state.queue.len();
     let len = state.queue.len();
-    // Move to previous video:
-    // If state.queue_cursor is pointing to the next index, the current index is (queue_cursor - 1).
-    // The previous index is (queue_cursor - 2).
-    let index = if state.queue_cursor >= 2 {
-        state.queue_cursor - 2
+    let index = if len == 1 {
+        0
     } else {
         (state.queue_cursor + len - 2) % len
     };

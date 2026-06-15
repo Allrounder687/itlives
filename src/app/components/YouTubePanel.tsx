@@ -170,7 +170,11 @@ export function YouTubePanel({ onApplyWallpaper, onStop, isPlaying }: YouTubePan
     }
   }, [yt.startTime, yt.meta]);
 
-  const embedUrl = yt.meta 
+  const checkUrl = yt.meta?.video_url || yt.url || "";
+  const isYouTube = checkUrl.toLowerCase().includes("youtube.com") || checkUrl.toLowerCase().includes("youtu.be");
+  const isLiveStream = !yt.meta?.duration || yt.meta.duration === 0;
+
+  const embedUrl = (yt.meta && isYouTube)
     ? `https://www.youtube.com/embed/${yt.meta.id}?start=${Math.floor(iframeStart)}&autoplay=1&controls=1&rel=0`
     : "";
 
@@ -211,9 +215,9 @@ export function YouTubePanel({ onApplyWallpaper, onStop, isPlaying }: YouTubePan
             📥
           </div>
           <div>
-            <h3 style={{ margin: "0 0 8px 0", fontSize: "20px", color: "var(--text)" }}>YouTube Extractor Setup</h3>
+            <h3 style={{ margin: "0 0 8px 0", fontSize: "20px", color: "var(--text)" }}>Web Video Extractor Setup</h3>
             <p style={{ margin: 0, fontSize: "14px", color: "var(--text-soft)", lineHeight: "1.6" }}>
-              To extract and trim video clips from YouTube, we use the powerful, open-source <strong>yt-dlp</strong> engine. We couldn't find it installed on your system.
+              To extract and trim video clips from YouTube, Vimeo, Twitch, Reddit, Twitter, Facebook, and more, we use the powerful, open-source <strong>yt-dlp</strong> engine. We couldn't find it installed on your system.
             </p>
           </div>
 
@@ -265,12 +269,12 @@ export function YouTubePanel({ onApplyWallpaper, onStop, isPlaying }: YouTubePan
           {/* URL Input + Quality */}
           <div className="yt-url-row">
             <div className="field" style={{ flex: 1 }}>
-              <span className="field__label">YouTube Video URL</span>
+              <span className="field__label">Web Video URL</span>
               <div className="input-group">
                 <input
                   className="input input--hud"
                   type="text"
-                  placeholder="https://www.youtube.com/watch?v=..."
+                  placeholder="https://www.youtube.com/..., https://vimeo.com/..., etc."
                   value={yt.url}
                   onChange={(e) => yt.setUrl(e.target.value)}
                   onKeyDown={(e) => {
@@ -367,15 +371,31 @@ export function YouTubePanel({ onApplyWallpaper, onStop, isPlaying }: YouTubePan
             <div className="yt-clip-builder">
               {/* IFrame Preview instead of Static Card */}
               <div className="yt-player-container">
-                <iframe
-                  ref={playerRef}
-                  className="yt-preview-iframe"
-                  src={embedUrl}
-                  title="YouTube video player"
-                  frameBorder="0"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
-                />
+                {isYouTube ? (
+                  <iframe
+                    ref={playerRef}
+                    className="yt-preview-iframe"
+                    src={embedUrl}
+                    title="YouTube video player"
+                    frameBorder="0"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                  />
+                ) : (
+                  <div style={{
+                    width: '100%', height: '100%', position: 'relative',
+                    backgroundImage: `url(${yt.meta.thumbnail_url})`,
+                    backgroundSize: 'cover', backgroundPosition: 'center',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center'
+                  }}>
+                    <div style={{
+                      background: 'rgba(0,0,0,0.6)', padding: '20px', borderRadius: '50%',
+                      backdropFilter: 'blur(4px)', color: '#fff', fontSize: '32px'
+                    }}>
+                      ▶
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Quick Info Bar */}
@@ -385,81 +405,121 @@ export function YouTubePanel({ onApplyWallpaper, onStop, isPlaying }: YouTubePan
                 <span>Resolution Choice: <strong>{yt.maxHeight}p max</strong></span>
               </div>
 
-              {/* Dual Range Slider */}
-              <div className="yt-range-section">
-                <div className="yt-range-header">
-                  <span className="eyebrow">Clip Range Selection</span>
-                  <span className="yt-clip-duration">
-                    {formatTime(yt.startTime)} → {formatTime(yt.endTime)} ({formatDuration(clipDuration)})
-                  </span>
-                </div>
+              {/* Dual Range Slider - Hide for Live Streams */}
+              {!isLiveStream && (
+                <div className="yt-range-section">
+                  <div className="yt-range-header">
+                    <span className="eyebrow">Clip Range Selection</span>
+                    <span className="yt-clip-duration">
+                      {formatTime(yt.startTime)} → {formatTime(yt.endTime)} ({formatDuration(clipDuration)})
+                    </span>
+                  </div>
 
-                <div className="yt-dual-slider">
-                  <div className="yt-slider-track">
-                    <div
-                      className="yt-slider-fill"
-                      style={{
-                        left: `${(yt.startTime / yt.meta.duration) * 100}%`,
-                        width: `${((yt.endTime - yt.startTime) / yt.meta.duration) * 100}%`,
+                  <div className="yt-dual-slider">
+                    <div className="yt-slider-track">
+                      <div
+                        className="yt-slider-fill"
+                        style={{
+                          left: `${(yt.startTime / yt.meta.duration) * 100}%`,
+                          width: `${((yt.endTime - yt.startTime) / yt.meta.duration) * 100}%`,
+                        }}
+                      />
+                    </div>
+                    <input
+                      type="range"
+                      className="yt-range-input yt-range-start"
+                      style={{ zIndex: activeThumb === "start" ? 15 : 10 }}
+                      onMouseDown={() => setActiveThumb("start")}
+                      onTouchStart={() => setActiveThumb("start")}
+                      onMouseUp={() => setIframeStart(yt.startTime)}
+                      onTouchEnd={() => setIframeStart(yt.startTime)}
+                      min={0}
+                      max={yt.meta.duration}
+                      step={0.5}
+                      value={yt.startTime}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value);
+                        if (val < yt.endTime - 1) yt.setStartTime(val);
+                      }}
+                    />
+                    <input
+                      type="range"
+                      className="yt-range-input yt-range-end"
+                      style={{ zIndex: activeThumb === "end" ? 15 : 10 }}
+                      onMouseDown={() => setActiveThumb("end")}
+                      onTouchStart={() => setActiveThumb("end")}
+                      onMouseUp={() => setIframeStart(yt.startTime)}
+                      onTouchEnd={() => setIframeStart(yt.startTime)}
+                      min={0}
+                      max={yt.meta.duration}
+                      step={0.5}
+                      value={yt.endTime}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value);
+                        if (val > yt.startTime + 1) yt.setEndTime(val);
                       }}
                     />
                   </div>
-                  <input
-                    type="range"
-                    className="yt-range-input yt-range-start"
-                    style={{ zIndex: activeThumb === "start" ? 15 : 10 }}
-                    onMouseDown={() => setActiveThumb("start")}
-                    onTouchStart={() => setActiveThumb("start")}
-                    onMouseUp={() => setIframeStart(yt.startTime)}
-                    onTouchEnd={() => setIframeStart(yt.startTime)}
-                    min={0}
-                    max={yt.meta.duration}
-                    step={0.5}
-                    value={yt.startTime}
-                    onChange={(e) => {
-                      const val = parseFloat(e.target.value);
-                      if (val < yt.endTime - 1) yt.setStartTime(val);
-                    }}
-                  />
-                  <input
-                    type="range"
-                    className="yt-range-input yt-range-end"
-                    style={{ zIndex: activeThumb === "end" ? 15 : 10 }}
-                    onMouseDown={() => setActiveThumb("end")}
-                    onTouchStart={() => setActiveThumb("end")}
-                    onMouseUp={() => setIframeStart(yt.startTime)}
-                    onTouchEnd={() => setIframeStart(yt.startTime)}
-                    min={0}
-                    max={yt.meta.duration}
-                    step={0.5}
-                    value={yt.endTime}
-                    onChange={(e) => {
-                      const val = parseFloat(e.target.value);
-                      if (val > yt.startTime + 1) yt.setEndTime(val);
-                    }}
-                  />
-                </div>
 
-                <div className="yt-range-labels">
-                  <span>0:00</span>
-                  <span>{formatDuration(yt.meta.duration)}</span>
+                  <div className="yt-range-labels">
+                    <span>0:00</span>
+                    <span>{formatDuration(yt.meta.duration)}</span>
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Action Buttons */}
               <div className="action-row action-row--hud">
                 <button
                   className="action-btn action-btn--primary"
+                  style={{ background: "linear-gradient(135deg, #10b981 0%, #059669 100%)" }}
+                  disabled={!isLiveStream && clipDuration < 1}
+                  onClick={() => {
+                    if (!yt.meta) return;
+                    
+                    let s: number | undefined;
+                    let e: number | undefined;
+                    
+                    if (!isLiveStream) {
+                      s = Math.floor(yt.startTime);
+                      e = Math.ceil(yt.endTime);
+                      if (e > yt.meta.duration) e = Math.floor(yt.meta.duration);
+                      if (s >= e) s = e - 1;
+                      if (s < 0) s = 0;
+                    }
+                    
+                    const rawUrl = yt.meta.video_url || yt.url || `https://www.youtube.com/watch?v=${yt.meta.id}`;
+                    onApplyWallpaper({
+                      id: `yt_stream_${yt.meta.id}`,
+                      video_url: rawUrl,
+                      thumbnail_url: yt.meta.thumbnail_url || "",
+                      local_path: rawUrl,
+                      duration: yt.meta.duration || 0,
+                      width: yt.meta.width || 1920,
+                      height: yt.meta.height || 1080,
+                      source: "youtube_stream",
+                      start_time: s,
+                      end_time: e,
+                    });
+                  }}
+                >
+                  {isLiveStream ? "Stream Live Channel" : "Stream & Apply"}
+                </button>
+
+                <button
+                  className="action-btn action-btn--secondary"
                   onClick={handleFetchAndApply}
-                  disabled={yt.isDownloading || clipDuration < 1}
+                  disabled={isLiveStream || yt.isDownloading || clipDuration < 1}
+                  title={isLiveStream ? "Live streams cannot be downloaded as clips" : ""}
                 >
                   {yt.isDownloading ? "Downloading..." : "Download & Apply"}
                 </button>
 
                 <button
-                  className="action-btn action-btn--secondary"
+                  className="action-btn action-btn--ghost"
                   onClick={yt.downloadClip}
-                  disabled={yt.isDownloading || clipDuration < 1}
+                  disabled={isLiveStream || yt.isDownloading || clipDuration < 1}
+                  title={isLiveStream ? "Live streams cannot be downloaded as clips" : ""}
                 >
                   {yt.isDownloading ? "Processing..." : "Download Only"}
                 </button>

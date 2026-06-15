@@ -69,7 +69,7 @@ export function useYouTube() {
 
   const fetchMeta = useCallback(async () => {
     if (!state.url.trim()) {
-      setState((s) => ({ ...s, error: "Paste a YouTube URL first." }));
+      setState((s) => ({ ...s, error: "Paste a video URL first." }));
       return;
     }
 

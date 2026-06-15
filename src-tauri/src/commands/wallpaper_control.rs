@@ -16,7 +16,12 @@ pub async fn apply_wallpaper(
     end_time: Option<f64>,
     monitor: Option<String>,
 ) -> Result<WallpaperState, String> {
-    if video.local_path.is_empty() || video.local_path.starts_with("http") {
+    if video.source == "youtube_stream" {
+        // Do not trigger download. We stream directly via mpv's ytdl-hook.
+        if video.local_path.is_empty() || video.local_path.contains("embed") {
+            video.local_path = video.video_url.clone();
+        }
+    } else if video.local_path.is_empty() || video.local_path.starts_with("http") {
         log::info!(
             "[Core] Download on apply triggered for source: {}",
             video.source
@@ -56,10 +61,10 @@ pub async fn apply_wallpaper(
                 }
             }
         } else {
-            let window_label = format!(
-                "web_wallpaper_{}",
-                m_key.replace(" ", "_").replace("\\", "_")
-            );
+            let window_label = format!("web_wallpaper_{}", m_key)
+                .chars()
+                .map(|c| if c.is_alphanumeric() || c == '-' || c == '/' || c == ':' || c == '_' { c } else { '_' })
+                .collect::<String>();
             if let Some(window) = app.get_webview_window(&window_label) {
                 let _ = window.close();
             }
@@ -84,7 +89,93 @@ pub async fn apply_wallpaper(
             monitor.clone(),
         )?;
     }
+
+    if let Some(window) = app.get_webview_window("effects_overlay") {
+        let _ = window.hide();
+        let data_dir = app
+            .path()
+            .app_local_data_dir()
+            .unwrap_or_else(|_| std::path::PathBuf::from("."));
+        let _ = std::fs::remove_file(data_dir.join("current_effects.json"));
+    }
+
     wallpaper::state::mark_active(&state, video)
+}
+
+#[tauri::command]
+pub async fn next_wallpaper(
+    app: tauri::AppHandle,
+    state: State<'_, AppStateStore>,
+) -> Result<WallpaperState, String> {
+    let current = state.snapshot();
+    let mut next_video = None;
+
+    if let Ok(advanced) = wallpaper::state::advance_queue(&state) {
+        next_video = Some(advanced.video);
+    } else if !current.recents.is_empty() {
+        use rand::Rng;
+        let mut rng = rand::thread_rng();
+        let index = rng.gen_range(0..current.recents.len());
+        next_video = Some(current.recents[index].video.clone());
+    } else if !current.imports.is_empty() {
+        use rand::Rng;
+        let mut rng = rand::thread_rng();
+        let index = rng.gen_range(0..current.imports.len());
+        next_video = Some(current.imports[index].video.clone());
+    }
+
+    if let Some(video) = next_video {
+        apply_wallpaper(
+            app.clone(),
+            state.clone(),
+            video,
+            current.wallpaper_scale_percent,
+            None,
+            None,
+            None,
+        )
+        .await
+    } else {
+        Err("No wallpapers available to play next".to_string())
+    }
+}
+
+#[tauri::command]
+pub async fn prev_wallpaper(
+    app: tauri::AppHandle,
+    state: State<'_, AppStateStore>,
+) -> Result<WallpaperState, String> {
+    let current = state.snapshot();
+    let mut prev_video = None;
+
+    if let Ok(advanced) = wallpaper::state::retreat_queue(&state) {
+        prev_video = Some(advanced.video);
+    } else if !current.recents.is_empty() {
+        use rand::Rng;
+        let mut rng = rand::thread_rng();
+        let index = rng.gen_range(0..current.recents.len());
+        prev_video = Some(current.recents[index].video.clone());
+    } else if !current.imports.is_empty() {
+        use rand::Rng;
+        let mut rng = rand::thread_rng();
+        let index = rng.gen_range(0..current.imports.len());
+        prev_video = Some(current.imports[index].video.clone());
+    }
+
+    if let Some(video) = prev_video {
+        apply_wallpaper(
+            app.clone(),
+            state.clone(),
+            video,
+            current.wallpaper_scale_percent,
+            None,
+            None,
+            None,
+        )
+        .await
+    } else {
+        Err("No wallpapers available to play previous".to_string())
+    }
 }
 
 #[tauri::command]

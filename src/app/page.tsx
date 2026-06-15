@@ -5,16 +5,17 @@ import { useState, useEffect, useRef, useCallback, useTransition, useMemo } from
 import { useWallpaper } from "@/hooks/useWallpaper";
 import { TitleBar } from "./components/TitleBar";
 import { Sidebar, TabState } from "./components/Sidebar";
-import { HeroPanel } from "./components/HeroPanel";
-import { MasterHUD } from "./components/MasterHUD";
-import { ControlBar } from "./components/ControlBar";
-import { SearchResults } from "./components/SearchResults";
-import { AutomationPanel } from "./components/AutomationPanel";
-import { QueuePanel } from "./components/QueuePanel";
-import { ThemeSelector } from "./components/ThemeSelector";
-import { DependencyChecker } from "./components/DependencyChecker";
-import { WallpaperSourcePanel } from "./components/WallpaperSourcePanel";
-import { DownloadProgressOverlay } from "./components/DownloadProgressOverlay";
+
+const HeroPanel = dynamic(() => import("./components/HeroPanel").then((m) => m.HeroPanel), { ssr: false });
+const MasterHUD = dynamic(() => import("./components/MasterHUD").then((m) => m.MasterHUD), { ssr: false });
+const ControlBar = dynamic(() => import("./components/ControlBar").then((m) => m.ControlBar), { ssr: false });
+const SearchResults = dynamic(() => import("./components/SearchResults").then((m) => m.SearchResults), { ssr: false, loading: () => <div className="skeleton skeleton-preview" /> });
+const AutomationPanel = dynamic(() => import("./components/AutomationPanel").then((m) => m.AutomationPanel), { ssr: false });
+const QueuePanel = dynamic(() => import("./components/QueuePanel").then((m) => m.QueuePanel), { ssr: false });
+const ThemeSelector = dynamic(() => import("./components/ThemeSelector").then((m) => m.ThemeSelector), { ssr: false });
+const DependencyChecker = dynamic(() => import("./components/DependencyChecker").then((m) => m.DependencyChecker), { ssr: false });
+const WallpaperSourcePanel = dynamic(() => import("./components/WallpaperSourcePanel").then((m) => m.WallpaperSourcePanel), { ssr: false });
+const DownloadProgressOverlay = dynamic(() => import("./components/DownloadProgressOverlay").then((m) => m.DownloadProgressOverlay), { ssr: false });
 
 const UnifiedLibrary = dynamic(() => import("./components/LibraryList").then((m) => m.UnifiedLibrary), { ssr: false });
 const VideoPreview = dynamic(() => import("./components/VideoPreview").then((m) => m.VideoPreview), { ssr: false });
