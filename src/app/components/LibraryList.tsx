@@ -20,6 +20,7 @@ interface UnifiedLibraryProps {
   onRemoveRecent?: (item: LibraryItem) => void;
   onRemoveImport?: (item: LibraryItem) => void;
   onUploadMedia?: () => void;
+  onApplyOverlay?: (item: LibraryItem) => void;
 }
 
 export function formatSavedAt(timestamp: number) {
@@ -42,6 +43,7 @@ export const UnifiedLibrary = memo(function UnifiedLibrary({
   onRemoveRecent,
   onRemoveImport,
   onUploadMedia,
+  onApplyOverlay,
 }: UnifiedLibraryProps) {
   const [filter, setFilter] = useState<"all" | "favorites" | "recents" | "local" | "interactive" | "icon_physics">("all");
   const [typeFilter, setTypeFilter] = useState<"all" | "live" | "static">("all");
@@ -49,12 +51,20 @@ export const UnifiedLibrary = memo(function UnifiedLibrary({
 
   useEffect(() => {
     getCoreApi().then(({ invoke }) => {
-      invoke<{id: string, local_path: string}[]>("get_builtin_interactives")
-        .then((items: any[]) => {
-          setInteractives(items.map(video => ({
-            video,
-            saved_at: Date.now() / 1000
-          } as LibraryItem)));
+      invoke<any[]>("get_builtin_interactives")
+        .then(async (items) => {
+          const interactivesList = await Promise.all(items.map(async (video) => {
+            let saved_at = Date.now() / 1000;
+            if (video.local_path) {
+              try {
+                saved_at = await invoke<number>("get_file_modified_time", { path: video.local_path });
+              } catch (e) {
+                console.error("Failed to get modified time", e);
+              }
+            }
+            return { video, saved_at } as LibraryItem;
+          }));
+          setInteractives(interactivesList);
         })
         .catch(console.error);
     });
@@ -246,12 +256,30 @@ export const UnifiedLibrary = memo(function UnifiedLibrary({
                     >
                       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="5 3 19 12 5 21 5 3" /></svg>
                     </button>
+                    {onApplyOverlay && item.video.source === "interactive" && (
+                      <button
+                        type="button"
+                        className="icon-btn"
+                        style={{ color: "#00ffcc", border: "1px solid rgba(0,255,204,0.3)", borderRadius: "8px" }}
+                        onClick={(e) => { e.stopPropagation(); onApplyOverlay(item); }}
+                        title="Apply as Overlay"
+                      >
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+                      </button>
+                    )}
                   </div>
                 </div>
 
                 <div className="library-card-item__copy">
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px" }}>
-                    <strong style={{ flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.video.id.replace(/-/g, " ")}</strong>
+                    <strong style={{ flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {item.video.id.replace(/-/g, " ")}
+                      {item.saved_at > 0 && (Date.now() / 1000 - item.saved_at) < (3 * 24 * 60 * 60) && (
+                        <span className="quality-badge" style={{ padding: "1px 4px", fontSize: "8px", marginLeft: "6px", backgroundColor: "var(--accent-color)", color: "#000" }}>
+                          NEW
+                        </span>
+                      )}
+                    </strong>
                     {item.video.width > 0 && (
                       <span className="quality-badge" style={{ padding: "1px 4px", fontSize: "8px" }}>
                         {item.video.width >= 3840 ? "4K" : item.video.width >= 1920 ? "1080p" : item.video.width >= 1280 ? "720p" : `${item.video.width}p`}

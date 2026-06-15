@@ -57,7 +57,7 @@ pub async fn apply_wallpaper_inner(
             .unwrap_or_else(|| "default".to_string());
         if m_key == "SPAN_ALL" {
             for (label, window) in app.webview_windows() {
-                if label.starts_with("web_wallpaper_") {
+                if label.starts_with("web_wallpaper_") || label == "effects_overlay" {
                     let _ = window.close();
                 }
             }
@@ -206,7 +206,7 @@ pub fn stop_wallpaper(
         let _ = window.hide();
     }
     for (label, window) in app_handle.webview_windows() {
-        if label.starts_with("web_wallpaper_") {
+        if label.starts_with("web_wallpaper_") || label == "effects_overlay" {
             let _ = window.close();
         }
     }
@@ -578,7 +578,7 @@ pub fn start_mouse_tracking(app_handle: tauri::AppHandle) {
                     // Dispatch mousemove to all active interactive webviews safely without __TAURI__
                     use tauri::Manager;
                     for (label, window) in app_handle.webview_windows() {
-                        if label.starts_with("web_wallpaper_") {
+                        if label.starts_with("web_wallpaper_") || label == "effects_overlay" {
                             let mut client_pt = pt;
                             if let Ok(hwnd) = window.hwnd() {
                                 let mut rect = windows::Win32::Foundation::RECT::default();
@@ -603,7 +603,7 @@ pub fn start_mouse_tracking(app_handle: tauri::AppHandle) {
 
                     if is_l_down && !was_l_down {
                         for (label, window) in app_handle.webview_windows() {
-                            if label.starts_with("web_wallpaper_") {
+                            if label.starts_with("web_wallpaper_") || label == "effects_overlay" {
                                 let mut client_pt = pt;
                                 if let Ok(hwnd) = window.hwnd() {
                                     let mut rect = windows::Win32::Foundation::RECT::default();
@@ -630,7 +630,7 @@ pub fn start_mouse_tracking(app_handle: tauri::AppHandle) {
 
                     if is_r_down && !was_r_down {
                         for (label, window) in app_handle.webview_windows() {
-                            if label.starts_with("web_wallpaper_") {
+                            if label.starts_with("web_wallpaper_") || label == "effects_overlay" {
                                 let mut client_pt = pt;
                                 if let Ok(hwnd) = window.hwnd() {
                                     let mut rect = windows::Win32::Foundation::RECT::default();
@@ -657,7 +657,7 @@ pub fn start_mouse_tracking(app_handle: tauri::AppHandle) {
 
                     if is_m_down && !was_m_down {
                         for (label, window) in app_handle.webview_windows() {
-                            if label.starts_with("web_wallpaper_") {
+                            if label.starts_with("web_wallpaper_") || label == "effects_overlay" {
                                 let mut client_pt = pt;
                                 if let Ok(hwnd) = window.hwnd() {
                                     let mut rect = windows::Win32::Foundation::RECT::default();
@@ -702,4 +702,16 @@ pub async fn get_current_effects(app_handle: tauri::AppHandle) -> Result<String,
 #[tauri::command]
 pub async fn get_builtin_interactives() -> Result<Vec<VideoResult>, String> {
     Ok(crate::wallpaper::interactives::get_builtin_interactives())
+}
+
+#[tauri::command]
+pub fn get_file_modified_time(path: String) -> Result<u64, String> {
+    std::fs::metadata(&path)
+        .and_then(|m| m.modified())
+        .map(|time| {
+            time.duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis() as u64
+        })
+        .map_err(|e| e.to_string())
 }

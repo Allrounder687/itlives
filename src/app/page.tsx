@@ -263,6 +263,12 @@ function Home() {
     void wallpaper.applyWallpaper(item.video);
   }, [wallpaper.applyWallpaper]);
 
+  const handleLibraryApplyOverlay = useCallback((item: any) => {
+    import("@tauri-apps/api/core").then(({ invoke }) => {
+      invoke("apply_interactive_overlay_cmd", { video: item.video, monitor: null }).catch(console.error);
+    });
+  }, []);
+
   const handleLibraryPreview = useCallback((item: any) => {
     wallpaper.selectVideo(item.video);
   }, [wallpaper.selectVideo]);
@@ -394,6 +400,7 @@ function Home() {
         onRemoveRecent={handleLibraryRemoveRecent}
         onRemoveImport={handleLibraryRemoveImport}
         onUploadMedia={wallpaper.browseLocalVideo}
+        onApplyOverlay={handleLibraryApplyOverlay}
       />
     );
   }, [
@@ -410,7 +417,8 @@ function Home() {
     handleLibraryToggleQueue,
     handleLibraryRemoveRecent,
     handleLibraryRemoveImport,
-    wallpaper.browseLocalVideo
+    wallpaper.browseLocalVideo,
+    handleLibraryApplyOverlay
   ]);
 
   const communityPanel = useMemo(() => {

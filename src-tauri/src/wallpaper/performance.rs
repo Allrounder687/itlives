@@ -61,20 +61,23 @@ pub fn start_monitor(state_store: AppStateStore, app_handle: tauri::AppHandle) {
                 should_pause,
                 reason
             );
-            if set_mpv_pause(&app_handle, should_pause) {
-                IS_PAUSED.store(should_pause, Ordering::Relaxed);
+            
+            // Send IPC to MPV if it's running (ignore failure)
+            let _ = set_mpv_pause(&app_handle, should_pause);
+            
+            // Always update state and emit to frontend (for HTML interactives)
+            IS_PAUSED.store(should_pause, Ordering::Relaxed);
 
-                #[derive(serde::Serialize, Clone)]
-                struct PausePayload {
-                    paused: bool,
-                }
-                let _ = app_handle.emit(
-                    "wallpaper-paused",
-                    PausePayload {
-                        paused: should_pause,
-                    },
-                );
+            #[derive(serde::Serialize, Clone)]
+            struct PausePayload {
+                paused: bool,
             }
+            let _ = app_handle.emit(
+                "wallpaper-paused",
+                PausePayload {
+                    paused: should_pause,
+                },
+            );
         }
     });
 }
@@ -143,12 +146,8 @@ fn check_should_pause_detailed() -> Option<&'static str> {
         let fg_class = c_name.trim_end_matches('\0');
 
         // Chrome_WidgetWin_* is the WebView2/Chromium embedded class used by Tauri
-        if fg_class.starts_with("Chrome_WidgetWin")
-            || fg_class.starts_with("Tauri")
-            || fg_class.contains("WebView")
-            || fg_class == "Shell_TrayWnd"
+        if fg_class == "Shell_TrayWnd"
             || fg_class == "Shell_SecondaryTrayWnd"
-            || fg_class == "CabinetWClass"
         {
             return None;
         }

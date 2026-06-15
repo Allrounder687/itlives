@@ -692,6 +692,250 @@ pub fn set_web_wallpaper(
 }
 
 /// Stops the video wallpaper on a specific monitor (by its key).
+
+pub fn apply_interactive_overlay(
+    app: tauri::AppHandle,
+    url: &str,
+    monitor_name: Option<String>,
+) -> Result<String, String> {
+    let _ = crate::wallpaper::audio::start_audio_capture(app.clone());
+    use tauri::Manager;
+    let monitors = app.available_monitors().unwrap_or_default();
+    let mut target_m = monitors.first().cloned();
+    let mut m_key = target_m
+        .as_ref()
+        .and_then(|m| m.name().cloned())
+        .unwrap_or_else(|| "default".to_string());
+
+    if let Some(ref m_name) = monitor_name {
+        if m_name == "SPAN_ALL" {
+            m_key = "SPAN_ALL".to_string();
+        } else {
+            for m in &monitors {
+                if m.name().map(|n| n == m_name).unwrap_or(false) {
+                    target_m = Some(m.clone());
+                    m_key = m_name.clone();
+                    break;
+                }
+            }
+        }
+    }
+
+    let mut width = target_m.as_ref().map(|m| m.size().width).unwrap_or(1920);
+    let mut height = target_m.as_ref().map(|m| m.size().height).unwrap_or(1080);
+    let mut x = target_m.as_ref().map(|m| m.position().x).unwrap_or(0);
+    let mut y = target_m.as_ref().map(|m| m.position().y).unwrap_or(0);
+
+    if m_key == "SPAN_ALL" {
+        let mut min_x = i32::MAX;
+        let mut min_y = i32::MAX;
+        let mut max_x = i32::MIN;
+        let mut max_y = i32::MIN;
+        for m in &monitors {
+            let mx = m.position().x;
+            let my = m.position().y;
+            let mw = m.size().width as i32;
+            let mh = m.size().height as i32;
+            min_x = min_x.min(mx);
+            min_y = min_y.min(my);
+            max_x = max_x.max(mx + mw);
+            max_y = max_y.max(my + mh);
+        }
+        if min_x != i32::MAX {
+            x = min_x;
+            y = min_y;
+            width = (max_x - min_x) as u32;
+            height = (max_y - min_y) as u32;
+        }
+    }
+
+    let window_label = format!("interactive_overlay_{}", m_key)
+        .chars()
+        .map(|c| if c.is_alphanumeric() || c == '-' || c == '/' || c == ':' || c == '_' { c } else { '_' })
+        .collect::<String>();
+
+    let parsed_url = if url.starts_with("http") {
+        tauri::Url::parse(url).map_err(|e| format!("Failed to parse URL: {}", e))?
+    } else {
+        let path = std::path::Path::new(url);
+        if !path.exists() {
+            return Err(format!("Local HTML file not found: {}", url));
+        }
+        let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+        let mut path_str = canonical.to_string_lossy().replace('\\', "/");
+        if path_str.starts_with("//?/") {
+            path_str = path_str[4..].to_string();
+        }
+        let asset_url = format!("http://asset.localhost/{}", path_str.trim_start_matches('/'));
+        tauri::Url::parse(&asset_url).map_err(|e| format!("Failed to parse asset URL: {}", e))?
+    };
+
+    if let Some(window) = app.get_webview_window(&window_label) {
+        window
+            .eval(&format!(
+                "window.location.replace('{}');",
+                parsed_url.as_str().replace("'", "\\'")
+            ))
+            .map_err(|e| e.to_string())?;
+        return Ok(format!("Interactive overlay updated to {} on {}", url, m_key));
+    }
+
+    let event_bridge_script = r#"
+        window.__isPaused = false;
+        window.__pendingFrames = [];
+        window.__originalRequestAnimationFrame = window.requestAnimationFrame;
+        
+        window.requestAnimationFrame = function(callback) {
+            if (window.__isPaused) {
+                window.__pendingFrames.push(callback);
+                return -1;
+            }
+            return window.__originalRequestAnimationFrame(callback);
+        };
+
+        const __originalSetInterval = window.setInterval;
+        window.setInterval = function(callback, time) {
+            return __originalSetInterval(function() {
+                if (!window.__isPaused) callback();
+            }, time);
+        };
+
+        window.__set_paused = function(paused) {
+            window.__isPaused = paused;
+            if (!paused) {
+                let frames = window.__pendingFrames;
+                window.__pendingFrames = [];
+                for (let cb of frames) {
+                    window.__originalRequestAnimationFrame(cb);
+                }
+            }
+        };
+
+        window.__dispatch_mouse_event = (type, rx, ry, button) => {
+            const btn = button === 'right' ? 2 : (button === 'food' ? 1 : 0);
+            const clientX = rx * window.innerWidth;
+            const clientY = ry * window.innerHeight;
+            if (type === 'mousemove') {
+                document.dispatchEvent(new MouseEvent('mousemove', { clientX, clientY, bubbles: true }));
+            } else if (type === 'click') {
+                document.dispatchEvent(new MouseEvent('mousedown', { clientX, clientY, button: btn, bubbles: true }));
+                setTimeout(() => document.dispatchEvent(new MouseEvent('mouseup', { clientX, clientY, button: btn, bubbles: true })), 50);
+                setTimeout(() => document.dispatchEvent(new MouseEvent('click', { clientX, clientY, button: btn, bubbles: true })), 50);
+            }
+        };
+    "#;
+
+    let window = tauri::WebviewWindowBuilder::new(
+        &app,
+        &window_label,
+        tauri::WebviewUrl::External(parsed_url),
+    )
+    .decorations(false)
+    .transparent(true)
+    .skip_taskbar(true)
+    .initialization_script(event_bridge_script)
+    .build()
+    .map_err(|e| format!("Failed to build webview: {}", e))?;
+
+    let _ = window.set_size(tauri::PhysicalSize::new(width, height));
+    let _ = window.set_position(tauri::PhysicalPosition::new(x, y));
+
+    #[cfg(windows)]
+    {
+        let hwnd = window.hwnd().map_err(|e| e.to_string())?;
+        let workerw = win32::get_desktop_workerw().unwrap_or(0);
+        unsafe {
+            let _ = windows::Win32::UI::WindowsAndMessaging::SetParent(
+                windows::Win32::Foundation::HWND(hwnd.0 as _),
+                windows::Win32::Foundation::HWND(workerw as _),
+            );
+
+            let old_style = windows::Win32::UI::WindowsAndMessaging::GetWindowLongW(
+                windows::Win32::Foundation::HWND(hwnd.0 as _),
+                windows::Win32::UI::WindowsAndMessaging::GWL_STYLE,
+            );
+            let mut new_style = old_style as u32;
+            new_style &= !windows::Win32::UI::WindowsAndMessaging::WS_POPUP.0;
+            new_style &= !windows::Win32::UI::WindowsAndMessaging::WS_CAPTION.0;
+            new_style &= !windows::Win32::UI::WindowsAndMessaging::WS_THICKFRAME.0;
+            new_style &= !windows::Win32::UI::WindowsAndMessaging::WS_MINIMIZEBOX.0;
+            new_style &= !windows::Win32::UI::WindowsAndMessaging::WS_MAXIMIZEBOX.0;
+            new_style &= !windows::Win32::UI::WindowsAndMessaging::WS_SYSMENU.0;
+            new_style |= windows::Win32::UI::WindowsAndMessaging::WS_CHILD.0;
+            let _ = windows::Win32::UI::WindowsAndMessaging::SetWindowLongW(
+                windows::Win32::Foundation::HWND(hwnd.0 as _),
+                windows::Win32::UI::WindowsAndMessaging::GWL_STYLE,
+                new_style as i32,
+            );
+
+            let shelldll: Vec<u16> = "SHELLDLL_DefView\0".encode_utf16().collect();
+            let shell_hwnd = windows::Win32::UI::WindowsAndMessaging::FindWindowExW(
+                windows::Win32::Foundation::HWND(workerw as _),
+                windows::Win32::Foundation::HWND(0 as _),
+                windows::core::PCWSTR(shelldll.as_ptr()),
+                windows::core::PCWSTR::null(),
+            )
+            .unwrap_or(windows::Win32::Foundation::HWND(1 as _));
+
+            let mut target_z = if shell_hwnd != windows::Win32::Foundation::HWND(0 as _)
+                && shell_hwnd != windows::Win32::Foundation::HWND(1 as _)
+            {
+                shell_hwnd
+            } else {
+                windows::Win32::Foundation::HWND(1 as _)
+            };
+
+            let chrome_class: Vec<u16> = "Chrome_WidgetWin_1\0".encode_utf16().collect();
+            let effects_hwnd = windows::Win32::UI::WindowsAndMessaging::FindWindowExW(
+                windows::Win32::Foundation::HWND(workerw as _),
+                windows::Win32::Foundation::HWND(0 as _),
+                windows::core::PCWSTR(chrome_class.as_ptr()),
+                windows::core::PCWSTR::null(),
+            )
+            .unwrap_or(windows::Win32::Foundation::HWND(0 as _));
+
+            if effects_hwnd != windows::Win32::Foundation::HWND(0 as _)
+                && effects_hwnd != windows::Win32::Foundation::HWND(1 as _)
+                && effects_hwnd.0 != hwnd.0
+            {
+                target_z = effects_hwnd;
+            }
+
+            let _ = windows::Win32::UI::WindowsAndMessaging::SetWindowPos(
+                windows::Win32::Foundation::HWND(hwnd.0 as _),
+                target_z,
+                x,
+                y,
+                width as i32,
+                height as i32,
+                windows::Win32::UI::WindowsAndMessaging::SWP_SHOWWINDOW,
+            );
+        }
+    }
+
+    crate::wallpaper::audio::start_audio_capture(app.clone());
+    crate::wallpaper::icon_tracker::start_icon_tracking(app.clone());
+
+    Ok(format!("Interactive overlay set on {}", m_key))
+}
+
+pub fn stop_interactive_overlay(app: &tauri::AppHandle, monitor_name: Option<String>) {
+    use tauri::Manager;
+    let m_key = monitor_name.unwrap_or_else(|| "SPAN_ALL".to_string());
+    
+    if m_key == "SPAN_ALL" {
+        for (label, window) in app.webview_windows() {
+            if label.starts_with("interactive_overlay_") {
+                let _ = window.close();
+            }
+        }
+    } else {
+        let label = format!("interactive_overlay_{}", m_key);
+        if let Some(window) = app.get_webview_window(&label) {
+            let _ = window.close();
+        }
+    }
+}
 pub fn stop_video_for_monitor(m_key: &str) {
     let pid_file = mpv_pid_file_for(m_key);
     if let Ok(content) = std::fs::read_to_string(&pid_file) {

@@ -643,8 +643,10 @@ const MATRIX_RAIN_PHYSICS_HTML: &str = r#"
         }
         const drops = Array.from({length: 400}, () => new Rain());
         function loop() {
+            ctx.globalCompositeOperation = 'destination-out';
             ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
             ctx.fillRect(0, 0, w, h);
+            ctx.globalCompositeOperation = 'source-over';
             for (let d of drops) { d.update(); d.draw(); }
             requestAnimationFrame(loop);
         }
@@ -670,6 +672,20 @@ const SNOW_PHYSICS_HTML: &str = r#"
         let w = c.width = window.innerWidth, h = c.height = window.innerHeight;
         let icons = []; window.__dispatch_icons = (data) => icons = data;
         let wind = 0;
+
+        const snowSvg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'>
+          <g stroke='white' stroke-width='6' stroke-linecap='round'>
+            <line x1='50' y1='10' x2='50' y2='90'/>
+            <line x1='15' y1='30' x2='85' y2='70'/>
+            <line x1='15' y1='70' x2='85' y2='30'/>
+            <path d='M50 30 L40 20 M50 30 L60 20 M50 70 L40 80 M50 70 L60 80'/>
+            <path d='M32 40 L22 30 M32 40 L22 50 M68 60 L78 50 M68 60 L78 70'/>
+            <path d='M32 60 L22 70 M32 60 L22 50 M68 40 L78 30 M68 40 L78 50'/>
+          </g>
+        </svg>`;
+        const snowImg = new Image();
+        snowImg.src = 'data:image/svg+xml;utf8,' + encodeURIComponent(snowSvg);
+
         
         let hue = 210; // Default icy blue
         document.addEventListener('click', () => { hue = (hue + 50) % 360; });
@@ -680,7 +696,9 @@ const SNOW_PHYSICS_HTML: &str = r#"
                 this.x = Math.random() * w;
                 this.y = Math.random() * -100;
                 this.vy = Math.random() * 1 + 0.5;
-                this.r = Math.random() * 2 + 1;
+                this.r = Math.random() * 8 + 4;
+                this.angle = Math.random() * Math.PI * 2;
+                this.rotSpeed = (Math.random() - 0.5) * 0.05;
                 this.vx = 0;
                 this.state = 'falling';
             }
@@ -1390,7 +1408,7 @@ pub fn init_extra_interactives(dir: &PathBuf) -> Result<(), String> {
 
     for (filename, html) in mapping {
         let path = dir.join(filename);
-        if !path.exists() {
+        if true {
             fs::write(&path, html).map_err(|e| e.to_string())?;
         }
     }
@@ -1399,27 +1417,27 @@ pub fn init_extra_interactives(dir: &PathBuf) -> Result<(), String> {
 
 pub fn get_extra_interactives(dir: &PathBuf) -> Vec<VideoResult> {
     let mapping = vec![
-        ("neon_waves.html", "interactive_neon_waves", "Neon Waves", "https://images.unsplash.com/photo-1550684848-fac1c5b4e853?q=80&w=640&auto=format&fit=crop", vec!["neon", "waves"]),
-        ("cursor_trail.html", "interactive_cursor_trail", "Cursor Trail", "https://images.unsplash.com/photo-1504333638930-c8787321ffa0?q=80&w=640&auto=format&fit=crop", vec!["fire", "trail"]),
-        ("hexagon_grid.html", "interactive_hexagon_grid", "Hexagon Grid", "https://images.unsplash.com/photo-1550684376-efcbd6e3f031?q=80&w=640&auto=format&fit=crop", vec!["hex", "grid"]),
-        ("starfield.html", "interactive_starfield", "Warp Starfield", "https://images.unsplash.com/photo-1462331940025-496dfbfc7564?q=80&w=640&auto=format&fit=crop", vec!["space", "stars"]),
-        ("particle_vortex.html", "interactive_particle_vortex", "Particle Vortex", "https://images.unsplash.com/photo-1534447677768-be436bb09401?q=80&w=640&auto=format&fit=crop", vec!["vortex", "particles"]),
-        ("boids_flock.html", "interactive_boids_flock", "Boids Flock", "https://images.unsplash.com/photo-1506260408121-e353d10b87c7?q=80&w=640&auto=format&fit=crop", vec!["flock", "birds"]),
-        ("bubble_pop.html", "interactive_bubble_pop", "Bubble Pop", "https://images.unsplash.com/photo-1518837695005-2083093ee35b?q=80&w=640&auto=format&fit=crop", vec!["bubbles", "pop"]),
-        ("gravity_points.html", "interactive_gravity_points", "Gravity Points", "https://images.unsplash.com/photo-1506318137071-a8e063b4bec0?q=80&w=640&auto=format&fit=crop", vec!["gravity", "physics"]),
-        ("interactive_ripple.html", "interactive_ripple_water", "Interactive Ripples", "https://images.unsplash.com/photo-1518837695005-2083093ee35b?q=80&w=640&auto=format&fit=crop", vec!["water", "ripple"]),
-        ("bouncing_dvd.html", "interactive_bouncing_dvd", "Bouncing DVD", "https://images.unsplash.com/photo-1550684848-fac1c5b4e853?q=80&w=640&auto=format&fit=crop", vec!["dvd", "meme"]),
-        ("icon_physics.html", "interactive_icon_physics", "Icon Physics Engine", "https://images.unsplash.com/photo-1534447677768-be436bb09401?q=80&w=640&auto=format&fit=crop", vec!["physics", "icons", "rain", "icon_physics"]),
-        ("matrix_rain_physics.html", "interactive_matrix_rain_physics", "Matrix Rain Icons", "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?q=80&w=640&auto=format&fit=crop", vec!["physics", "icons", "matrix", "icon_physics"]),
-        ("snow_physics.html", "interactive_snow_physics", "Snow Accumulation", "https://images.unsplash.com/photo-1483921020237-2ff51e8e4b22?q=80&w=640&auto=format&fit=crop", vec!["physics", "icons", "snow", "icon_physics"]),
-        ("fluid_drops.html", "interactive_fluid_drops", "Fluid Drops Splash", "https://images.unsplash.com/photo-1527066236129-8bc1862086b5?q=80&w=640&auto=format&fit=crop", vec!["physics", "icons", "water", "icon_physics"]),
-        ("laser_reflections.html", "interactive_laser_reflections", "Laser Reflections", "https://images.unsplash.com/photo-1550684848-fac1c5b4e853?q=80&w=640&auto=format&fit=crop", vec!["physics", "icons", "laser", "icon_physics"]),
-        ("magnetic_swarm.html", "interactive_magnetic_swarm", "Magnetic Swarm", "https://images.unsplash.com/photo-1518837695005-2083093ee35b?q=80&w=640&auto=format&fit=crop", vec!["physics", "icons", "swarm", "icon_physics"]),
-        ("firefly_rest.html", "interactive_firefly_rest", "Firefly Rest", "https://images.unsplash.com/photo-1462331940025-496dfbfc7564?q=80&w=640&auto=format&fit=crop", vec!["physics", "icons", "firefly", "icon_physics"]),
-        ("quantum_nexus.html", "interactive_quantum_nexus", "Quantum Nexus", "https://images.unsplash.com/photo-1518837695005-2083093ee35b?q=80&w=640&auto=format&fit=crop", vec!["quantum", "nexus", "nodes", "audio"]),
-        ("event_horizon.html", "interactive_event_horizon", "Event Horizon", "https://images.unsplash.com/photo-1462331940025-496dfbfc7564?q=80&w=640&auto=format&fit=crop", vec!["vortex", "blackhole", "audio"]),
-        ("acoustic_dust.html", "interactive_acoustic_dust", "Acoustic Dust", "https://images.unsplash.com/photo-1534447677768-be436bb09401?q=80&w=640&auto=format&fit=crop", vec!["particles", "audio"]),
-        ("resonance_strings.html", "interactive_resonance_strings", "Resonance Strings", "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?q=80&w=640&auto=format&fit=crop", vec!["strings", "audio", "physics"]),
+        ("neon_waves.html", "interactive_neon_waves", "Neon Waves", "/thumbnails/neon_waves.png", vec!["neon", "waves"]),
+        ("cursor_trail.html", "interactive_cursor_trail", "Cursor Trail", "/thumbnails/cursor_trail.png", vec!["fire", "trail"]),
+        ("hexagon_grid.html", "interactive_hexagon_grid", "Hexagon Grid", "/thumbnails/hexagon_grid.png", vec!["hex", "grid"]),
+        ("starfield.html", "interactive_starfield", "Warp Starfield", "/thumbnails/starfield.png", vec!["space", "stars"]),
+        ("particle_vortex.html", "interactive_particle_vortex", "Particle Vortex", "/thumbnails/particle_vortex.png", vec!["vortex", "particles"]),
+        ("boids_flock.html", "interactive_boids_flock", "Boids Flock", "/thumbnails/boids_flock.png", vec!["flock", "birds"]),
+        ("bubble_pop.html", "interactive_bubble_pop", "Bubble Pop", "/thumbnails/bubble_pop.png", vec!["bubbles", "pop"]),
+        ("gravity_points.html", "interactive_gravity_points", "Gravity Points", "/thumbnails/gravity_points.png", vec!["gravity", "physics"]),
+        ("interactive_ripple.html", "interactive_ripple_water", "Interactive Ripples", "/thumbnails/ripple_water.png", vec!["water", "ripple"]),
+        ("bouncing_dvd.html", "interactive_bouncing_dvd", "Bouncing DVD", "/thumbnails/bouncing_dvd.png", vec!["dvd", "meme"]),
+        ("icon_physics.html", "interactive_icon_physics", "Icon Physics Engine", "/thumbnails/icon_physics.png", vec!["physics", "icons", "rain", "icon_physics"]),
+        ("matrix_rain_physics.html", "interactive_matrix_rain_physics", "Matrix Rain Icons", "/thumbnails/matrix_rain_physics.png", vec!["physics", "icons", "matrix", "icon_physics"]),
+        ("snow_physics.html", "interactive_snow_physics", "Snow Accumulation", "/thumbnails/snow_physics.png", vec!["physics", "icons", "snow", "icon_physics"]),
+        ("fluid_drops.html", "interactive_fluid_drops", "Fluid Drops Splash", "/thumbnails/fluid_drops.png", vec!["physics", "icons", "water", "icon_physics"]),
+        ("laser_reflections.html", "interactive_laser_reflections", "Laser Reflections", "/thumbnails/laser_reflections.png", vec!["physics", "icons", "laser", "icon_physics"]),
+        ("magnetic_swarm.html", "interactive_magnetic_swarm", "Magnetic Swarm", "/thumbnails/magnetic_swarm.png", vec!["physics", "icons", "swarm", "icon_physics"]),
+        ("firefly_rest.html", "interactive_firefly_rest", "Firefly Rest", "/thumbnails/firefly_rest.png", vec!["physics", "icons", "firefly", "icon_physics"]),
+        ("quantum_nexus.html", "interactive_quantum_nexus", "Quantum Nexus", "/thumbnails/quantum_nexus.png", vec!["quantum", "nexus", "nodes", "audio"]),
+        ("event_horizon.html", "interactive_event_horizon", "Event Horizon", "/thumbnails/event_horizon.png", vec!["vortex", "blackhole", "audio"]),
+        ("acoustic_dust.html", "interactive_acoustic_dust", "Acoustic Dust", "/thumbnails/acoustic_dust.png", vec!["particles", "audio"]),
+        ("resonance_strings.html", "interactive_resonance_strings", "Resonance Strings", "/thumbnails/resonance_strings.png", vec!["strings", "audio", "physics"]),
     ];
 
     let mut results = Vec::new();

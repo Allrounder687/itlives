@@ -338,22 +338,22 @@ pub fn get_interactives_dir() -> PathBuf {
 
 pub fn init_interactives() -> Result<(), String> {
     let dir = get_interactives_dir();
-    if !dir.exists() {
+    if true {
         fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     }
 
     let matrix_path = dir.join("matrix_rain.html");
-    if !matrix_path.exists() {
+    if true {
         fs::write(&matrix_path, MATRIX_HTML).map_err(|e| e.to_string())?;
     }
 
     let particles_path = dir.join("triangles_and_light.html");
-    if !particles_path.exists() {
+    if true {
         fs::write(&particles_path, PARTICLES_HTML).map_err(|e| e.to_string())?;
     }
 
     let fluids_path = dir.join("fluids_simulation.html");
-    if !fluids_path.exists() {
+    if true {
         fs::write(&fluids_path, FLUIDS_HTML).map_err(|e| e.to_string())?;
     }
 
@@ -371,7 +371,7 @@ pub fn get_builtin_interactives() -> Vec<VideoResult> {
         results.push(VideoResult {
             id: "interactive_matrix_rain".to_string(),
             video_url: "local_interactive".to_string(),
-            thumbnail_url: "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?q=80&w=640&auto=format&fit=crop".to_string(),
+            thumbnail_url: "/thumbnails/matrix_rain.png".to_string(),
             local_path: matrix_path.to_string_lossy().to_string(),
             duration: 0.0,
             width: 1920,
@@ -388,7 +388,7 @@ pub fn get_builtin_interactives() -> Vec<VideoResult> {
         results.push(VideoResult {
             id: "interactive_triangles".to_string(),
             video_url: "local_interactive".to_string(),
-            thumbnail_url: "https://images.unsplash.com/photo-1550684848-fac1c5b4e853?q=80&w=640&auto=format&fit=crop".to_string(),
+            thumbnail_url: "/thumbnails/matrix_rain.png".to_string(),
             local_path: particles_path.to_string_lossy().to_string(),
             duration: 0.0,
             width: 1920,
@@ -405,7 +405,7 @@ pub fn get_builtin_interactives() -> Vec<VideoResult> {
         results.push(VideoResult {
             id: "interactive_fluids".to_string(),
             video_url: "local_interactive".to_string(),
-            thumbnail_url: "https://images.unsplash.com/photo-1550684376-efcbd6e3f031?q=80&w=640&auto=format&fit=crop".to_string(),
+            thumbnail_url: "/thumbnails/matrix_rain.png".to_string(),
             local_path: fluids_path.to_string_lossy().to_string(),
             duration: 0.0,
             width: 1920,

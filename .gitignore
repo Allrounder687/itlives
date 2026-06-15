@@ -70,3 +70,4 @@ mpv_cmd.txt
 read_evtx.ps1
 /src-tauri/target-cli/
 /itlives-cli/target/
+patch_get_file_modified_time.exe

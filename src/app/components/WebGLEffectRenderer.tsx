@@ -1399,6 +1399,50 @@ interface WebGLEffectRendererProps {
   bgBrightness?: number;
 }
 
+// ─────────────────────────────────────────────────────────────
+// HTML Interactive Physics Widget (iframes for advanced effects)
+// ─────────────────────────────────────────────────────────────
+function HtmlInteractiveOverlay({ interactiveId, isOverlay }: { interactiveId: string, isOverlay: boolean }) {
+  const [url, setUrl] = useState<string>("");
+
+  useEffect(() => {
+    Promise.all([
+      import("@tauri-apps/api/path"),
+      import("@tauri-apps/api/core")
+    ]).then(([pathAPI, coreAPI]) => {
+      pathAPI.appDataDir()
+        .then(dir => pathAPI.join(dir, "wallpapers", "interactive", interactiveId))
+        .then(fullPath => {
+           let cleanPath = fullPath;
+           if (cleanPath.startsWith("file:///")) {
+             cleanPath = cleanPath.slice(8);
+           } else if (cleanPath.startsWith("file://")) {
+             cleanPath = cleanPath.slice(7);
+           }
+           setUrl(coreAPI.convertFileSrc(cleanPath));
+        });
+    }).catch(console.error);
+  }, [interactiveId]);
+
+  if (!url) return null;
+
+  return (
+    <iframe 
+      src={url} 
+      style={{
+        position: "absolute",
+        inset: 0,
+        width: "100%",
+        height: "100%",
+        border: "none",
+        pointerEvents: "none", 
+        zIndex: 15 
+      }}
+    />
+  );
+}
+
+
 export function WebGLEffectRenderer({ videoSrc, effects, selectedLayerId, onUpdateParam, onRemoveLayer, isOverlay = false, isPaused = false, bgMode = "blur-fill", bgBlur = 20, bgBrightness = 0.4 }: WebGLEffectRendererProps) {
   const [liveEffects, setLiveEffects] = useState<EffectLayer[]>(effects);
   const [src, setSrc] = useState<string>("");
@@ -1559,6 +1603,8 @@ export function WebGLEffectRenderer({ videoSrc, effects, selectedLayerId, onUpda
   const dotScreen = currentEffects.find(e => e.type === "dot-screen" && e.enabled);
   const tiltShift = currentEffects.find(e => e.type === "tilt-shift" && e.enabled);
   const waterEffect = currentEffects.find(e => e.type === "water-effect" && e.enabled);
+  
+  const htmlInteractives = currentEffects.filter(e => e.type === "html-interactive" && e.enabled);
 
   const isComplexBg = ["triptych", "mirror", "tiles"].includes(bgMode || "");
   // Post-processing effects need the background rendered inside the Canvas
@@ -1690,6 +1736,12 @@ export function WebGLEffectRenderer({ videoSrc, effects, selectedLayerId, onUpda
         <AppLauncherWidget params={appLauncher.params} layerId={appLauncher.id} isOverlay={isOverlay} />
       )}
 
+      {/* HTML Interactive Physics Overlays */}
+      {htmlInteractives.map(layer => (
+        <HtmlInteractiveOverlay key={layer.id} interactiveId={layer.params.interactiveId} isOverlay={isOverlay} />
+      ))}
+
+
 
       {/* WebGL Canvas — only mounted when effects are active */}
       {hasWebGLEffects && (
@@ -1799,6 +1851,11 @@ export function WebGLEffectRenderer({ videoSrc, effects, selectedLayerId, onUpda
           </Canvas>
         </div>
       )}
+
+      {/* HTML Interactive Physics Overlays */}
+      {htmlInteractives.map(layer => (
+        <HtmlInteractiveOverlay key={layer.id} interactiveId={layer.params.interactiveId} isOverlay={isOverlay} />
+      ))}
     </div>
   );
 }

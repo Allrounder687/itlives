@@ -30,7 +30,7 @@ export function HoverVideo({ video, className, gridSize = "M", onClick, priority
   const isHtml = video.local_path?.toLowerCase().endsWith(".html") || video.video_url?.toLowerCase().endsWith(".html");
   const isStaticRender = isStaticImage || isHtml;
 
-  const effectiveThumbUrl = video.thumbnail_url && !video.thumbnail_url.startsWith("http")
+  const effectiveThumbUrl = video.thumbnail_url && !video.thumbnail_url.startsWith("http") && !video.thumbnail_url.startsWith("/")
     ? convertFileSrc(video.thumbnail_url)
     : video.thumbnail_url;
 

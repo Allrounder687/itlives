@@ -42,6 +42,13 @@ export const EFFECT_TEMPLATES: Record<string, Omit<EffectLayer, "id">> = {
   "dot-screen": { type: "dot-screen", name: "Comic Halftone", enabled: true, params: { angle: 1.57, scale: 1.0 } },
   "tilt-shift": { type: "tilt-shift", name: "Miniature Blur", enabled: true, params: { blur: 0.5, taper: 0.5 } },
   "water-effect": { type: "water-effect", name: "Underwater", enabled: true, params: { factor: 1.0 } },
+  "html-matrix": { type: "html-interactive", name: "Matrix Rain (Physics)", enabled: true, params: { interactiveId: "matrix_rain_physics.html" } },
+  "html-fireflies": { type: "html-interactive", name: "Fireflies (Physics)", enabled: true, params: { interactiveId: "firefly_rest.html" } },
+  "html-snow": { type: "html-interactive", name: "Snow (Physics)", enabled: true, params: { interactiveId: "snow_physics.html" } },
+  "html-boids": { type: "html-interactive", name: "Boids Swarm (Physics)", enabled: true, params: { interactiveId: "boids_flock.html" } },
+  "html-quantum": { type: "html-interactive", name: "Quantum Nexus (Physics)", enabled: true, params: { interactiveId: "quantum_nexus.html" } },
+  "html-triangles": { type: "html-interactive", name: "Triangles & Light (Physics)", enabled: true, params: { interactiveId: "triangles_and_light.html" } },
+  "html-fluids": { type: "html-interactive", name: "Fluids Sim (Physics)", enabled: true, params: { interactiveId: "fluids_simulation.html" } },
 };
 
 export const EFFECT_DROPDOWN: { group: string, items: { key: string, icon: string, label: string }[] }[] = [
@@ -71,6 +78,15 @@ export const EFFECT_DROPDOWN: { group: string, items: { key: string, icon: strin
     { key: "ribbon-trail", icon: "🖌️", label: "Fluid Ribbon" },
     { key: "click-ripple", icon: "💥", label: "Click Ripple" },
     { key: "liquid-ripple", icon: "💧", label: "Screen Ripple" },
+  ]},
+  { group: "⚛️ Advanced Physics", items: [
+    { key: "html-snow", icon: "❄️", label: "Snow (Physics)" },
+    { key: "html-fireflies", icon: "🪲", label: "Fireflies (Physics)" },
+    { key: "html-boids", icon: "🐦", label: "Boids Swarm (Physics)" },
+    { key: "html-quantum", icon: "⚛️", label: "Quantum Nexus (Physics)" },
+    { key: "html-matrix", icon: "💻", label: "Matrix Rain (Physics)" },
+    { key: "html-triangles", icon: "📐", label: "Triangles & Light (Physics)" },
+    { key: "html-fluids", icon: "🌊", label: "Fluids Sim (Physics)" },
   ]},
   { group: "🎨 Overlays & Widgets", items: [
     { key: "color-grade", icon: "🎨", label: "Color Tint" },
