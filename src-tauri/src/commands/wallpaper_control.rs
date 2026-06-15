@@ -222,11 +222,12 @@ pub fn get_wallpaper_status() -> Option<String> {
 #[tauri::command]
 pub fn set_wallpaper_paused(
     state: State<'_, AppStateStore>,
+    app_handle: tauri::AppHandle,
     paused: bool,
 ) -> Result<WallpaperState, String> {
     let persisted = wallpaper::state::set_paused(&state, paused)?;
     if persisted.is_playing {
-        if let Err(e) = wallpaper::desktop::set_paused(paused) {
+        if let Err(e) = wallpaper::desktop::set_paused(&app_handle, paused) {
             log::warn!("Failed to apply paused state: {}", e);
         }
     }

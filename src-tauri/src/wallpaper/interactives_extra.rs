@@ -444,6 +444,587 @@ const BOUNCING_DVD_HTML: &str = r#"
 </html>
 "#;
 
+const ICON_PHYSICS_HTML: &str = r#"
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <style>body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000; } canvas { display: block; }</style>
+</head>
+<body>
+    <canvas id="c"></canvas>
+    <script>
+        const c = document.getElementById('c');
+        const ctx = c.getContext('2d');
+        let w = c.width = window.innerWidth;
+        let h = c.height = window.innerHeight;
+        let icons = [];
+
+        window.__dispatch_icons = (data) => {
+            icons = data;
+        };
+
+        class Particle {
+            constructor() {
+                this.reset();
+            }
+            reset() {
+                this.x = Math.random() * w;
+                this.y = Math.random() * -100 - 10;
+                this.vx = (Math.random() - 0.5) * 2;
+                this.vy = Math.random() * 2 + 1;
+                this.radius = Math.random() * 2 + 1;
+                this.color = `hsl(${Math.random() * 60 + 180}, 100%, 70%)`;
+                this.restitution = 0.5;
+            }
+            update() {
+                this.vy += 0.2; // Gravity
+                
+                // Max fall speed
+                if (this.vy > 12) this.vy = 12;
+                
+                this.x += this.vx;
+                this.y += this.vy;
+                
+                // Air friction
+                this.vx *= 0.99;
+
+                for (let icon of icons) {
+                    // Tighter hitbox to match the actual icon graphic rather than the grid cell
+                    let hitX = icon.x + 15;
+                    let hitY = icon.y + 10;
+                    let hitW = icon.w - 30;
+                    let hitH = icon.h - 30;
+
+                    if (this.x > hitX && this.x < hitX + hitW &&
+                        this.y + this.radius > hitY && this.y - this.radius < hitY + hitH) {
+                        
+                        let prevY = this.y - this.vy;
+                        if (prevY + this.radius <= hitY) {
+                            this.y = hitY - this.radius;
+                            this.vy *= -this.restitution;
+                            
+                            // Splash sideways so particles roll off the icons
+                            this.vx += (Math.random() - 0.5) * 5;
+                            
+                            // If a particle has lost most of its vertical momentum, it's stuck on the icon. Reset it!
+                            if (Math.abs(this.vy) < 1.5) {
+                                this.reset();
+                            }
+                        } else if (this.y - this.radius >= hitY + hitH) {
+                            this.y = hitY + hitH + this.radius;
+                            this.vy *= -this.restitution;
+                        } else {
+                            this.vx *= -this.restitution;
+                        }
+                    }
+                }
+
+                if (this.y > h + 10 || this.x < -10 || this.x > w + 10) {
+                    this.reset();
+                }
+            }
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        const particles = Array.from({ length: 1500 }, () => new Particle());
+
+        function loop() {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+            ctx.fillRect(0, 0, w, h);
+
+            for (let p of particles) {
+                p.update();
+                p.draw();
+            }
+            requestAnimationFrame(loop);
+        }
+        loop();
+
+        window.addEventListener('resize', () => { w = c.width = window.innerWidth; h = c.height = window.innerHeight; });
+    </script>
+</body>
+</html>
+"#;
+
+const MATRIX_RAIN_PHYSICS_HTML: &str = r#"
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <style>body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000; } canvas { display: block; }</style>
+</head>
+<body>
+    <canvas id="c"></canvas>
+    <script>
+        const c = document.getElementById('c');
+        const ctx = c.getContext('2d');
+        let w = c.width = window.innerWidth;
+        let h = c.height = window.innerHeight;
+        let icons = []; window.__dispatch_icons = (data) => icons = data;
+        
+        let hue = 120; // Default green
+        document.addEventListener('click', () => { hue = (hue + 60) % 360; });
+
+        class Rain {
+            constructor() { this.reset(); this.y = Math.random() * h; }
+            reset() {
+                this.x = Math.random() * w;
+                this.y = Math.random() * -100 - 10;
+                this.vy = Math.random() * 2 + 2;
+                this.char = String.fromCharCode(0x30A0 + Math.random() * 96);
+                this.state = 'falling';
+            }
+            update() {
+                if (this.state === 'falling') {
+                    this.y += this.vy;
+                    for (let icon of icons) {
+                        let hitX = icon.x + 15, hitY = icon.y + 5, hitW = icon.w - 30, hitH = icon.w - 30;
+                        if (this.x > hitX && this.x < hitX + hitW && this.y > hitY && this.y < hitY + 10) {
+                            this.state = 'splashing';
+                            this.y = hitY;
+                            this.targetIcon = {x: hitX, y: hitY, w: hitW, h: hitH};
+                            this.vx = (this.x > hitX + hitW/2) ? 2 : -2;
+                            break;
+                        }
+                    }
+                } else if (this.state === 'splashing') {
+                    this.x += this.vx;
+                    if (this.x < this.targetIcon.x || this.x > this.targetIcon.x + this.targetIcon.w) {
+                        this.state = 'sliding';
+                        this.slideSpeed = Math.random() * 0.5 + 0.5;
+                    }
+                } else if (this.state === 'sliding') {
+                    this.y += this.slideSpeed;
+                    if (this.y >= this.targetIcon.y + this.targetIcon.h) {
+                        this.state = 'dripping';
+                        this.slideTimer = Math.floor(Math.random() * 60) + 30;
+                        this.vy = 0;
+                    }
+                } else if (this.state === 'dripping') {
+                    if (this.slideTimer > 0) this.slideTimer--;
+                    else {
+                        this.vy += 0.2;
+                        this.y += this.vy;
+                    }
+                }
+                if (this.y > h) this.reset();
+                if(Math.random() > 0.9) this.char = String.fromCharCode(0x30A0 + Math.random() * 96);
+            }
+            draw() {
+                ctx.fillStyle = this.state === 'splashing' ? '#FFF' : `hsl(${hue}, 100%, 50%)`;
+                ctx.font = '14px monospace';
+                let drawX = this.state === 'falling' ? Math.floor(this.x / 14) * 14 : this.x;
+                ctx.fillText(this.char, drawX, this.y);
+            }
+        }
+        const drops = Array.from({length: 400}, () => new Rain());
+        function loop() {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+            ctx.fillRect(0, 0, w, h);
+            for (let d of drops) { d.update(); d.draw(); }
+            requestAnimationFrame(loop);
+        }
+        loop();
+        window.addEventListener('resize', () => { w = c.width = window.innerWidth; h = c.height = window.innerHeight; });
+    </script>
+</body>
+</html>
+"#;
+
+const SNOW_PHYSICS_HTML: &str = r#"
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <style>body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000510; } canvas { display: block; }</style>
+</head>
+<body>
+    <canvas id="c"></canvas>
+    <script>
+        const c = document.getElementById('c');
+        const ctx = c.getContext('2d');
+        let w = c.width = window.innerWidth, h = c.height = window.innerHeight;
+        let icons = []; window.__dispatch_icons = (data) => icons = data;
+        let wind = 0;
+        
+        let hue = 210; // Default icy blue
+        document.addEventListener('click', () => { hue = (hue + 50) % 360; });
+
+        class Snow {
+            constructor() { this.reset(); this.y = Math.random() * h; }
+            reset() {
+                this.x = Math.random() * w;
+                this.y = Math.random() * -100;
+                this.vy = Math.random() * 1 + 0.5;
+                this.r = Math.random() * 2 + 1;
+                this.vx = 0;
+                this.state = 'falling';
+            }
+            update() {
+                if (this.state === 'falling') {
+                    this.x += this.vx + wind;
+                    this.y += this.vy;
+                    this.vx = Math.sin(this.y * 0.01) * 0.5;
+                    for (let icon of icons) {
+                        let hitX = icon.x + 15, hitY = icon.y + 5, hitW = icon.w - 30, hitH = icon.w - 30;
+                        if (this.x > hitX && this.x < hitX + hitW && this.y > hitY && this.y < hitY + 10) {
+                            this.state = 'stuck';
+                            this.stuckTimer = Math.floor(Math.random() * 150) + 50;
+                            this.y = hitY;
+                            this.targetIcon = {x: hitX, y: hitY, w: hitW, h: hitH};
+                            break;
+                        }
+                    }
+                } else if (this.state === 'stuck') {
+                    this.stuckTimer--;
+                    if (this.stuckTimer <= 0) {
+                        this.state = 'sliding';
+                        this.slideVx = (Math.random() > 0.5 ? 0.5 : -0.5);
+                    }
+                } else if (this.state === 'sliding') {
+                    this.x += this.slideVx;
+                    this.y += 0.5; // Melt down the side
+                    if (this.y >= this.targetIcon.y + this.targetIcon.h || this.x < this.targetIcon.x || this.x > this.targetIcon.x + this.targetIcon.w) {
+                        this.state = 'falling';
+                        this.vy = Math.random() * 1 + 0.5;
+                    }
+                }
+                
+                if (this.y > h || this.x < 0 || this.x > w) this.reset();
+            }
+            draw() {
+                ctx.fillStyle = `hsla(${hue}, 80%, 80%, ${this.state !== 'falling' ? 0.3 : 0.8})`;
+                ctx.beginPath(); ctx.arc(this.x, this.y, this.r, 0, Math.PI*2); ctx.fill();
+            }
+        }
+        const flakes = Array.from({length: 800}, () => new Snow());
+        function loop() {
+            wind = Math.sin(Date.now() * 0.001) * 0.5;
+            ctx.clearRect(0, 0, w, h);
+            for (let f of flakes) { f.update(); f.draw(); }
+            requestAnimationFrame(loop);
+        }
+        loop();
+        window.addEventListener('resize', () => { w = c.width = window.innerWidth; h = c.height = window.innerHeight; });
+    </script>
+</body>
+</html>
+"#;
+
+const FLUID_DROPS_HTML: &str = r#"
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <style>body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000; } canvas { display: block; }</style>
+</head>
+<body>
+    <canvas id="c"></canvas>
+    <script>
+        const c = document.getElementById('c');
+        const ctx = c.getContext('2d');
+        let w = c.width = window.innerWidth, h = c.height = window.innerHeight;
+        let icons = []; window.__dispatch_icons = (data) => icons = data;
+        let ripples = [];
+        
+        let hue = 200; // Cyan water
+        document.addEventListener('click', () => { hue = (hue + 45) % 360; });
+
+        class Drop {
+            constructor() { this.reset(); this.y = Math.random() * h; }
+            reset() {
+                this.x = Math.random() * w; this.y = Math.random() * -100;
+                this.vy = Math.random() * 4 + 4;
+                this.state = 'falling';
+            }
+            update() {
+                if (this.state === 'falling') {
+                    this.y += this.vy;
+                    for (let icon of icons) {
+                        let hitX = icon.x + 15, hitY = icon.y + 5, hitW = icon.w - 30, hitH = icon.w - 30;
+                        if (this.x > hitX && this.x < hitX+hitW && this.y > hitY && this.y < hitY+10) {
+                            ripples.push({x: this.x, y: hitY, r: 0, alpha: 1});
+                            this.state = 'sliding';
+                            this.y = hitY;
+                            this.targetIcon = {x: hitX, y: hitY, w: hitW, h: hitH};
+                            this.vx = (this.x > hitX + hitW/2) ? 1.5 : -1.5;
+                            return;
+                        }
+                    }
+                } else if (this.state === 'sliding') {
+                    this.x += this.vx;
+                    if (this.x < this.targetIcon.x || this.x > this.targetIcon.x + this.targetIcon.w) {
+                        this.state = 'dripping_down';
+                        this.slideSpeed = Math.random() * 1.5 + 1;
+                    }
+                } else if (this.state === 'dripping_down') {
+                    this.y += this.slideSpeed;
+                    if (this.y >= this.targetIcon.y + this.targetIcon.h) {
+                        this.state = 'hanging';
+                        this.hangTimer = Math.floor(Math.random() * 40) + 20;
+                        this.vy = 0;
+                    }
+                } else if (this.state === 'hanging') {
+                    this.hangTimer--;
+                    if (this.hangTimer <= 0) {
+                        this.vy += 0.3;
+                        this.y += this.vy;
+                    }
+                }
+                if (this.y > h) this.reset();
+            }
+            draw() {
+                ctx.fillStyle = `hsl(${hue}, 100%, 60%)`;
+                if (this.state === 'hanging') {
+                    ctx.beginPath(); ctx.arc(this.x, this.y, 2 + (40-this.hangTimer)/20, 0, Math.PI*2); ctx.fill();
+                } else {
+                    ctx.fillRect(this.x, this.y, 2, this.state === 'falling' ? 10 : 4);
+                }
+            }
+        }
+        const drops = Array.from({length: 150}, () => new Drop());
+        function loop() {
+            ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.fillRect(0, 0, w, h);
+            for (let d of drops) { d.update(); d.draw(); }
+            for (let i = ripples.length-1; i >= 0; i--) {
+                let r = ripples[i];
+                ctx.strokeStyle = `hsla(${hue}, 100%, 60%, ${r.alpha})`; ctx.lineWidth = 1.5;
+                ctx.beginPath(); ctx.ellipse(r.x, r.y, r.r, r.r/2, 0, 0, Math.PI*2); ctx.stroke();
+                r.r += 2; r.alpha -= 0.02;
+                if (r.alpha <= 0) ripples.splice(i, 1);
+            }
+            requestAnimationFrame(loop);
+        }
+        loop();
+        window.addEventListener('resize', () => { w = c.width = window.innerWidth; h = c.height = window.innerHeight; });
+    </script>
+</body>
+</html>
+"#;
+
+const LASER_REFLECTIONS_HTML: &str = r#"
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <style>body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #000; } canvas { display: block; }</style>
+</head>
+<body>
+    <canvas id="c"></canvas>
+    <script>
+        const c = document.getElementById('c');
+        const ctx = c.getContext('2d');
+        let w = c.width = window.innerWidth, h = c.height = window.innerHeight;
+        let icons = []; window.__dispatch_icons = (data) => icons = data;
+        
+        let hueOffset = 0;
+        document.addEventListener('click', () => { hueOffset += 90; });
+
+        class Laser {
+            constructor() { this.reset(); }
+            reset() {
+                this.x = Math.random() > 0.5 ? 0 : w;
+                this.y = Math.random() * h;
+                this.vx = (this.x === 0 ? 1 : -1) * (Math.random()*3+3);
+                this.vy = (Math.random()-0.5) * 6;
+                this.baseHue = Math.random() * 360;
+                this.history = [];
+            }
+            update() {
+                this.history.push({x: this.x, y: this.y});
+                if (this.history.length > 20) this.history.shift();
+                
+                this.x += this.vx; this.y += this.vy;
+                
+                for (let icon of icons) {
+                    let hitX = icon.x + 10, hitY = icon.y + 10, hitW = icon.w - 20, hitH = icon.h - 20;
+                    if (this.x > hitX && this.x < hitX+hitW && this.y > hitY && this.y < hitY+hitH) {
+                        // Reflect!
+                        let dx1 = Math.abs(this.x - hitX); let dx2 = Math.abs(this.x - (hitX+hitW));
+                        let dy1 = Math.abs(this.y - hitY); let dy2 = Math.abs(this.y - (hitY+hitH));
+                        let min = Math.min(dx1, dx2, dy1, dy2);
+                        if (min === dx1 || min === dx2) this.vx *= -1;
+                        if (min === dy1 || min === dy2) this.vy *= -1;
+                        this.x += this.vx; this.y += this.vy; // Push out
+                    }
+                }
+                if (this.x < 0 || this.x > w || this.y < 0 || this.y > h) this.reset();
+            }
+            draw() {
+                ctx.beginPath();
+                if (this.history.length > 0) {
+                    ctx.moveTo(this.history[0].x, this.history[0].y);
+                    for (let i=1; i<this.history.length; i++) ctx.lineTo(this.history[i].x, this.history[i].y);
+                }
+                ctx.lineTo(this.x, this.y);
+                let col = `hsl(${(this.baseHue + hueOffset) % 360}, 100%, 60%)`;
+                ctx.strokeStyle = col; ctx.lineWidth = 3;
+                ctx.shadowBlur = 10; ctx.shadowColor = col;
+                ctx.stroke(); ctx.shadowBlur = 0;
+            }
+        }
+        const lasers = Array.from({length: 15}, () => new Laser());
+        function loop() {
+            ctx.fillStyle = 'rgba(0,0,0,0.2)'; ctx.fillRect(0, 0, w, h);
+            for (let l of lasers) { l.update(); l.draw(); }
+            requestAnimationFrame(loop);
+        }
+        loop();
+        window.addEventListener('resize', () => { w = c.width = window.innerWidth; h = c.height = window.innerHeight; });
+    </script>
+</body>
+</html>
+"#;
+
+const MAGNETIC_SWARM_HTML: &str = r#"
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <style>body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #050505; } canvas { display: block; }</style>
+</head>
+<body>
+    <canvas id="c"></canvas>
+    <script>
+        const c = document.getElementById('c');
+        const ctx = c.getContext('2d');
+        let w = c.width = window.innerWidth, h = c.height = window.innerHeight;
+        let icons = []; window.__dispatch_icons = (data) => icons = data;
+        let mx = w/2, my = h/2; document.addEventListener('mousemove', e => { mx = e.clientX; my = e.clientY; });
+        
+        let hue = 320; // Cyber pink
+        document.addEventListener('click', () => { hue = (hue + 75) % 360; });
+
+        class Mote {
+            constructor() {
+                this.x = Math.random()*w; this.y = Math.random()*h;
+                this.vx = 0; this.vy = 0;
+            }
+            update() {
+                let dx = mx - this.x, dy = my - this.y;
+                let dist = Math.sqrt(dx*dx + dy*dy);
+                
+                this.vx += (Math.random() - 0.5) * 1.5;
+                this.vy += (Math.random() - 0.5) * 1.5;
+
+                if (dist > 60) { 
+                    this.vx += (dx/dist)*0.5; 
+                    this.vy += (dy/dist)*0.5; 
+                } else {
+                    this.vx += -dy * 0.02;
+                    this.vy += dx * 0.02;
+                }
+                
+                for (let icon of icons) {
+                    let cx = icon.x + icon.w/2, cy = icon.y + icon.h/2;
+                    let idx = this.x - cx, idy = this.y - cy;
+                    let idist = Math.sqrt(idx*idx + idy*idy);
+                    if (idist < 80) {
+                        this.vx += (idx/idist)*3; this.vy += (idy/idist)*3;
+                    }
+                }
+                
+                this.vx *= 0.92; this.vy *= 0.92;
+                this.x += this.vx; this.y += this.vy;
+            }
+            draw() {
+                ctx.fillStyle = `hsl(${hue}, 100%, 60%)`; 
+                ctx.beginPath(); ctx.arc(this.x, this.y, 2, 0, Math.PI*2); ctx.fill();
+            }
+        }
+        const motes = Array.from({length: 400}, () => new Mote());
+        function loop() {
+            ctx.fillStyle = 'rgba(5,5,5,0.2)'; ctx.fillRect(0, 0, w, h);
+            for (let m of motes) { m.update(); m.draw(); }
+            requestAnimationFrame(loop);
+        }
+        loop();
+        window.addEventListener('resize', () => { w = c.width = window.innerWidth; h = c.height = window.innerHeight; });
+    </script>
+</body>
+</html>
+"#;
+
+const FIREFLY_REST_HTML: &str = r#"
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <style>body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #020502; } canvas { display: block; }</style>
+</head>
+<body>
+    <canvas id="c"></canvas>
+    <script>
+        const c = document.getElementById('c');
+        const ctx = c.getContext('2d');
+        let w = c.width = window.innerWidth, h = c.height = window.innerHeight;
+        let icons = []; window.__dispatch_icons = (data) => icons = data;
+        
+        let hue = 70; // Yellow green
+        document.addEventListener('click', () => { hue = (hue + 45) % 360; });
+
+        class Firefly {
+            constructor() {
+                this.x = Math.random()*w; this.y = Math.random()*h;
+                this.vx = (Math.random()-0.5)*2; this.vy = (Math.random()-0.5)*2;
+                this.rest = 0; this.phase = Math.random()*Math.PI*2;
+            }
+            update() {
+                if (this.rest > 0) {
+                    this.rest--;
+                    this.phase += 0.05;
+                    if (this.rest === 0) {
+                        this.vx = (Math.random()-0.5)*4; this.vy = -Math.random()*3-1;
+                    }
+                    return;
+                }
+                
+                this.x += this.vx; this.y += this.vy;
+                this.vx += (Math.random()-0.5)*0.5; this.vy += (Math.random()-0.5)*0.5;
+                let speed = Math.sqrt(this.vx*this.vx + this.vy*this.vy);
+                if (speed > 2) { this.vx = (this.vx/speed)*2; this.vy = (this.vy/speed)*2; }
+                
+                for (let icon of icons) {
+                    let hitX = icon.x + 10, hitY = icon.y + 10, hitW = icon.w - 20;
+                    if (this.vy > 0 && this.x > hitX && this.x < hitX+hitW && this.y > hitY && this.y < hitY+20) {
+                        if (Math.random() > 0.5) {
+                            this.rest = Math.floor(Math.random()*200)+100;
+                            this.y = hitY; this.vy = 0; this.vx = 0;
+                        }
+                    }
+                }
+                
+                if (this.x<0||this.x>w) this.vx*=-1;
+                if (this.y<0||this.y>h) this.vy*=-1;
+                this.phase += 0.1;
+            }
+            draw() {
+                let glow = (Math.sin(this.phase) + 1) / 2; // 0 to 1
+                ctx.fillStyle = `hsla(${hue}, 100%, 70%, ${glow})`;
+                ctx.beginPath(); ctx.arc(this.x, this.y, 2, 0, Math.PI*2); ctx.fill();
+                ctx.shadowBlur = 10; ctx.shadowColor = `hsl(${hue}, 100%, 50%)`;
+                ctx.fill(); ctx.shadowBlur = 0;
+            }
+        }
+        const bugs = Array.from({length: 100}, () => new Firefly());
+        function loop() {
+            ctx.fillStyle = 'rgba(2,5,2,0.3)'; ctx.fillRect(0, 0, w, h);
+            for (let b of bugs) { b.update(); b.draw(); }
+            requestAnimationFrame(loop);
+        }
+        loop();
+        window.addEventListener('resize', () => { w = c.width = window.innerWidth; h = c.height = window.innerHeight; });
+    </script>
+</body>
+</html>
+"#;
+
 pub fn init_extra_interactives(dir: &PathBuf) -> Result<(), String> {
     let mapping = vec![
         ("neon_waves.html", NEON_WAVES_HTML),
@@ -456,6 +1037,13 @@ pub fn init_extra_interactives(dir: &PathBuf) -> Result<(), String> {
         ("gravity_points.html", GRAVITY_POINTS_HTML),
         ("interactive_ripple.html", INTERACTIVE_RIPPLE_HTML),
         ("bouncing_dvd.html", BOUNCING_DVD_HTML),
+        ("icon_physics.html", ICON_PHYSICS_HTML),
+        ("matrix_rain_physics.html", MATRIX_RAIN_PHYSICS_HTML),
+        ("snow_physics.html", SNOW_PHYSICS_HTML),
+        ("fluid_drops.html", FLUID_DROPS_HTML),
+        ("laser_reflections.html", LASER_REFLECTIONS_HTML),
+        ("magnetic_swarm.html", MAGNETIC_SWARM_HTML),
+        ("firefly_rest.html", FIREFLY_REST_HTML),
     ];
 
     for (filename, html) in mapping {
@@ -479,6 +1067,13 @@ pub fn get_extra_interactives(dir: &PathBuf) -> Vec<VideoResult> {
         ("gravity_points.html", "interactive_gravity_points", "Gravity Points", "https://images.unsplash.com/photo-1506318137071-a8e063b4bec0?q=80&w=640&auto=format&fit=crop", vec!["gravity", "physics"]),
         ("interactive_ripple.html", "interactive_ripple_water", "Interactive Ripples", "https://images.unsplash.com/photo-1518837695005-2083093ee35b?q=80&w=640&auto=format&fit=crop", vec!["water", "ripple"]),
         ("bouncing_dvd.html", "interactive_bouncing_dvd", "Bouncing DVD", "https://images.unsplash.com/photo-1550684848-fac1c5b4e853?q=80&w=640&auto=format&fit=crop", vec!["dvd", "meme"]),
+        ("icon_physics.html", "interactive_icon_physics", "Icon Physics Engine", "https://images.unsplash.com/photo-1534447677768-be436bb09401?q=80&w=640&auto=format&fit=crop", vec!["physics", "icons", "rain", "icon_physics"]),
+        ("matrix_rain_physics.html", "interactive_matrix_rain_physics", "Matrix Rain Icons", "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?q=80&w=640&auto=format&fit=crop", vec!["physics", "icons", "matrix", "icon_physics"]),
+        ("snow_physics.html", "interactive_snow_physics", "Snow Accumulation", "https://images.unsplash.com/photo-1483921020237-2ff51e8e4b22?q=80&w=640&auto=format&fit=crop", vec!["physics", "icons", "snow", "icon_physics"]),
+        ("fluid_drops.html", "interactive_fluid_drops", "Fluid Drops Splash", "https://images.unsplash.com/photo-1527066236129-8bc1862086b5?q=80&w=640&auto=format&fit=crop", vec!["physics", "icons", "water", "icon_physics"]),
+        ("laser_reflections.html", "interactive_laser_reflections", "Laser Reflections", "https://images.unsplash.com/photo-1550684848-fac1c5b4e853?q=80&w=640&auto=format&fit=crop", vec!["physics", "icons", "laser", "icon_physics"]),
+        ("magnetic_swarm.html", "interactive_magnetic_swarm", "Magnetic Swarm", "https://images.unsplash.com/photo-1518837695005-2083093ee35b?q=80&w=640&auto=format&fit=crop", vec!["physics", "icons", "swarm", "icon_physics"]),
+        ("firefly_rest.html", "interactive_firefly_rest", "Firefly Rest", "https://images.unsplash.com/photo-1462331940025-496dfbfc7564?q=80&w=640&auto=format&fit=crop", vec!["physics", "icons", "firefly", "icon_physics"]),
     ];
 
     let mut results = Vec::new();

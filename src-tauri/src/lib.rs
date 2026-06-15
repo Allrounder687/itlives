@@ -184,6 +184,7 @@ pub fn run() {
     // integrations server is started inside .setup() once the AppHandle is available
 
     let app = tauri::Builder::default()
+        .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_autostart::init(

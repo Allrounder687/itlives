@@ -545,6 +545,36 @@ pub fn set_web_wallpaper(
     }
 
     let event_bridge_script = r#"
+        window.__isPaused = false;
+        window.__pendingFrames = [];
+        window.__originalRequestAnimationFrame = window.requestAnimationFrame;
+        
+        window.requestAnimationFrame = function(callback) {
+            if (window.__isPaused) {
+                window.__pendingFrames.push(callback);
+                return -1;
+            }
+            return window.__originalRequestAnimationFrame(callback);
+        };
+
+        const __originalSetInterval = window.setInterval;
+        window.setInterval = function(callback, time) {
+            return __originalSetInterval(function() {
+                if (!window.__isPaused) callback();
+            }, time);
+        };
+
+        window.__set_paused = function(paused) {
+            window.__isPaused = paused;
+            if (!paused) {
+                let frames = window.__pendingFrames;
+                window.__pendingFrames = [];
+                for (let cb of frames) {
+                    window.__originalRequestAnimationFrame(cb);
+                }
+            }
+        };
+
         window.__dispatch_mouse_event = (type, rx, ry, button) => {
             const btn = button === 'right' ? 2 : (button === 'food' ? 1 : 0);
             const clientX = rx * window.innerWidth;
@@ -655,6 +685,9 @@ pub fn set_web_wallpaper(
         current.insert(m_key.clone(), url.to_string());
     }
 
+    crate::wallpaper::audio::start_audio_capture(app.clone());
+    crate::wallpaper::icon_tracker::start_icon_tracking(app.clone());
+
     Ok(format!("Web wallpaper set: {} on {}", url, m_key))
 }
 
@@ -735,14 +768,19 @@ pub fn set_speed(speed: f64) -> Result<(), String> {
         speed
     ))
 }
-
-pub fn set_paused(paused: bool) -> Result<(), String> {
-    if let Ok(mut last) = LAST_CONFIG.lock() {
-        if last.is_empty() {
-            return Ok(());
+pub fn set_paused(app: &tauri::AppHandle, paused: bool) -> Result<(), String> {
+    use tauri::Manager;
+    for (label, window) in app.webview_windows() {
+        if label.starts_with("web_wallpaper_") {
+            let _ = window.eval(&format!("if (window.__set_paused) window.__set_paused({});", paused));
         }
-        for config in last.values_mut() {
-            config.paused = paused;
+    }
+    
+    if let Ok(mut last) = LAST_CONFIG.lock() {
+        if !last.is_empty() {
+            for config in last.values_mut() {
+                config.paused = paused;
+            }
         }
     }
     send_ipc_command(&format!(
@@ -750,7 +788,6 @@ pub fn set_paused(paused: bool) -> Result<(), String> {
         paused
     ))
 }
-
 pub fn set_volume(volume_percent: u64) -> Result<(), String> {
     if LAST_CONFIG.lock().map(|l| l.is_empty()).unwrap_or(true) {
         return Ok(());

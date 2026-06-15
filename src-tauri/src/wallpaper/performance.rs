@@ -61,7 +61,7 @@ pub fn start_monitor(state_store: AppStateStore, app_handle: tauri::AppHandle) {
                 should_pause,
                 reason
             );
-            if set_mpv_pause(should_pause) {
+            if set_mpv_pause(&app_handle, should_pause) {
                 IS_PAUSED.store(should_pause, Ordering::Relaxed);
 
                 #[derive(serde::Serialize, Clone)]
@@ -83,8 +83,8 @@ fn force_paused() -> bool {
     FORCE_PAUSE.load(Ordering::Relaxed)
 }
 
-fn set_mpv_pause(pause: bool) -> bool {
-    match crate::wallpaper::desktop::set_paused(pause) {
+fn set_mpv_pause(app: &tauri::AppHandle, pause: bool) -> bool {
+    match crate::wallpaper::desktop::set_paused(app, pause) {
         Ok(()) => {
             log::info!("Successfully sent IPC pause={} to mpv", pause);
             true

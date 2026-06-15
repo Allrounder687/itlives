@@ -6,3 +6,4 @@ pub mod providers;
 pub mod state;
 pub mod interactives;
 pub mod interactives_extra;
+pub mod icon_tracker;

@@ -43,7 +43,7 @@ export const UnifiedLibrary = memo(function UnifiedLibrary({
   onRemoveImport,
   onUploadMedia,
 }: UnifiedLibraryProps) {
-  const [filter, setFilter] = useState<"all" | "favorites" | "recents" | "local" | "interactive">("all");
+  const [filter, setFilter] = useState<"all" | "favorites" | "recents" | "local" | "interactive" | "icon_physics">("all");
   const [typeFilter, setTypeFilter] = useState<"all" | "live" | "static">("all");
   const [interactives, setInteractives] = useState<LibraryItem[]>([]);
 
@@ -103,6 +103,7 @@ export const UnifiedLibrary = memo(function UnifiedLibrary({
     if (filter === "recents" && !item.isRecent) return false;
     if (filter === "local" && !item.isLocal && item.video.source !== "interactive") return false;
     if (filter === "interactive" && item.video.source !== "interactive") return false;
+    if (filter === "icon_physics" && !(item.video.tags && item.video.tags.includes("icon_physics"))) return false;
 
     if (hiddenVideos.includes(item.video.id)) return false;
 
@@ -135,14 +136,14 @@ export const UnifiedLibrary = memo(function UnifiedLibrary({
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem", flexWrap: "wrap", gap: "10px" }}>
         <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", flex: 1 }}>
           <div className="library-filter-bar" style={{ marginBottom: 0 }}>
-            {(["all", "favorites", "recents", "local", "interactive"] as const).map((f) => (
+            {(["all", "favorites", "recents", "local", "interactive", "icon_physics"] as const).map((f) => (
               <button
                 key={f}
                 type="button"
                 className={`library-filter-btn ${filter === f ? "library-filter-btn--active" : ""}`}
                 onClick={() => setFilter(f)}
               >
-                {f.charAt(0).toUpperCase() + f.slice(1)}
+                {f === "icon_physics" ? "Icon Physics" : f.charAt(0).toUpperCase() + f.slice(1)}
               </button>
             ))}
           </div>

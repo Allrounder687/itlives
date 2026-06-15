@@ -160,19 +160,19 @@ fn handle_request(
             }
         }
         "/pause" => {
-            let _ = wallpaper::desktop::set_paused(true);
+            let _ = wallpaper::desktop::set_paused(&app, true);
             let _ = wallpaper::state::set_paused(state, true);
             (200, r#"{"status":"paused"}"#.to_string())
         }
         "/play" => {
-            let _ = wallpaper::desktop::set_paused(false);
+            let _ = wallpaper::desktop::set_paused(&app, false);
             let _ = wallpaper::state::set_paused(state, false);
             (200, r#"{"status":"playing"}"#.to_string())
         }
         "/toggle" => {
             let current = state.snapshot();
             let new_paused = !current.paused;
-            let _ = wallpaper::desktop::set_paused(new_paused);
+            let _ = wallpaper::desktop::set_paused(&app, new_paused);
             let _ = wallpaper::state::set_paused(state, new_paused);
             (
                 200,
