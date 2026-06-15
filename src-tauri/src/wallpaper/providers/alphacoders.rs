@@ -88,7 +88,8 @@ impl VideoProvider for AlphaCodersProvider {
         // Format is typically: https://images2.alphacoders.com/140/thumb-350-1407175.mp4
         // Or: https://images2.alphacoders.com/140/1407175.mp4
         // Let's grab all MP4 urls in the page matching the pattern `https://images[0-9]+\.alphacoders\.com/[0-9]+/([0-9]+)\.mp4`
-        let re = Regex::new(r"https://(images\d*\.alphacoders\.com/\d+/)(\d+)\.mp4").unwrap();
+        let re = Regex::new(r"https://(images\d*\.alphacoders\.com/\d+/)(\d+)\.mp4")
+            .map_err(|e| format!("Regex parse error: {}", e))?;
 
         let mut items = Vec::new();
         for cap in re.captures_iter(&text) {

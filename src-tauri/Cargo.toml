@@ -19,6 +19,7 @@ tauri-build = { version = "2.5.6", features = [] }
 [dependencies]
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
+thiserror = "2.0"
 log = "0.4"
 tauri = { version = "2.11.0", features = ["protocol-asset", "tray-icon"] }
 tauri-plugin-log = "2"
@@ -38,6 +39,7 @@ cpal = "0.17.1"
 rustfft = "6.4.1"
 windows = { version = "0.58", features = ["Media_Control", "Foundation", "Storage_Streams", "Win32_Foundation", "Win32_System_LibraryLoader", "Win32_UI_Controls", "Win32_UI_WindowsAndMessaging"] }
 tauri-plugin-http = "2"
+env_logger = "0.11.10"
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.58", features = [

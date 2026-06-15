@@ -96,8 +96,9 @@ pub mod win32 {
             PCWSTR::null(),
         );
 
-        if shell.is_ok() && !shell.unwrap().is_invalid() {
-            // This is the window that actually holds the icons!
+        if let Ok(sh) = shell {
+            if !sh.is_invalid() {
+                // This is the window that actually holds the icons!
             // The old PowerShell script embedded directly into this window, and shoved mpv behind SHELLDLL_DefView.
             if let Ok(mut g) = FOUND_WORKERW.lock() {
                 *g = hwnd.0 as isize;
@@ -531,13 +532,13 @@ pub fn set_web_wallpaper(
     }
 
     let parsed_url = if url.starts_with("http") {
-        tauri::Url::parse(url).unwrap()
+        tauri::Url::parse(url).map_err(|e| format!("Failed to parse URL: {}", e))?
     } else {
         let path = std::path::Path::new(url);
         if !path.exists() {
             return Err(format!("Local HTML file not found: {}", url));
         }
-        tauri::Url::from_file_path(path).unwrap()
+        tauri::Url::from_file_path(path).map_err(|_| format!("Invalid file path: {}", url))?
     };
 
     let window = tauri::WebviewWindowBuilder::new(
@@ -553,7 +554,7 @@ pub fn set_web_wallpaper(
 
     #[cfg(windows)]
     {
-        let hwnd = window.hwnd().unwrap();
+        let hwnd = window.hwnd().map_err(|e| e.to_string())?;
         let workerw = win32::get_desktop_workerw().unwrap_or(0);
         unsafe {
             let _ = windows::Win32::UI::WindowsAndMessaging::SetParent(
@@ -969,7 +970,7 @@ fn process_static_image_if_needed(path: &str) -> Result<String, String> {
 
 /// Sets a static image file as the desktop background using the native Windows API.
 pub fn set_static_image(path: &str) -> Result<String, String> {
-    let _lock = WALLPAPER_SET_LOCK.lock().unwrap();
+    let _lock = WALLPAPER_SET_LOCK.lock().map_err(|_| "Failed to lock wallpaper mutex".to_string())?;
     let resolved_path = path.to_string();
     let img_path = std::path::Path::new(&resolved_path);
     if !img_path.exists() {
