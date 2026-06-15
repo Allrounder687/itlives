@@ -200,21 +200,25 @@ export function useWallpaperActions(state: WallpaperState, setState: React.Dispa
 
   const playNext = useCallback(async () => {
     try {
+      setState((s) => ({ ...s, isLoading: true }));
       const { invoke } = await getCoreApi();
       await invoke("next_wallpaper");
     } catch (error) {
       console.error("Failed to play next", error);
+      setState((s) => ({ ...s, isLoading: false }));
     }
-  }, []);
+  }, [setState]);
 
   const playPrevious = useCallback(async () => {
     try {
+      setState((s) => ({ ...s, isLoading: true }));
       const { invoke } = await getCoreApi();
       await invoke("prev_wallpaper");
     } catch (error) {
       console.error("Failed to play previous", error);
+      setState((s) => ({ ...s, isLoading: false }));
     }
-  }, []);
+  }, [setState]);
 
   return { 
     applyWallpaper, 

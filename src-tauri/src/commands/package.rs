@@ -92,7 +92,7 @@ pub fn export_itl_package(config_json: String, dest_path: String) -> Result<(), 
 }
 
 #[tauri::command]
-pub fn import_itl_package(
+pub async fn import_itl_package(
     state: tauri::State<'_, crate::wallpaper::state::AppStateStore>,
     src_path: String,
 ) -> Result<String, String> {
@@ -196,7 +196,7 @@ pub fn import_itl_package(
         super::profiles::save_profile(
             profile_name.clone(),
             serde_json::to_string(&config).unwrap(),
-        )?;
+        ).await?;
 
         // Add to Library Imports
         let thumbnail_url = config

@@ -1,7 +1,8 @@
 use std::path::PathBuf;
 use tauri::command;
 
-fn get_profiles_dir() -> PathBuf {
+// OPTIMIZATION: Switched to async helper to avoid blocking the main thread during directory creation
+async fn get_profiles_dir() -> PathBuf {
     let app_data = std::env::var("OPENCLAW_LWP_RUNTIME_DIR").unwrap_or_else(|_| {
         let local_app_data = std::env::var("LOCALAPPDATA").unwrap_or_else(|_| "C:\\".to_string());
         PathBuf::from(local_app_data)
@@ -10,31 +11,34 @@ fn get_profiles_dir() -> PathBuf {
             .to_string()
     });
     let dir = PathBuf::from(app_data).join("profiles");
-    std::fs::create_dir_all(&dir).ok();
+    let _ = tokio::fs::create_dir_all(&dir).await;
     dir
 }
 
 #[command]
-pub fn save_profile(name: String, config_json: String) -> Result<(), String> {
+pub async fn save_profile(name: String, config_json: String) -> Result<(), String> {
     let safe_name = name.replace(|c: char| !c.is_alphanumeric() && c != ' ' && c != '-', "_");
-    let path = get_profiles_dir().join(format!("{}.ilwp", safe_name));
-    std::fs::write(path, config_json).map_err(|e| e.to_string())
+    let path = get_profiles_dir().await.join(format!("{}.ilwp", safe_name));
+    // OPTIMIZATION: Swapped synchronous write for async stream to free up main IPC thread
+    tokio::fs::write(path, config_json).await.map_err(|e| e.to_string())
 }
 
 #[command]
-pub fn load_profile(name: String) -> Result<String, String> {
+pub async fn load_profile(name: String) -> Result<String, String> {
     let safe_name = name.replace(|c: char| !c.is_alphanumeric() && c != ' ' && c != '-', "_");
-    let path = get_profiles_dir().join(format!("{}.ilwp", safe_name));
-    std::fs::read_to_string(path).map_err(|e| e.to_string())
+    let path = get_profiles_dir().await.join(format!("{}.ilwp", safe_name));
+    // OPTIMIZATION: Non-blocking async file read
+    tokio::fs::read_to_string(path).await.map_err(|e| e.to_string())
 }
 
 #[command]
-pub fn list_profiles() -> Result<Vec<String>, String> {
-    let dir = get_profiles_dir();
+pub async fn list_profiles() -> Result<Vec<String>, String> {
+    let dir = get_profiles_dir().await;
     let mut profiles = Vec::new();
-    if let Ok(entries) = std::fs::read_dir(dir) {
-        for entry in entries.flatten() {
-            if let Ok(file_type) = entry.file_type() {
+    // OPTIMIZATION: Async directory iteration
+    if let Ok(mut entries) = tokio::fs::read_dir(dir).await {
+        while let Ok(Some(entry)) = entries.next_entry().await {
+            if let Ok(file_type) = entry.file_type().await {
                 if file_type.is_file() {
                     let path = entry.path();
                     if path.extension().and_then(|e| e.to_str()) == Some("ilwp") {
@@ -50,11 +54,12 @@ pub fn list_profiles() -> Result<Vec<String>, String> {
 }
 
 #[command]
-pub fn delete_profile(name: String) -> Result<(), String> {
+pub async fn delete_profile(name: String) -> Result<(), String> {
     let safe_name = name.replace(|c: char| !c.is_alphanumeric() && c != ' ' && c != '-', "_");
-    let path = get_profiles_dir().join(format!("{}.ilwp", safe_name));
+    let path = get_profiles_dir().await.join(format!("{}.ilwp", safe_name));
     if path.exists() {
-        std::fs::remove_file(path).map_err(|e| e.to_string())?;
+        // OPTIMIZATION: Async file removal
+        tokio::fs::remove_file(path).await.map_err(|e| e.to_string())?;
     }
     Ok(())
 }

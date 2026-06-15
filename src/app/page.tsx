@@ -6,7 +6,7 @@ import { useWallpaper } from "@/hooks/useWallpaper";
 import { TitleBar } from "./components/TitleBar";
 import { Sidebar, TabState } from "./components/Sidebar";
 
-const HeroPanel = dynamic(() => import("./components/HeroPanel").then((m) => m.HeroPanel), { ssr: false });
+
 const MasterHUD = dynamic(() => import("./components/MasterHUD").then((m) => m.MasterHUD), { ssr: false });
 const ControlBar = dynamic(() => import("./components/ControlBar").then((m) => m.ControlBar), { ssr: false });
 const SearchResults = dynamic(() => import("./components/SearchResults").then((m) => m.SearchResults), { ssr: false, loading: () => <div className="skeleton skeleton-preview" /> });
@@ -50,9 +50,6 @@ function Home() {
   }>({});
   const [isErrorDismissed, setIsErrorDismissed] = useState(false);
   const [isErrorVisible, setIsErrorVisible] = useState(false);
-  
-  // Detached Editor Preview State
-  const [editorPreviewVideo, setEditorPreviewVideo] = useState<any | null>(null);
 
   // Reset error dismissal when a new error appears
   const prevErrorRef = useRef(wallpaper.error);
@@ -218,6 +215,69 @@ function Home() {
     }
   }, [wallpaper.currentVideo, wallpaper.isQueued, wallpaper.removeFromQueue, wallpaper.addToQueue]);
 
+  const handleEditEffects = useCallback((video: any) => {
+    handleTabChange("editor");
+    setTimeout(() => window.dispatchEvent(new CustomEvent('load-profile', {detail: video.id})), 100);
+  }, [handleTabChange]);
+
+  const handleApplyCurrent = useCallback((st?: number, et?: number) => {
+    if (wallpaper.currentVideo) {
+      void wallpaper.applyWallpaper(wallpaper.currentVideo, st, et);
+    }
+  }, [wallpaper.currentVideo, wallpaper.applyWallpaper]);
+
+  const handleToggleFavoriteCurrent = useCallback(() => {
+    if (wallpaper.currentVideo) {
+      void wallpaper.toggleFavorite(wallpaper.currentVideo);
+    }
+  }, [wallpaper.currentVideo, wallpaper.toggleFavorite]);
+
+  const handleToggleHideCurrent = useCallback(() => {
+    if (wallpaper.currentVideo) {
+      void wallpaper.toggleHideVideo(wallpaper.currentVideo.id);
+    }
+  }, [wallpaper.currentVideo, wallpaper.toggleHideVideo]);
+
+  const handleEditEffectsCurrent = useCallback(() => {
+    if (wallpaper.currentVideo) {
+      handleTabChange("editor");
+      setTimeout(() => window.dispatchEvent(new CustomEvent('load-profile', {detail: wallpaper.currentVideo!.id})), 100);
+    }
+  }, [wallpaper.currentVideo, handleTabChange]);
+
+  const handleClosePreview = useCallback(() => {
+    wallpaper.dismissPreview();
+  }, [wallpaper.dismissPreview]);
+
+  const handleLibraryApply = useCallback((item: any) => {
+    void wallpaper.applyWallpaper(item.video);
+  }, [wallpaper.applyWallpaper]);
+
+  const handleLibraryPreview = useCallback((item: any) => {
+    wallpaper.selectVideo(item.video);
+  }, [wallpaper.selectVideo]);
+
+  const handleLibraryToggleFavorite = useCallback((item: any) => {
+    void wallpaper.toggleFavorite(item.video);
+  }, [wallpaper.toggleFavorite]);
+
+  const handleLibraryToggleQueue = useCallback((item: any) => {
+    const key = `${item.video.id}:${item.video.local_path}`;
+    if (queueIds.has(key)) {
+      void wallpaper.removeFromQueue(item.video);
+    } else {
+      void wallpaper.addToQueue(item.video);
+    }
+  }, [queueIds, wallpaper.removeFromQueue, wallpaper.addToQueue]);
+
+  const handleLibraryRemoveRecent = useCallback((item: any) => {
+    void wallpaper.removeRecentVideo(item.video);
+  }, [wallpaper.removeRecentVideo]);
+
+  const handleLibraryRemoveImport = useCallback((item: any) => {
+    void wallpaper.removeImportedVideo(item.video);
+  }, [wallpaper.removeImportedVideo]);
+
   const handleOverlayParamUpdate = useCallback((layerId: string, paramName: string, value: any) => {
     setOverlayConfig(prev => {
       if (!prev || !prev.layers) return prev;
@@ -245,7 +305,7 @@ function Home() {
           source={wallpaper.source} query={wallpaper.query} isLoading={wallpaper.isLoading}
           onSourceChange={wallpaper.setSource} onQueryChange={wallpaper.setQuery}
           onCategoryChange={wallpaper.setCategory} onBrowseLocalFile={wallpaper.browseLocalVideo}
-          onFetch={() => wallpaper.fetchVideosList()} onFetchAndApply={handleFetchAndApply}
+          onFetch={wallpaper.fetchVideosList} onFetchAndApply={handleFetchAndApply}
           onStop={wallpaper.stopWallpaper}
           pinterestUrls={wallpaper.pinterestUrls}
           onSetPinterestUrls={wallpaper.setPinterestUrls}
@@ -269,10 +329,7 @@ function Home() {
           isLoading={wallpaper.isLoading}
           hasMore={wallpaper.hasMore ?? true}
           duplicateNotice={wallpaper.duplicateNotice}
-          onEditEffects={(video) => {
-            setEditorPreviewVideo(video);
-            handleTabChange("editor");
-          }}
+          onEditEffects={handleEditEffects}
         />
         {wallpaper.isLoading && wallpaper.page === 1 && <div className="skeleton skeleton-preview" />}
       </section>
@@ -310,7 +367,7 @@ function Home() {
     wallpaper.setPurityFilter,
     wallpaper.selectVideo,
     wallpaper.setPage,
-    handleTabChange
+    handleEditEffects
   ]);
 
   const libraryPanel = useMemo(() => {
@@ -320,12 +377,12 @@ function Home() {
         favorites={wallpaper.favorites} recents={wallpaper.recents}
         imports={wallpaper.imports} favoriteIds={favoriteIds} queueIds={queueIds}
         hiddenVideos={wallpaper.hiddenVideos}
-        onApply={(item) => wallpaper.applyWallpaper(item.video)}
-        onPreview={(item) => wallpaper.selectVideo(item.video)}
-        onToggleFavorite={(item) => wallpaper.toggleFavorite(item.video)}
-        onToggleQueue={(item) => queueIds.has(`${item.video.id}:${item.video.local_path}`) ? wallpaper.removeFromQueue(item.video) : wallpaper.addToQueue(item.video)}
-        onRemoveRecent={(item) => wallpaper.removeRecentVideo(item.video)}
-        onRemoveImport={(item) => wallpaper.removeImportedVideo(item.video)}
+        onApply={handleLibraryApply}
+        onPreview={handleLibraryPreview}
+        onToggleFavorite={handleLibraryToggleFavorite}
+        onToggleQueue={handleLibraryToggleQueue}
+        onRemoveRecent={handleLibraryRemoveRecent}
+        onRemoveImport={handleLibraryRemoveImport}
         onUploadMedia={wallpaper.browseLocalVideo}
       />
     );
@@ -337,13 +394,12 @@ function Home() {
     favoriteIds,
     queueIds,
     wallpaper.hiddenVideos,
-    wallpaper.applyWallpaper,
-    wallpaper.selectVideo,
-    wallpaper.toggleFavorite,
-    wallpaper.removeFromQueue,
-    wallpaper.addToQueue,
-    wallpaper.removeRecentVideo,
-    wallpaper.removeImportedVideo,
+    handleLibraryApply,
+    handleLibraryPreview,
+    handleLibraryToggleFavorite,
+    handleLibraryToggleQueue,
+    handleLibraryRemoveRecent,
+    handleLibraryRemoveImport,
     wallpaper.browseLocalVideo
   ]);
 
@@ -426,17 +482,14 @@ function Home() {
             isQueued={wallpaper.isQueued(wallpaper.currentVideo)}
             playbackSpeed={wallpaper.playbackSpeed}
             blurStrength={wallpaper.blurStrength}
-            onApply={(st?: number, et?: number) => wallpaper.applyWallpaper(wallpaper.currentVideo!, st, et)}
-            onToggleFavorite={() => wallpaper.toggleFavorite(wallpaper.currentVideo!)}
+            onApply={handleApplyCurrent}
+            onToggleFavorite={handleToggleFavoriteCurrent}
             onToggleQueue={toggleCurrentQueue}
             onSetSpeed={wallpaper.setPlaybackSpeed}
             onSetBlur={wallpaper.setBlurStrength}
             isHidden={wallpaper.hiddenVideos.includes(wallpaper.currentVideo.id)}
-            onToggleHide={() => wallpaper.toggleHideVideo(wallpaper.currentVideo!.id)}
-            onEditEffects={() => {
-              handleTabChange("editor");
-              setTimeout(() => window.dispatchEvent(new CustomEvent('load-profile', {detail: wallpaper.currentVideo!.id})), 100);
-            }}
+            onToggleHide={handleToggleHideCurrent}
+            onEditEffects={handleEditEffectsCurrent}
           />
         ) : !wallpaper.isLoading ? (
           <div className="preview-empty">
@@ -456,20 +509,20 @@ function Home() {
     wallpaper.queue,
     wallpaper.playbackSpeed,
     wallpaper.blurStrength,
-    wallpaper.applyWallpaper,
-    wallpaper.toggleFavorite,
+    handleApplyCurrent,
+    handleToggleFavoriteCurrent,
     toggleCurrentQueue,
     wallpaper.setPlaybackSpeed,
     wallpaper.setBlurStrength,
     wallpaper.hiddenVideos,
-    wallpaper.toggleHideVideo,
-    handleTabChange
+    handleToggleHideCurrent,
+    handleEditEffectsCurrent
   ]);
 
   const youtubePanel = useMemo(() => {
     if (renderedTab !== "youtube") return null;
     return (
-      <YouTubePanel onApplyWallpaper={(v) => wallpaper.applyWallpaper(v)} onStop={wallpaper.stopWallpaper} isPlaying={wallpaper.isPlaying} />
+      <YouTubePanel onApplyWallpaper={wallpaper.applyWallpaper} onStop={wallpaper.stopWallpaper} isPlaying={wallpaper.isPlaying} />
     );
   }, [renderedTab, wallpaper.applyWallpaper, wallpaper.stopWallpaper, wallpaper.isPlaying]);
 
@@ -478,8 +531,8 @@ function Home() {
     return (
       <EditorWorkspace 
         currentVideo={wallpaper.currentVideo} 
-        onSelectVideo={(video) => wallpaper.selectVideo(video)}
-        onApplyWallpaper={async (v) => { await wallpaper.applyWallpaper(v); }} 
+        onSelectVideo={wallpaper.selectVideo}
+        onApplyWallpaper={wallpaper.applyWallpaper}
         onUploadMedia={wallpaper.browseLocalVideo}
         onStopWallpaper={wallpaper.stopWallpaper}
         recentWallpapers={wallpaper.recents}
@@ -500,40 +553,6 @@ function Home() {
     return <ParallaxWorkspace />;
   }, [renderedTab]);
 
-  const handleEditEffects = useCallback((video: any) => {
-    handleTabChange("editor");
-    setTimeout(() => window.dispatchEvent(new CustomEvent('load-profile', {detail: video.id})), 100);
-  }, [handleTabChange]);
-
-  const handleApplyCurrent = useCallback((st?: number, et?: number) => {
-    if (wallpaper.currentVideo) {
-      wallpaper.applyWallpaper(wallpaper.currentVideo, st, et);
-    }
-  }, [wallpaper.currentVideo, wallpaper.applyWallpaper]);
-
-  const handleToggleFavoriteCurrent = useCallback(() => {
-    if (wallpaper.currentVideo) {
-      wallpaper.toggleFavorite(wallpaper.currentVideo);
-    }
-  }, [wallpaper.currentVideo, wallpaper.toggleFavorite]);
-
-  const handleToggleHideCurrent = useCallback(() => {
-    if (wallpaper.currentVideo) {
-      wallpaper.toggleHideVideo(wallpaper.currentVideo.id);
-    }
-  }, [wallpaper.currentVideo, wallpaper.toggleHideVideo]);
-
-  const handleEditEffectsCurrent = useCallback(() => {
-    if (wallpaper.currentVideo) {
-      handleTabChange("editor");
-      setTimeout(() => window.dispatchEvent(new CustomEvent('load-profile', {detail: wallpaper.currentVideo!.id})), 100);
-    }
-  }, [wallpaper.currentVideo, handleTabChange]);
-
-  const handleClosePreview = useCallback(() => {
-    wallpaper.dismissPreview();
-  }, [wallpaper.dismissPreview]);
-
   const titleBarElement = useMemo(() => {
     return <TitleBar minimizeToTray={wallpaper.minimizeToTray} />;
   }, [wallpaper.minimizeToTray]);
@@ -542,23 +561,7 @@ function Home() {
     return <DependencyChecker />;
   }, []);
 
-  const heroPanelElement = useMemo(() => {
-    if (!wallpaper.currentVideo) return null;
-    return (
-      <HeroPanel 
-        wallpaper={wallpaper} 
-        activeTab={activeTab} 
-        onEditEffects={handleEditEffects} 
-      />
-    );
-  }, [
-    wallpaper.currentVideo,
-    wallpaper.isPlaying,
-    wallpaper.volumePercent,
-    wallpaper.theme,
-    activeTab,
-    handleEditEffects
-  ]);
+
 
   const masterHudElement = useMemo(() => {
     return <MasterHUD wallpaper={wallpaper} />;
@@ -762,8 +765,6 @@ function Home() {
 
         <main className="workspace">
           {dependencyCheckerElement}
-
-          {heroPanelElement}
 
           {discoverPanel}
           {libraryPanel}

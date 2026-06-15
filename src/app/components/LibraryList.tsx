@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, memo } from "react";
 import { LibraryItem } from "@/hooks/useWallpaper";
 import { isStaticWallpaper } from "@/utils/wallpaperTypes";
 import { HoverVideo } from "./HoverVideo";
@@ -27,7 +27,7 @@ export function formatSavedAt(timestamp: number) {
   return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-export function UnifiedLibrary({
+export const UnifiedLibrary = memo(function UnifiedLibrary({
   favorites,
   recents,
   imports,
@@ -157,7 +157,7 @@ export function UnifiedLibrary({
         <p className="library-empty">No wallpapers found in {filter} view {typeFilter !== "all" ? `(${typeFilter} filter active)` : ""}.</p>
       ) : (
         <div className={`library-grid-view library-grid-view--${gridSize.toLowerCase()}`}>
-          {filteredItems.map((item) => {
+          {filteredItems.map((item, index) => {
             const key = `${item.video.id}:${item.video.local_path}`;
             const isFavorite = favoriteIds.has(key);
             const isQueued = queueIds.has(key);
@@ -165,7 +165,7 @@ export function UnifiedLibrary({
             return (
               <article className="library-card-item" key={key}>
                 <div className="library-card-item__media">
-                  <HoverVideo video={item.video} gridSize={gridSize} onClick={() => onPreview(item)} />
+                  <HoverVideo video={item.video} gridSize={gridSize} onClick={() => onPreview(item)} priority={index < 8} />
 
                   <div className="library-card-item__actions">
                     {onRemoveRecent && item.isRecent && (
@@ -246,4 +246,4 @@ export function UnifiedLibrary({
       )}
     </div>
   );
-}
+});

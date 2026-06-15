@@ -10,9 +10,10 @@ interface HoverVideoProps {
   className?: string;
   gridSize?: "S" | "M" | "L" | "XL" | "XXL";
   onClick?: () => void;
+  priority?: boolean;
 }
 
-export function HoverVideo({ video, className, gridSize = "M", onClick }: HoverVideoProps) {
+export function HoverVideo({ video, className, gridSize = "M", onClick, priority = false }: HoverVideoProps) {
   const [isHovered, setIsHovered] = useState(false);
   const [imgError, setImgError] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -100,6 +101,9 @@ export function HoverVideo({ video, className, gridSize = "M", onClick }: HoverV
         <img 
           src={thumbSrc} 
           alt={video.id}
+          loading={priority ? "eager" : "lazy"}
+          decoding="async"
+          fetchPriority={priority ? "high" : "auto"}
           onError={() => setImgError(true)}
           style={{ 
             position: "absolute", 

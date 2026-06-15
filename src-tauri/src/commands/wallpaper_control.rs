@@ -398,7 +398,7 @@ pub fn toggle_favorite(
 }
 
 #[tauri::command]
-pub fn apply_desktop_effects(
+pub async fn apply_desktop_effects(
     app_handle: tauri::AppHandle,
     layers_json: String,
 ) -> Result<(), String> {
@@ -407,9 +407,10 @@ pub fn apply_desktop_effects(
         .path()
         .app_local_data_dir()
         .unwrap_or_else(|_| std::path::PathBuf::from("."));
-    std::fs::create_dir_all(&data_dir).ok();
+    let _ = tokio::fs::create_dir_all(&data_dir).await;
     let config_path = data_dir.join("current_effects.json");
-    std::fs::write(config_path, &layers_json)
+    // OPTIMIZATION: Swapped synchronous write for async stream
+    tokio::fs::write(config_path, &layers_json).await
         .map_err(|e| format!("Failed to save current_effects.json: {}", e))?;
 
     // 2. Spawn Transparent Overlay Window to attach into layout grids
@@ -599,14 +600,15 @@ pub fn start_mouse_tracking(app_handle: tauri::AppHandle) {
 }
 
 #[tauri::command]
-pub fn get_current_effects(app_handle: tauri::AppHandle) -> Result<String, String> {
+pub async fn get_current_effects(app_handle: tauri::AppHandle) -> Result<String, String> {
     let data_dir = app_handle
         .path()
         .app_local_data_dir()
         .unwrap_or_else(|_| std::path::PathBuf::from("."));
     let config_path = data_dir.join("current_effects.json");
     if config_path.exists() {
-        std::fs::read_to_string(config_path).map_err(|e| e.to_string())
+        // OPTIMIZATION: Non-blocking file read
+        tokio::fs::read_to_string(config_path).await.map_err(|e| e.to_string())
     } else {
         Ok("{}".to_string())
     }

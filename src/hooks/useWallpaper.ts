@@ -154,6 +154,8 @@ export function useWallpaper() {
     return state.queue.some((q) => q.video.id === video.id || q.video.local_path === video.local_path);
   }, [state.queue]);
 
+  const callbacks = useWallpaperCallbacks(setState);
+
   return {
     ...state,
     applyWallpaper,
@@ -193,50 +195,95 @@ export function useWallpaper() {
     isFavorite,
     isQueued,
     // Add missing simple state setters as needed for the UI
-    setSource: (source: string) => setState(s => ({ ...s, source, page: 1 })),
-    setQuery: (query: string) => setState(s => ({ ...s, query, page: 1 })),
-    setPage: (page: number) => setState(s => ({ ...s, page })),
-    setResolutions: (resolutions: string | null) => setState(s => ({ ...s, resolutions, page: 1 })),
-    setRatios: (ratios: string | null) => setState(s => ({ ...s, ratios, page: 1 })),
-    setColors: (colors: string | null) => setState(s => ({ ...s, colors, page: 1 })),
-    setCategoriesFilter: async (categoriesFilter: string) => {
-      try {
-        const { invoke } = await getCoreApi();
-        const persisted = await invoke<PersistedState>("set_categories_filter", { categories: categoriesFilter });
-        setState((s) => ({ ...applyPersistedState(persisted, s), page: 1 }));
-      } catch (e) { console.error("Categories filter failed", e); }
-    },
-    setPurityFilter: async (purityFilter: string) => {
-      try {
-        const { invoke } = await getCoreApi();
-        const persisted = await invoke<PersistedState>("set_purity_filter", { purity: purityFilter });
-        setState((s) => ({ ...applyPersistedState(persisted, s), page: 1 }));
-      } catch (e) { console.error("Purity filter failed", e); }
-    },
-    setSlideshowSource: async (slideshowSource: string) => {
-      try {
-        const { invoke } = await getCoreApi();
-        const persisted = await invoke<PersistedState>("set_slideshow_source", { source: slideshowSource });
-        setState((s) => applyPersistedState(persisted, s));
-      } catch (e) { console.error("Slideshow source failed", e); }
-    },
-    setDiscoverProvider: async (provider: string) => {
-      try {
-        const { invoke } = await getCoreApi();
-        const persisted = await invoke<PersistedState>("set_discover_provider", { provider });
-        setState((s) => applyPersistedState(persisted, s));
-      } catch (e) { console.error("Discover provider failed", e); }
-    },
-    setSelectedMonitor: (monitor: DisplayMonitor | null) => setState(s => ({ ...s, selectedMonitor: monitor })),
-    setColorFilter: (colorFilter: string) => setState(s => {
-      // Keep old colorFilter logic just in case it's used elsewhere, but we map to colors
-      return { ...s, colorFilter, colors: colorFilter || null, page: 1 };
-    }),
-    setCategory: (category: string) => setState(s => {
-      const q = category === "all" ? "" : category;
-      return { ...s, category, query: q.trim(), page: 1 };
-    }),
-    selectVideo: (video: VideoResult) => setState(s => ({ ...s, currentVideo: video, previewDismissed: false })),
-    dismissPreview: () => setState(s => ({ ...s, previewDismissed: true })),
+    setSource: callbacks.setSource,
+    setQuery: callbacks.setQuery,
+    setPage: callbacks.setPage,
+    setResolutions: callbacks.setResolutions,
+    setRatios: callbacks.setRatios,
+    setColors: callbacks.setColors,
+    setCategoriesFilter: callbacks.setCategoriesFilter,
+    setPurityFilter: callbacks.setPurityFilter,
+    setSlideshowSource: callbacks.setSlideshowSource,
+    setDiscoverProvider: callbacks.setDiscoverProvider,
+    setSelectedMonitor: callbacks.setSelectedMonitor,
+    setColorFilter: callbacks.setColorFilter,
+    setCategory: callbacks.setCategory,
+    selectVideo: callbacks.selectVideo,
+    dismissPreview: callbacks.dismissPreview,
+  };
+}
+
+// Stable callback definitions
+function useWallpaperCallbacks(setState: React.Dispatch<React.SetStateAction<WallpaperState>>) {
+  const setSource = useCallback((source: string) => setState(s => ({ ...s, source, page: 1 })), [setState]);
+  const setQuery = useCallback((query: string) => setState(s => ({ ...s, query, page: 1 })), [setState]);
+  const setPage = useCallback((page: number) => setState(s => ({ ...s, page })), [setState]);
+  const setResolutions = useCallback((resolutions: string | null) => setState(s => ({ ...s, resolutions, page: 1 })), [setState]);
+  const setRatios = useCallback((ratios: string | null) => setState(s => ({ ...s, ratios, page: 1 })), [setState]);
+  const setColors = useCallback((colors: string | null) => setState(s => ({ ...s, colors, page: 1 })), [setState]);
+
+  const setCategoriesFilter = useCallback(async (categoriesFilter: string) => {
+    try {
+      const { invoke } = await getCoreApi();
+      const persisted = await invoke<PersistedState>("set_categories_filter", { categories: categoriesFilter });
+      setState((s) => ({ ...applyPersistedState(persisted, s), page: 1 }));
+    } catch (e) { console.error("Categories filter failed", e); }
+  }, [setState]);
+
+  const setPurityFilter = useCallback(async (purityFilter: string) => {
+    try {
+      const { invoke } = await getCoreApi();
+      const persisted = await invoke<PersistedState>("set_purity_filter", { purity: purityFilter });
+      setState((s) => ({ ...applyPersistedState(persisted, s), page: 1 }));
+    } catch (e) { console.error("Purity filter failed", e); }
+  }, [setState]);
+
+  const setSlideshowSource = useCallback(async (slideshowSource: string) => {
+    try {
+      const { invoke } = await getCoreApi();
+      const persisted = await invoke<PersistedState>("set_slideshow_source", { source: slideshowSource });
+      setState((s) => applyPersistedState(persisted, s));
+    } catch (e) { console.error("Slideshow source failed", e); }
+  }, [setState]);
+
+  const setDiscoverProvider = useCallback(async (provider: string) => {
+    try {
+      const { invoke } = await getCoreApi();
+      const persisted = await invoke<PersistedState>("set_discover_provider", { provider });
+      setState((s) => applyPersistedState(persisted, s));
+    } catch (e) { console.error("Discover provider failed", e); }
+  }, [setState]);
+
+  const setSelectedMonitor = useCallback((monitor: DisplayMonitor | null) => setState(s => ({ ...s, selectedMonitor: monitor })), [setState]);
+
+  const setColorFilter = useCallback((colorFilter: string) => setState(s => {
+    return { ...s, colorFilter, colors: colorFilter || null, page: 1 };
+  }), [setState]);
+
+  const setCategory = useCallback((category: string) => setState(s => {
+    const q = category === "all" ? "" : category;
+    return { ...s, category, query: q.trim(), page: 1 };
+  }), [setState]);
+
+  const selectVideo = useCallback((video: VideoResult) => setState(s => ({ ...s, currentVideo: video, previewDismissed: false })), [setState]);
+
+  const dismissPreview = useCallback(() => setState(s => ({ ...s, previewDismissed: true })), [setState]);
+
+  return {
+    setSource,
+    setQuery,
+    setPage,
+    setResolutions,
+    setRatios,
+    setColors,
+    setCategoriesFilter,
+    setPurityFilter,
+    setSlideshowSource,
+    setDiscoverProvider,
+    setSelectedMonitor,
+    setColorFilter,
+    setCategory,
+    selectVideo,
+    dismissPreview,
   };
 }

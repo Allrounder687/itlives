@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, startTransition, useRef } from "react";
+import { useState, useEffect, startTransition, useRef, memo } from "react";
 import { EffectLayer } from "./CanvasEffectRenderer";
 import { WebGLEffectRenderer } from "./WebGLEffectRenderer";
 import { VideoResult } from "@/hooks/useWallpaper";
@@ -20,7 +20,7 @@ interface EditorWorkspaceProps {
 }
 
 
-export function EditorWorkspace({ currentVideo, onSelectVideo, onApplyWallpaper, onUploadMedia, onStopWallpaper, recentWallpapers }: EditorWorkspaceProps) {
+export const EditorWorkspace = memo(function EditorWorkspace({ currentVideo, onSelectVideo, onApplyWallpaper, onUploadMedia, onStopWallpaper, recentWallpapers }: EditorWorkspaceProps) {
   const [layers, setLayers] = useState<EffectLayer[]>([]);
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
   const [isPreviewPaused, setIsPreviewPaused] = useState(true);
@@ -2151,4 +2151,4 @@ export function EditorWorkspace({ currentVideo, onSelectVideo, onApplyWallpaper,
 
     </div>
   );
-}
+});

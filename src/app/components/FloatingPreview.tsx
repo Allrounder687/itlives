@@ -2,7 +2,7 @@
 
 import { VideoResult } from "@/hooks/useWallpaper";
 import { VideoPreview } from "./VideoPreview";
-import { useState } from "react";
+import { useState, memo } from "react";
 
 interface FloatingPreviewProps {
   video: VideoResult;
@@ -24,7 +24,7 @@ interface FloatingPreviewProps {
   onEditEffects?: () => void;
 }
 
-export function FloatingPreview(props: FloatingPreviewProps) {
+export const FloatingPreview = memo(function FloatingPreview(props: FloatingPreviewProps) {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
 
@@ -81,4 +81,4 @@ export function FloatingPreview(props: FloatingPreviewProps) {
       </div>
     </div>
   );
-}
+});

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, memo } from "react";
 
 import { VideoResult } from "@/hooks/useWallpaper";
 import { isStaticWallpaper } from "@/utils/wallpaperTypes";
@@ -27,7 +27,7 @@ interface VideoPreviewProps {
   onEditEffects?: () => void;
 }
 
-export function VideoPreview({
+export const VideoPreview = memo(function VideoPreview({
   video,
   volumePercent,
   filterPreset,
@@ -236,8 +236,13 @@ export function VideoPreview({
         </div>
         
         {/* Dual Range Slider for Trimming Previews */}
-        {!isStaticImage && endTime > 0 && (
-          <div className="yt-range-section" style={{ padding: "12px", borderTop: "1px solid rgba(255,255,255,0.05)", background: "rgba(0,0,0,0.1)" }}>
+        {!isStaticImage && !isHtml && (
+          <div className="yt-range-section" style={{ 
+            padding: "12px", 
+            borderTop: "1px solid rgba(255,255,255,0.05)", 
+            background: "rgba(0,0,0,0.1)",
+            visibility: endTime > 0 ? "visible" : "hidden"
+          }}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px", alignItems: "center" }}>
               <span className="eyebrow" style={{ fontSize: "10px" }}>Trim Range Control</span>
               <span style={{ fontSize: "11px", color: "var(--accent)", fontWeight: 600 }}>
@@ -336,6 +341,7 @@ export function VideoPreview({
             gap: "14px",
             animation: "preview-spawn 0.3s ease-out"
           }}>
+
             <div className="spinner" style={{
               width: "42px",
               height: "42px",
@@ -385,7 +391,7 @@ export function VideoPreview({
       </div>
     </article>
   );
-}
+});
 
 function previewCssFilter(filterPreset: string, blur: number = 0) {
   let css = "none";

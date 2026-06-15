@@ -1,4 +1,4 @@
-import { useState, useEffect, RefObject } from 'react';
+import { useState, useEffect, useRef, RefObject } from 'react';
 
 function getVibrantColorFromCanvas(canvas: HTMLCanvasElement): string | null {
   const ctx = canvas.getContext('2d');
@@ -52,26 +52,38 @@ export function useDominantColor(
   isEnabled: boolean = true
 ) {
   const [dominantColor, setDominantColor] = useState<string>("#ffffff");
+  // OPTIMIZATION: Track last extracted color to avoid React re-renders if the color hasn't significantly changed
+  const lastColor = useRef<string>("#ffffff");
 
   useEffect(() => {
     if (!isEnabled || !mediaRef.current) return;
 
     const media = mediaRef.current;
+    // OPTIMIZATION: Reduce canvas size from 32x32 to 16x16 to cut pixels processed per frame by 75%
     const canvas = document.createElement("canvas");
-    canvas.width = 32;
-    canvas.height = 32;
+    canvas.width = 16;
+    canvas.height = 16;
     const ctx = canvas.getContext("2d");
 
     let intervalId: NodeJS.Timeout;
-    let frameId: number;
 
     const extract = () => {
       if (!ctx || !media) return;
       try {
-        ctx.drawImage(media, 0, 0, canvas.width, canvas.height);
-        const color = getVibrantColorFromCanvas(canvas);
-        if (color) {
-          setDominantColor(color);
+        // OPTIMIZATION: Wrap in requestIdleCallback (or fallback to setTimeout) to keep extraction off the main frame loop
+        const runExtraction = () => {
+          ctx.drawImage(media, 0, 0, canvas.width, canvas.height);
+          const color = getVibrantColorFromCanvas(canvas);
+          if (color && color !== lastColor.current) {
+            lastColor.current = color;
+            setDominantColor(color);
+          }
+        };
+
+        if ('requestIdleCallback' in window) {
+          (window as any).requestIdleCallback(runExtraction, { timeout: 500 });
+        } else {
+          setTimeout(runExtraction, 0);
         }
       } catch (e) {
         // Tainted canvas (CORS), just ignore
@@ -81,7 +93,8 @@ export function useDominantColor(
     if (media instanceof HTMLVideoElement) {
       const loop = () => {
         extract();
-        intervalId = setTimeout(loop, 2000); // Check every 2 seconds for video
+        // OPTIMIZATION: Throttle polling to every 5 seconds (5000ms) instead of 2 seconds
+        intervalId = setTimeout(loop, 5000); 
       };
       
       const onPlay = () => loop();
@@ -96,7 +109,6 @@ export function useDominantColor(
         media.removeEventListener("play", onPlay);
       };
     } else {
-      // It's an image
       if (media.complete) {
         extract();
       } else {

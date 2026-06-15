@@ -342,55 +342,46 @@ pub fn show_mini_player(app: tauri::AppHandle) -> Result<(), String> {
                 let hwnd = windows::Win32::Foundation::HWND(hwnd.0 as *mut std::ffi::c_void);
                 unsafe {
                     use windows::Win32::UI::WindowsAndMessaging::{
-                        ShowWindow, SetWindowPos, HWND_TOP, SW_SHOW,
+                        ShowWindow, SetWindowPos, HWND_TOPMOST, SW_SHOW,
                         GetWindowLongW, SetWindowLongW, GWL_STYLE, GWL_EXSTYLE,
                         WS_POPUP, WS_CAPTION, WS_THICKFRAME, WS_MINIMIZEBOX, WS_MAXIMIZEBOX, WS_SYSMENU,
-                        WS_EX_TOOLWINDOW, GWL_HWNDPARENT
+                        WS_EX_TOOLWINDOW
                     };
                     
-                    let workerw = crate::wallpaper::desktop::win32::get_desktop_workerw().unwrap_or(0);
-                    if workerw != 0 {
-                        // 1. Set the window owner to WorkerW.
-                        // Setting the owner (GWL_HWNDPARENT) on a WS_POPUP window pins it to the desktop layer
-                        // (above WorkerW wallpaper, but below all normal application windows), prevents it from
-                        // minimizing on Win+D (Show Desktop), and retains full interactivity.
-                        let _ = SetWindowLongW(hwnd, GWL_HWNDPARENT, workerw as i32);
+                    // 1. Ensure WS_POPUP style and remove standard caption/thickframes/system menus
+                    let old_style = GetWindowLongW(hwnd, GWL_STYLE) as u32;
+                    let mut new_style = old_style;
+                    new_style |= WS_POPUP.0;
+                    new_style &= !WS_CAPTION.0;
+                    new_style &= !WS_THICKFRAME.0;
+                    new_style &= !WS_MINIMIZEBOX.0;
+                    new_style &= !WS_MAXIMIZEBOX.0;
+                    new_style &= !WS_SYSMENU.0;
+                    let _ = SetWindowLongW(hwnd, GWL_STYLE, new_style as i32);
+                    
+                    // 2. Set extended window styles (exStyle: tool window, no taskbar)
+                    let old_ex = GetWindowLongW(hwnd, GWL_EXSTYLE) as u32;
+                    let new_ex = old_ex | WS_EX_TOOLWINDOW.0;
+                    let _ = SetWindowLongW(hwnd, GWL_EXSTYLE, new_ex as i32);
+                    
+                    // 3. Position it relative to the monitor (and keep it always on top)
+                    if let Ok(Some(monitor)) = window.current_monitor() {
+                        let monitor_size = monitor.size();
+                        let scale = monitor.scale_factor();
+                        let w = (320.0 * scale) as i32;
+                        let h = (420.0 * scale) as i32;
+                        let x = monitor_size.width as i32 - w - (20.0 * scale) as i32;
+                        let y = (monitor_size.height as i32 - h) / 2;
                         
-                        // 2. Ensure WS_POPUP style and remove standard caption/thickframes/system menus
-                        let old_style = GetWindowLongW(hwnd, GWL_STYLE) as u32;
-                        let mut new_style = old_style;
-                        new_style |= WS_POPUP.0;
-                        new_style &= !WS_CAPTION.0;
-                        new_style &= !WS_THICKFRAME.0;
-                        new_style &= !WS_MINIMIZEBOX.0;
-                        new_style &= !WS_MAXIMIZEBOX.0;
-                        new_style &= !WS_SYSMENU.0;
-                        let _ = SetWindowLongW(hwnd, GWL_STYLE, new_style as i32);
-                        
-                        // 3. Set extended window styles (exStyle: tool window, no taskbar)
-                        let old_ex = GetWindowLongW(hwnd, GWL_EXSTYLE) as u32;
-                        let new_ex = old_ex | WS_EX_TOOLWINDOW.0;
-                        let _ = SetWindowLongW(hwnd, GWL_EXSTYLE, new_ex as i32);
-                        
-                        // 4. Position it relative to the monitor
-                        if let Ok(Some(monitor)) = window.current_monitor() {
-                            let monitor_size = monitor.size();
-                            let scale = monitor.scale_factor();
-                            let w = (320.0 * scale) as i32;
-                            let h = (420.0 * scale) as i32;
-                            let x = monitor_size.width as i32 - w - (20.0 * scale) as i32;
-                            let y = (monitor_size.height as i32 - h) / 2;
-                            
-                            let _ = SetWindowPos(
-                                hwnd,
-                                HWND_TOP,
-                                x,
-                                y,
-                                w,
-                                h,
-                                windows::Win32::UI::WindowsAndMessaging::SWP_SHOWWINDOW,
-                            );
-                        }
+                        let _ = SetWindowPos(
+                            hwnd,
+                            HWND_TOPMOST,
+                            x,
+                            y,
+                            w,
+                            h,
+                            windows::Win32::UI::WindowsAndMessaging::SWP_SHOWWINDOW,
+                        );
                     }
                     
                     let _ = ShowWindow(hwnd, SW_SHOW);

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, memo } from "react";
 import { useNsfw } from "@/hooks/useNsfw";
 
 interface AdvancedFiltersProps {
@@ -79,7 +79,7 @@ const RESOLUTION_GROUPS = [
   }
 ];
 
-export function AdvancedFilters({
+export const AdvancedFilters = memo(function AdvancedFilters({
   resolutionFilter,
   ratioFilter,
   colorFilter,
@@ -146,7 +146,7 @@ export function AdvancedFilters({
   };
 
   return (
-    <div className="wh-filters-container" style={{ position: "relative", display: "flex", gap: "8px", marginBottom: "12px", flexWrap: "wrap" }} ref={dropdownRef}>
+    <div className="wh-filters-container" style={{ position: "relative", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: "8px", marginBottom: "12px" }} ref={dropdownRef}>
       
       {/* RESOLUTION BUTTON */}
       <div style={{ position: "relative" }}>
@@ -359,7 +359,7 @@ export function AdvancedFilters({
 
     </div>
   );
-}
+});
 
 const dropdownStyle: React.CSSProperties = {
   position: "absolute",

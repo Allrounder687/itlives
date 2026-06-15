@@ -116,7 +116,7 @@ export const Sidebar = React.memo(function Sidebar({ activeTab, setActiveTab, is
             title="Discover"
           >
             <div className="tab-icon">{ICONS.discover}</div>
-            {!isSidebarCollapsed && <span>Discover</span>}
+            <span>Discover</span>
           </button>
           <button
             type="button"
@@ -125,7 +125,7 @@ export const Sidebar = React.memo(function Sidebar({ activeTab, setActiveTab, is
             title="Library"
           >
             <div className="tab-icon">{ICONS.library}</div>
-            {!isSidebarCollapsed && <span>Library</span>}
+            <span>Library</span>
           </button>
           <button
             type="button"
@@ -134,7 +134,7 @@ export const Sidebar = React.memo(function Sidebar({ activeTab, setActiveTab, is
             title="Direct Launch"
           >
             <div className="tab-icon">{ICONS.direct}</div>
-            {!isSidebarCollapsed && <span>Direct Launch</span>}
+            <span>Direct Launch</span>
           </button>
           <button
             type="button"
@@ -143,7 +143,7 @@ export const Sidebar = React.memo(function Sidebar({ activeTab, setActiveTab, is
             title="Preview Deck"
           >
             <div className="tab-icon">{ICONS.preview}</div>
-            {!isSidebarCollapsed && <span>Preview Deck</span>}
+            <span>Preview Deck</span>
           </button>
           <button
             type="button"
@@ -152,7 +152,7 @@ export const Sidebar = React.memo(function Sidebar({ activeTab, setActiveTab, is
             title="Parallax Engine"
           >
             <div className="tab-icon">{ICONS.parallax}</div>
-            {!isSidebarCollapsed && <span>Parallax Engine</span>}
+            <span>Parallax Engine</span>
           </button>
           <button
             type="button"
@@ -161,7 +161,7 @@ export const Sidebar = React.memo(function Sidebar({ activeTab, setActiveTab, is
             title="Effects Editor"
           >
             <div className="tab-icon">✨</div>
-            {!isSidebarCollapsed && <span>Effects Editor</span>}
+            <span>Effects Editor</span>
           </button>
 
           <button
@@ -171,7 +171,7 @@ export const Sidebar = React.memo(function Sidebar({ activeTab, setActiveTab, is
             title="Web Video"
           >
             <div className="tab-icon">{ICONS.youtube}</div>
-            {!isSidebarCollapsed && <span>Web Video</span>}
+            <span>Web Video</span>
           </button>
           <button
             type="button"
@@ -180,7 +180,7 @@ export const Sidebar = React.memo(function Sidebar({ activeTab, setActiveTab, is
             title="Community"
           >
             <div className="tab-icon">{ICONS.community}</div>
-            {!isSidebarCollapsed && <span>Community</span>}
+            <span>Community</span>
           </button>
           <button
             type="button"
@@ -189,9 +189,28 @@ export const Sidebar = React.memo(function Sidebar({ activeTab, setActiveTab, is
             title="Settings"
           >
             <div className="tab-icon">{ICONS.settings}</div>
-            {!isSidebarCollapsed && <span>Settings</span>}
+            <span>Settings</span>
           </button>
         </div>
+      </div>
+
+      <div className="sidebar-section" style={{ marginTop: 'auto', paddingTop: '16px', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+        <button
+          type="button"
+          className="sidebar-list__item sidebar-list__item--clickable"
+          onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+          title={isSidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+          style={{ justifyContent: isSidebarCollapsed ? 'center' : 'flex-start' }}
+        >
+          <div className="tab-icon">
+            {isSidebarCollapsed ? (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+            ) : (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+            )}
+          </div>
+          <span>Collapse</span>
+        </button>
       </div>
 
       {showPinModal && typeof document !== "undefined" && createPortal(

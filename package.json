@@ -17,7 +17,7 @@
     "@react-three/rapier": "^2.2.0",
     "@tauri-apps/api": "^2.10.1",
     "@tauri-apps/plugin-autostart": "^2.5.1",
-    "@tauri-apps/plugin-dialog": "^2.6.0",
+    "@tauri-apps/plugin-dialog": "^2.7.1",
     "@tauri-apps/plugin-http": "^2.5.9",
     "@types/three": "^0.184.1",
     "kokoro-js": "^1.2.1",

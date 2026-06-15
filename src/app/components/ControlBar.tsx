@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, memo } from "react";
 import { BatchDownloadModal } from "./BatchDownloadModal";
 import { AdvancedFilters } from "./AdvancedFilters";
 import DisplaySelector from "./DisplaySelector";
@@ -64,7 +64,7 @@ const WALLHAVEN_CATEGORIES = [
   { label: "Food/Drink", value: "https://wallhaven.cc/user/DeviateFish/collections/131464", count: 3066 }
 ].sort((a, b) => b.count - a.count);
 
-export function ControlBar({
+export const ControlBar = memo(function ControlBar({
   source,
   query,
   isLoading,
@@ -649,4 +649,4 @@ export function ControlBar({
       )}
     </div>
   );
-}
+});

@@ -99,7 +99,7 @@ export function HeroPanel({ wallpaper, activeTab, onEditEffects }: HeroPanelProp
           paddingTop: "12px",
           borderTop: "1px solid rgba(255,255,255,0.05)"
         }}>
-          {tags.map(tag => (
+          {Array.from(new Set(tags)).map(tag => (
             <button
               key={tag}
               onClick={() => {

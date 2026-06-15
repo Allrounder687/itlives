@@ -66,7 +66,7 @@ fn restore_wallpaper_if_enabled(app: tauri::AppHandle, store: &AppStateStore) {
                     if let Err(e) = crate::commands::wallpaper_control::apply_desktop_effects(
                         app_clone,
                         layers_json,
-                    ) {
+                    ).await {
                         log::error!("[Startup] Failed to restore desktop effects overlay: {}", e);
                     } else {
                         log::info!("[Startup] Desktop effects overlay restored successfully!");

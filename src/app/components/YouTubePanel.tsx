@@ -1,7 +1,7 @@
 "use client";
 
 import { useYouTube, YtMetaResult } from "@/hooks/useYouTube";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, memo } from "react";
 
 interface YouTubePanelProps {
   onApplyWallpaper: (video: any) => void;
@@ -30,7 +30,7 @@ const QUALITIES = [
   { label: "2160p (4K)", value: 2160 },
 ];
 
-export function YouTubePanel({ onApplyWallpaper, onStop, isPlaying }: YouTubePanelProps) {
+export const YouTubePanel = memo(function YouTubePanel({ onApplyWallpaper, onStop, isPlaying }: YouTubePanelProps) {
   const yt = useYouTube();
   const clipDuration = yt.endTime - yt.startTime;
   const playerRef = useRef<HTMLIFrameElement>(null);
@@ -627,4 +627,4 @@ export function YouTubePanel({ onApplyWallpaper, onStop, isPlaying }: YouTubePan
       )}
     </section>
   );
-}
+});

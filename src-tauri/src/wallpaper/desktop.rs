@@ -99,11 +99,11 @@ pub mod win32 {
         if let Ok(sh) = shell {
             if !sh.is_invalid() {
                 // This is the window that actually holds the icons!
-            // The old PowerShell script embedded directly into this window, and shoved mpv behind SHELLDLL_DefView.
-            if let Ok(mut g) = FOUND_WORKERW.lock() {
-                *g = hwnd.0 as isize;
+                if let Ok(mut g) = FOUND_WORKERW.lock() {
+                    *g = hwnd.0 as isize;
+                }
+                return BOOL(0);
             }
-            return BOOL(0);
         }
         BOOL(1)
     }
@@ -813,39 +813,40 @@ pub fn cleanup_cache(keep: usize) -> Result<usize, String> {
         return Ok(0);
     }
 
-    let mut entries: Vec<_> = std::fs::read_dir(&cache_dir)
-        .map_err(|e| e.to_string())?
-        .filter_map(|e| e.ok())
-        .filter(|e| {
-            e.path().extension().is_some_and(|ext| {
-                let ext_str = ext.to_string_lossy().to_lowercase();
-                ext_str == "mp4"
-                    || ext_str == "jpg"
-                    || ext_str == "jpeg"
-                    || ext_str == "png"
-                    || ext_str == "webp"
+    // OPTIMIZATION: Shifted intensive file stat & remove operations off the main caller thread
+    std::thread::spawn(move || {
+        let mut entries: Vec<_> = std::fs::read_dir(&cache_dir)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .filter(|e| {
+                e.path().extension().is_some_and(|ext| {
+                    let ext_str = ext.to_string_lossy().to_lowercase();
+                    ext_str == "mp4"
+                        || ext_str == "jpg"
+                        || ext_str == "jpeg"
+                        || ext_str == "png"
+                        || ext_str == "webp"
+                })
             })
-        })
-        .collect();
+            .collect();
 
-    entries.sort_by_key(|e| {
-        std::cmp::Reverse(
-            e.metadata()
-                .ok()
-                .and_then(|m| m.modified().ok())
-                .unwrap_or(std::time::SystemTime::UNIX_EPOCH),
-        )
-    });
+        entries.sort_by_key(|e| {
+            std::cmp::Reverse(
+                e.metadata()
+                    .ok()
+                    .and_then(|m| m.modified().ok())
+                    .unwrap_or(std::time::SystemTime::UNIX_EPOCH),
+            )
+        });
 
-    let mut removed = 0;
-    if entries.len() > keep {
-        for entry in &entries[keep..] {
-            if std::fs::remove_file(entry.path()).is_ok() {
-                removed += 1;
+        if entries.len() > keep {
+            for entry in &entries[keep..] {
+                let _ = std::fs::remove_file(entry.path());
             }
         }
-    }
-    Ok(removed)
+    });
+
+    Ok(0)
 }
 
 fn process_static_image_if_needed(path: &str) -> Result<String, String> {
