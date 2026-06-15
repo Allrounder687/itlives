@@ -3,6 +3,7 @@
 import React, { useState, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useNsfw } from "@/hooks/useNsfw";
+import { useAddons } from "@/hooks/useAddons";
 
 const ICONS = {
   discover: (
@@ -55,7 +56,7 @@ const ICONS = {
   ),
 };
 
-export type TabState = "discover" | "library" | "direct" | "preview" | "editor" | "youtube" | "parallax" | "settings" | "community";
+export type TabState = "discover" | "library" | "direct" | "preview" | "editor" | "youtube" | "parallax" | "settings" | "community" | "addons";
 
 interface SidebarProps {
   activeTab: TabState;
@@ -66,6 +67,7 @@ interface SidebarProps {
 
 export const Sidebar = React.memo(function Sidebar({ activeTab, setActiveTab, isSidebarCollapsed, setIsSidebarCollapsed }: SidebarProps) {
   const { isUnlocked, unlockNsfw } = useNsfw();
+  const { isAddonInstalled } = useAddons();
   const [showPinModal, setShowPinModal] = useState(false);
   const [pin, setPin] = useState("");
   const [pinError, setPinError] = useState(false);
@@ -164,15 +166,18 @@ export const Sidebar = React.memo(function Sidebar({ activeTab, setActiveTab, is
             <span>Effects Editor</span>
           </button>
 
-          <button
-            type="button"
-            className={`sidebar-list__item sidebar-list__item--clickable ${activeTab === "youtube" ? "sidebar-list__item--active" : ""}`}
-            onClick={() => setActiveTab("youtube")}
-            title="Web Video"
-          >
-            <div className="tab-icon">{ICONS.youtube}</div>
-            <span>Web Video</span>
-          </button>
+          {isAddonInstalled("youtube-dl") && (
+            <button
+              type="button"
+              className={`sidebar-list__item sidebar-list__item--clickable ${activeTab === "youtube" ? "sidebar-list__item--active" : ""}`}
+              onClick={() => setActiveTab("youtube")}
+              title="Web Video"
+            >
+              <div className="tab-icon">{ICONS.youtube}</div>
+              <span>Web Video</span>
+            </button>
+          )}
+
           <button
             type="button"
             className={`sidebar-list__item sidebar-list__item--clickable ${activeTab === "community" ? "sidebar-list__item--active" : ""}`}
@@ -181,6 +186,15 @@ export const Sidebar = React.memo(function Sidebar({ activeTab, setActiveTab, is
           >
             <div className="tab-icon">{ICONS.community}</div>
             <span>Community</span>
+          </button>
+          <button
+            type="button"
+            className={`sidebar-list__item sidebar-list__item--clickable ${activeTab === "addons" ? "sidebar-list__item--active" : ""}`}
+            onClick={() => setActiveTab("addons")}
+            title="Addons Marketplace"
+          >
+            <div className="tab-icon">📦</div>
+            <span>Addons</span>
           </button>
           <button
             type="button"

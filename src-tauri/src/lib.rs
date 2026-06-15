@@ -259,6 +259,7 @@ pub fn run() {
             commands::settings::list_sources,
             commands::settings::cleanup_cache,
             commands::wallpaper_control::toggle_favorite,
+            commands::wallpaper_control::get_file_modified_time,
             commands::settings::get_app_state,
             commands::settings::set_lightweight_mode,
             commands::queue::add_to_queue,
@@ -318,6 +319,10 @@ pub fn run() {
             commands::window_info::get_active_window,
             commands::shell_control::toggle_desktop_icons,
             commands::shell_control::set_taskbar_state,
+            commands::addon_manager::fetch_addon_registry,
+            commands::addon_manager::install_addon,
+            commands::addon_manager::uninstall_addon,
+            commands::addon_manager::list_installed_addons,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

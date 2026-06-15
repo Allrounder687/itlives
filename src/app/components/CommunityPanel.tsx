@@ -42,11 +42,17 @@ export function CommunityPanel({ currentWallpaper }: CommunityPanelProps) {
         {currentWallpaper ? (
           <div style={{ display: "flex", gap: "2rem", alignItems: "center" }}>
             <div style={{ width: "200px", height: "120px", borderRadius: "8px", overflow: "hidden", border: "2px solid var(--accent)" }}>
-                <img 
-                    src={currentWallpaper.thumbnail_url} 
-                    alt="Preview" 
-                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                />
+                {currentWallpaper.thumbnail_url ? (
+                  <img 
+                      src={currentWallpaper.thumbnail_url} 
+                      alt="Preview" 
+                      style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                  />
+                ) : (
+                  <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(255,255,255,0.05)", fontSize: "12px", color: "rgba(255,255,255,0.5)" }}>
+                    No Preview
+                  </div>
+                )}
             </div>
             <div style={{ flex: 1 }}>
                 <h3 style={{ marginBottom: "0.5rem" }}>{currentWallpaper.id.replace(/-/g, " ")}</h3>

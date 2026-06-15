@@ -5,7 +5,7 @@ import { useState, useEffect, useRef, useCallback, useTransition, useMemo } from
 import { useWallpaper } from "@/hooks/useWallpaper";
 import { TitleBar } from "./components/TitleBar";
 import { Sidebar, TabState } from "./components/Sidebar";
-
+import { useAddons } from "@/hooks/useAddons";
 
 const MasterHUD = dynamic(() => import("./components/MasterHUD").then((m) => m.MasterHUD), { ssr: false });
 const ControlBar = dynamic(() => import("./components/ControlBar").then((m) => m.ControlBar), { ssr: false });
@@ -25,12 +25,23 @@ const WebGLEffectRenderer = dynamic(() => import("./components/WebGLEffectRender
 const ParallaxWorkspace = dynamic(() => import("./components/ParallaxWorkspace").then((m) => m.ParallaxWorkspace), { ssr: false });
 const CommunityPanel = dynamic(() => import("./components/CommunityPanel").then((m) => m.CommunityPanel), { ssr: false });
 const FloatingPreview = dynamic(() => import("./components/FloatingPreview").then((m) => m.FloatingPreview), { ssr: false });
+const AddonsMarketplace = dynamic(() => import("./components/AddonsMarketplace").then((m) => m.AddonsMarketplace), { ssr: false });
 
 function Home() {
   const wallpaper = useWallpaper();
+  const { isAddonInstalled } = useAddons();
   const [activeTab, setActiveTab] = useState<TabState>("discover");
   const [renderedTab, setRenderedTab] = useState<TabState>("discover");
   const [isPending, startTransition] = useTransition();
+
+  const isSourceAvailable = useCallback((src: string) => {
+    if (src === "unified") return isAddonInstalled("scraper-unified");
+    if (src === "wallpaperwaves") return isAddonInstalled("scraper-wpwaves");
+    if (src === "alphacoders") return isAddonInstalled("scraper-alphacoders");
+    if (src === "wallhaven") return isAddonInstalled("scraper-wallhaven");
+    if (src === "pinterest") return isAddonInstalled("scraper-pinterest");
+    return true; // direct, youtube (handled in its own tab)
+  }, [isAddonInstalled]);
 
   const handleTabChange = useCallback((tab: TabState) => {
     setActiveTab(tab);
@@ -136,6 +147,7 @@ function Home() {
     if (wallpaper.isHydrating) return;
     if (wallpaper.source === "direct") return;
     if (activeTab !== "discover") return;
+    if (!isSourceAvailable(wallpaper.source)) return;
 
     const urlsHash = JSON.stringify(wallpaper.pinterestUrls);
 
@@ -198,7 +210,8 @@ function Home() {
     wallpaper.colors,
     wallpaper.categoriesFilter,
     wallpaper.purityFilter,
-    activeTab
+    activeTab,
+    isSourceAvailable
   ]);
 
   const handleFetchAndApply = useCallback(async () => {
@@ -339,14 +352,20 @@ function Home() {
           onCategoriesFilterChange={wallpaper.setCategoriesFilter}
           onPurityFilterChange={wallpaper.setPurityFilter}
         />
-        <SearchResults
-          results={wallpaper.searchResults} onSelect={wallpaper.selectVideo}
-          page={wallpaper.page} onPageChange={wallpaper.setPage}
-          isLoading={wallpaper.isLoading}
-          hasMore={wallpaper.hasMore ?? true}
-          duplicateNotice={wallpaper.duplicateNotice}
-          onEditEffects={handleEditEffects}
-        />
+        {isSourceAvailable(wallpaper.source) ? (
+          <SearchResults
+            results={wallpaper.searchResults} onSelect={wallpaper.selectVideo}
+            page={wallpaper.page} onPageChange={wallpaper.setPage}
+            isLoading={wallpaper.isLoading}
+            hasMore={wallpaper.hasMore ?? true}
+            duplicateNotice={wallpaper.duplicateNotice}
+            onEditEffects={handleEditEffects}
+          />
+        ) : (
+          <div style={{ padding: "40px", textAlign: "center", color: "var(--text-soft)" }}>
+            <p>Source requires an addon. Please go to the <strong>Addons Marketplace</strong>.</p>
+          </div>
+        )}
         {wallpaper.isLoading && wallpaper.page === 1 && <div className="skeleton skeleton-preview" />}
       </section>
     );
@@ -381,9 +400,9 @@ function Home() {
     wallpaper.setColors,
     wallpaper.setCategoriesFilter,
     wallpaper.setPurityFilter,
-    wallpaper.selectVideo,
     wallpaper.setPage,
-    handleEditEffects
+    handleEditEffects,
+    isSourceAvailable
   ]);
 
   const libraryPanel = useMemo(() => {
@@ -569,6 +588,11 @@ function Home() {
   const parallaxPanel = useMemo(() => {
     if (renderedTab !== "parallax") return null;
     return <ParallaxWorkspace />;
+  }, [renderedTab]);
+
+  const addonsPanel = useMemo(() => {
+    if (renderedTab !== "addons") return null;
+    return <AddonsMarketplace />;
   }, [renderedTab]);
 
   const titleBarElement = useMemo(() => {
@@ -789,6 +813,7 @@ function Home() {
           {youtubePanel}
           {editorPanel}
           {parallaxPanel}
+          {addonsPanel}
 
           {masterHudElement}
         </main>

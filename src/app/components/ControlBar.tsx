@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect, memo } from "react";
+import { useState, useEffect, memo, useMemo } from "react";
 import { BatchDownloadModal } from "./BatchDownloadModal";
 import { AdvancedFilters } from "./AdvancedFilters";
 import DisplaySelector from "./DisplaySelector";
+import { useAddons } from "@/hooks/useAddons";
 
 interface ControlBarProps {
   source: string;
@@ -91,6 +92,23 @@ export const ControlBar = memo(function ControlBar({
   onCategoriesFilterChange,
   onPurityFilterChange,
 }: ControlBarProps) {
+  const { isAddonInstalled } = useAddons();
+  const hasUnified = isAddonInstalled("scraper-unified");
+  const hasWPWaves = isAddonInstalled("scraper-wpwaves");
+  const hasAlphaCoders = isAddonInstalled("scraper-alphacoders");
+  const hasWallhaven = isAddonInstalled("scraper-wallhaven");
+  const hasPinterest = isAddonInstalled("scraper-pinterest");
+
+  const availableSources = useMemo(() => {
+    const sources = [];
+    if (hasUnified) sources.push({ id: "unified", label: "🎥 Unified Live", desc: "Combined live loops" });
+    if (hasAlphaCoders) sources.push({ id: "alphacoders", label: "🎬 AlphaCoders", desc: "Live video loops" });
+    if (hasWPWaves) sources.push({ id: "wallpaperwaves", label: "🌊 WP Waves", desc: "Premium loops" });
+    if (hasWallhaven) sources.push({ id: "wallhaven", label: "🖼️ WallHaven", desc: "Premium static images" });
+    if (hasPinterest) sources.push({ id: "pinterest", label: "📌 Pinterest", desc: "Art & static designs" });
+    return sources;
+  }, [hasUnified, hasWPWaves, hasAlphaCoders, hasWallhaven, hasPinterest]);
+
   const [showPinterestSources, setShowPinterestSources] = useState(true);
   const [newPinUrl, setNewPinUrl] = useState("");
   const [pinAddStatus, setPinAddStatus] = useState<"idle" | "adding" | "added" | "duplicate">("idle");
@@ -175,7 +193,7 @@ export const ControlBar = memo(function ControlBar({
         </span>
       </div>
 
-      {source !== "direct" && (
+      {source !== "direct" && availableSources.length > 0 && (
         <div className="source-selector" style={{ 
           display: "flex", 
           flexWrap: "wrap",
@@ -186,13 +204,7 @@ export const ControlBar = memo(function ControlBar({
           border: "1px solid rgba(255, 255, 255, 0.05)",
           marginBottom: "12px"
         }}>
-          {[
-            { id: "unified", label: "🎥 Unified Live", desc: "Combined live loops" },
-            { id: "alphacoders", label: "🎬 AlphaCoders", desc: "Live video loops" },
-            { id: "wallpaperwaves", label: "🌊 WP Waves", desc: "Premium loops" },
-            { id: "wallhaven", label: "🖼️ WallHaven", desc: "Premium static images" },
-            { id: "pinterest", label: "📌 Pinterest", desc: "Art & static designs" }
-          ].map((src) => (
+          {availableSources.map((src) => (
             <button
               key={src.id}
               type="button"
@@ -521,124 +533,142 @@ export const ControlBar = memo(function ControlBar({
         </div>
       )}
 
-      <DisplaySelector />
-
-      <div className="control-grid-v2">
-        <div className="field">
-          <span className="field__label">
-            {source === "direct" ? "Integrated Video Feed URL or local path" : "Search Query"}
-          </span>
-          <div className="input-group">
-            <input
-              className="input input--hud"
-              type="text"
-              placeholder={source === "direct" ? "Paste an .mp4 URL or local file path" : "Search worldwide live wallpapers..."}
-              value={query}
-              onChange={(e) => handleQueryChange(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  onFetchAndApply();
-                }
-              }}
-            />
-            {source === "direct" && (
-                <button
-                  type="button"
-                  className="action-btn action-btn--accent-ghost"
-                  onClick={onBrowseLocalFile}
-                  disabled={isLoading}
-                >
-                  Browse Local
-                </button>
-            )}
-          </div>
+      {source !== "direct" && availableSources.length === 0 ? (
+        <div style={{
+          textAlign: "center",
+          padding: "24px",
+          background: "rgba(0, 0, 0, 0.2)",
+          borderRadius: "12px",
+          border: "1px dashed rgba(255, 255, 255, 0.1)",
+          marginBottom: "16px"
+        }}>
+          <h3 style={{ margin: "0 0 8px 0", color: "var(--text)" }}>No Sources Installed</h3>
+          <p style={{ margin: 0, color: "var(--text-soft)", fontSize: "14px" }}>
+            The Discover tab is empty. Please visit the <strong>Addons Marketplace</strong> to install wallpaper scrapers and video feeds.
+          </p>
         </div>
-      </div>
-
-      {source !== "direct" && (
+      ) : (
         <>
-          <div className="categories-scroll" style={{ display: "flex", flexWrap: "wrap", gap: "8px", paddingBottom: "8px" }}>
-            {source === "wallhaven" ? (
-              [{label: "All", value: "all", count: 0}, ...wallhavenCollections].map((cat) => {
-                const isActive = (category || "all").toLowerCase() === cat.value.toLowerCase();
-                const heatmapColor = (!isActive && cat.count) ? getHeatmapColor(cat.count, maxCollectionCount) : undefined;
-                return (
-                  <button
-                    key={cat.label}
-                    type="button"
-                    className={`pill ${isActive ? "" : "pill--muted"}`}
-                    style={{ 
-                      padding: "6px 14px", 
-                      cursor: "pointer", 
-                      border: "none", 
-                      whiteSpace: "nowrap", 
-                      minWidth: "fit-content",
-                      background: heatmapColor,
-                      color: heatmapColor ? "#fff" : undefined
-                    }}
-                    onClick={() => onCategoryChange && onCategoryChange(cat.value)}
-                  >
-                    {cat.label} {cat.count ? `(${cat.count.toLocaleString()})` : ''}
-                  </button>
-                );
-              })
-            ) : (source === "wallpaperwaves" ? WALLPAPERWAVES_CATEGORIES : CATEGORIES).map((cat) => (
-              <button
-                key={cat}
-                type="button"
-                className={`pill ${(category || "all").toLowerCase() === cat.toLowerCase() ? "" : "pill--muted"}`}
-                style={{ padding: "6px 14px", cursor: "pointer", border: "none", whiteSpace: "nowrap", minWidth: "fit-content" }}
-                onClick={() => onCategoryChange && onCategoryChange(cat.toLowerCase())}
-              >
-                {cat}
-              </button>
-            ))}
-          </div>
-          
-          {source === "wallhaven" && category.startsWith("http") && (
-            <div style={{ marginTop: "4px", marginBottom: "12px", display: "flex", justifyContent: "flex-end" }}>
-              <button
-                type="button"
-                className="action-btn action-btn--secondary"
-                style={{ padding: "4px 12px", fontSize: "11px", gap: "6px" }}
-                onClick={() => setBatchDownloadModalOpen(true)}
-              >
-                ⬇️ Batch Download Collection
-              </button>
+          <DisplaySelector />
+
+          <div className="control-grid-v2">
+            <div className="field">
+              <span className="field__label">
+                {source === "direct" ? "Integrated Video Feed URL or local path" : "Search Query"}
+              </span>
+              <div className="input-group">
+                <input
+                  className="input input--hud"
+                  type="text"
+                  placeholder={source === "direct" ? "Paste an .mp4 URL or local file path" : "Search worldwide live wallpapers..."}
+                  value={query}
+                  onChange={(e) => handleQueryChange(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      onFetchAndApply();
+                    }
+                  }}
+                />
+                {source === "direct" && (
+                    <button
+                      type="button"
+                      className="action-btn action-btn--accent-ghost"
+                      onClick={onBrowseLocalFile}
+                      disabled={isLoading}
+                    >
+                      Browse Local
+                    </button>
+                )}
+              </div>
             </div>
+          </div>
+
+          {source !== "direct" && (
+            <>
+              <div className="categories-scroll" style={{ display: "flex", flexWrap: "wrap", gap: "8px", paddingBottom: "8px" }}>
+                {source === "wallhaven" ? (
+                  [{label: "All", value: "all", count: 0}, ...wallhavenCollections].map((cat) => {
+                    const isActive = (category || "all").toLowerCase() === cat.value.toLowerCase();
+                    const heatmapColor = (!isActive && cat.count) ? getHeatmapColor(cat.count, maxCollectionCount) : undefined;
+                    return (
+                      <button
+                        key={cat.label}
+                        type="button"
+                        className={`pill ${isActive ? "" : "pill--muted"}`}
+                        style={{ 
+                          padding: "6px 14px", 
+                          cursor: "pointer", 
+                          border: "none", 
+                          whiteSpace: "nowrap", 
+                          minWidth: "fit-content",
+                          background: heatmapColor,
+                          color: heatmapColor ? "#fff" : undefined
+                        }}
+                        onClick={() => onCategoryChange && onCategoryChange(cat.value)}
+                      >
+                        {cat.label} {cat.count ? `(${cat.count.toLocaleString()})` : ''}
+                      </button>
+                    );
+                  })
+                ) : (source === "wallpaperwaves" ? WALLPAPERWAVES_CATEGORIES : CATEGORIES).map((cat) => (
+                  <button
+                    key={cat}
+                    type="button"
+                    className={`pill ${(category || "all").toLowerCase() === cat.toLowerCase() ? "" : "pill--muted"}`}
+                    style={{ padding: "6px 14px", cursor: "pointer", border: "none", whiteSpace: "nowrap", minWidth: "fit-content" }}
+                    onClick={() => onCategoryChange && onCategoryChange(cat.toLowerCase())}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+              
+              {source === "wallhaven" && category.startsWith("http") && (
+                <div style={{ marginTop: "4px", marginBottom: "12px", display: "flex", justifyContent: "flex-end" }}>
+                  <button
+                    type="button"
+                    className="action-btn action-btn--secondary"
+                    style={{ padding: "4px 12px", fontSize: "11px", gap: "6px" }}
+                    onClick={() => setBatchDownloadModalOpen(true)}
+                  >
+                    ⬇️ Batch Download Collection
+                  </button>
+                </div>
+              )}
+              
+              {!category.startsWith("http") && source !== "direct" && source !== "youtube" && (
+                <AdvancedFilters 
+                  resolutionFilter={resolutions || null}
+                  ratioFilter={ratios || null}
+                  colorFilter={colors || null}
+                  onResolutionChange={onResolutionsChange || (() => {})}
+                  onRatioChange={onRatiosChange || (() => {})}
+                  onColorChange={onColorsChange || (() => {})}
+                  categoriesFilter={categoriesFilter}
+                  purityFilter={purityFilter}
+                  onCategoriesChange={onCategoriesFilterChange}
+                  onPurityChange={onPurityFilterChange}
+                  showColorFilter={true}
+                />
+              )}
+            </>
           )}
-          
-          {!category.startsWith("http") && source !== "direct" && source !== "youtube" && (
-            <AdvancedFilters 
-              resolutionFilter={resolutions || null}
-              ratioFilter={ratios || null}
-              colorFilter={colors || null}
-              onResolutionChange={onResolutionsChange || (() => {})}
-              onRatioChange={onRatiosChange || (() => {})}
-              onColorChange={onColorsChange || (() => {})}
-              categoriesFilter={categoriesFilter}
-              purityFilter={purityFilter}
-              onCategoriesChange={onCategoriesFilterChange}
-              onPurityChange={onPurityFilterChange}
-              showColorFilter={true}
-            />
-          )}
+
+          <div className="action-row action-row--hud" style={{ marginTop: "4px" }}>
+            <button className="action-btn action-btn--primary" onClick={onFetchAndApply} disabled={isLoading}>
+              {isLoading ? "Syncing..." : "Fetch and Deploy"}
+            </button>
+
+            <button className="action-btn action-btn--secondary" onClick={onFetch} disabled={isLoading}>
+              Preview Stream
+            </button>
+
+            <button className="action-btn action-btn--ghost" onClick={onStop}>
+              Unload Engine
+            </button>
+          </div>
         </>
       )}
-
-      <div className="action-row action-row--hud" style={{ marginTop: "4px" }}>
-        <button className="action-btn action-btn--primary" onClick={onFetchAndApply} disabled={isLoading}>
-          {isLoading ? "Syncing..." : "Fetch and Deploy"}
-        </button>
-
-        <button className="action-btn action-btn--secondary" onClick={onFetch} disabled={isLoading}>
-          Preview Stream
-        </button>
-
-        <button className="action-btn action-btn--ghost" onClick={onStop}>
-          Unload Engine
-        </button>
-      </div>
 
       {batchDownloadModalOpen && (
         <BatchDownloadModal
