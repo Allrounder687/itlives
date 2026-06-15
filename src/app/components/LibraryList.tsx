@@ -3,7 +3,7 @@
 import { useState, memo, useEffect } from "react";
 import { getCoreApi } from "@/utils/tauriApis";
 import { LibraryItem } from "@/hooks/useWallpaper";
-import { isStaticWallpaper } from "@/utils/wallpaperTypes";
+import { isStaticWallpaper, formatVideoTitle } from "@/utils/wallpaperTypes";
 import { HoverVideo } from "./HoverVideo";
 
 interface UnifiedLibraryProps {
@@ -47,6 +47,7 @@ export const UnifiedLibrary = memo(function UnifiedLibrary({
 }: UnifiedLibraryProps) {
   const [filter, setFilter] = useState<"all" | "favorites" | "recents" | "local" | "interactive" | "icon_physics">("all");
   const [typeFilter, setTypeFilter] = useState<"all" | "live" | "static">("all");
+  const [searchQuery, setSearchQuery] = useState("");
   const [interactives, setInteractives] = useState<LibraryItem[]>([]);
 
   useEffect(() => {
@@ -75,7 +76,7 @@ export const UnifiedLibrary = memo(function UnifiedLibrary({
 
     favorites.forEach(item => {
       const key = `${item.video.id}:${item.video.local_path}`;
-      map.set(key, { ...item, isFavorite: true, saved_at: item.saved_at || Date.now() / 1000 });
+      map.set(key, { ...item, isFavorite: true, saved_at: item.saved_at || 0 });
     });
 
     recents.forEach(item => {
@@ -83,7 +84,7 @@ export const UnifiedLibrary = memo(function UnifiedLibrary({
       if (map.has(key)) {
         map.get(key)!.isRecent = true;
       } else {
-        map.set(key, { ...item, isRecent: true, saved_at: item.saved_at || Date.now() / 1000 });
+        map.set(key, { ...item, isRecent: true, saved_at: item.saved_at || 0 });
       }
     });
 
@@ -92,14 +93,14 @@ export const UnifiedLibrary = memo(function UnifiedLibrary({
       if (map.has(key)) {
         map.get(key)!.isLocal = true;
       } else {
-        map.set(key, { ...item, isLocal: true, saved_at: item.saved_at || Date.now() / 1000 });
+        map.set(key, { ...item, isLocal: true, saved_at: item.saved_at || 0 });
       }
     });
 
     interactives.forEach(item => {
       const key = `${item.video.id}:${item.video.local_path}`;
       if (!map.has(key)) {
-        map.set(key, { ...item, isLocal: true, saved_at: item.saved_at || Date.now() / 1000 });
+        map.set(key, { ...item, isLocal: true, saved_at: item.saved_at || 0 });
       }
     });
 
@@ -109,6 +110,7 @@ export const UnifiedLibrary = memo(function UnifiedLibrary({
   const combinedItems = getCombinedItems();
 
   const filteredItems = combinedItems.filter(item => {
+    if (searchQuery && !formatVideoTitle(item.video.id).toLowerCase().includes(searchQuery.toLowerCase())) return false;
     if (filter === "favorites" && !item.isFavorite) return false;
     if (filter === "recents" && !item.isRecent) return false;
     if (filter === "local" && !item.isLocal && item.video.source !== "interactive") return false;
@@ -144,7 +146,20 @@ export const UnifiedLibrary = memo(function UnifiedLibrary({
       </div>
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem", flexWrap: "wrap", gap: "10px" }}>
-        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", flex: 1 }}>
+        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", flex: 1, alignItems: "center" }}>
+          
+          <div className="search-input-wrapper" style={{ position: "relative", minWidth: "200px" }}>
+            <svg style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", color: "var(--text-dim)" }} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            <input 
+              type="text" 
+              className="input" 
+              placeholder="Search library..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              style={{ paddingLeft: "34px", paddingRight: "12px", width: "100%", height: "34px", borderRadius: "8px", background: "rgba(0,0,0,0.2)", border: "1px solid rgba(255,255,255,0.1)" }}
+            />
+          </div>
+
           <div className="library-filter-bar" style={{ marginBottom: 0 }}>
             {(["all", "favorites", "recents", "local", "interactive", "icon_physics"] as const).map((f) => (
               <button
@@ -270,25 +285,27 @@ export const UnifiedLibrary = memo(function UnifiedLibrary({
                   </div>
                 </div>
 
-                <div className="library-card-item__copy">
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px" }}>
-                    <strong style={{ flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                      {item.video.id.replace(/-/g, " ")}
-                      {item.saved_at > 0 && (Date.now() / 1000 - item.saved_at) < (3 * 24 * 60 * 60) && (
-                        <span className="quality-badge" style={{ padding: "1px 4px", fontSize: "8px", marginLeft: "6px", backgroundColor: "var(--accent-color)", color: "#000" }}>
-                          NEW
-                        </span>
-                      )}
+                <div className="library-card-item__copy" style={{ padding: "10px 12px", background: "rgba(0,0,0,0.3)" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+                    <strong style={{ flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontSize: "13px", fontWeight: 600, color: "#fff" }} title={formatVideoTitle(item.video.id)}>
+                      {formatVideoTitle(item.video.id)}
                     </strong>
+                  </div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", alignItems: "center" }}>
+                    {item.saved_at > 0 && (Date.now() / 1000 - item.saved_at) < (3 * 24 * 60 * 60) && (
+                      <span style={{ padding: "2px 6px", fontSize: "9px", backgroundColor: "var(--accent)", color: "#000", borderRadius: "4px", fontWeight: 700, letterSpacing: "0.5px" }}>NEW</span>
+                    )}
                     {item.video.width > 0 && (
-                      <span className="quality-badge" style={{ padding: "1px 4px", fontSize: "8px" }}>
+                      <span style={{ padding: "2px 6px", fontSize: "9px", backgroundColor: "rgba(255,255,255,0.1)", color: "#eee", borderRadius: "4px", fontWeight: 500, letterSpacing: "0.5px" }}>
                         {item.video.width >= 3840 ? "4K" : item.video.width >= 1920 ? "1080p" : item.video.width >= 1280 ? "720p" : `${item.video.width}p`}
                       </span>
                     )}
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "10px", color: "var(--text-soft)", marginTop: "1px" }}>
-                    <span style={{ fontSize: "9px" }}>{isStaticWallpaper(item.video) ? "STATIC IMAGE" : "LIVE WALLPAPER"}{item.video.local_path ? " (Local)" : ""} - {formatSavedAt(item.saved_at)}</span>
-                    {item.video.duration > 0 && <span style={{ fontSize: "9px" }}>{Math.floor(item.video.duration / 60)}m {Math.floor(item.video.duration % 60)}s</span>}
+                    <span style={{ padding: "2px 6px", fontSize: "9px", backgroundColor: isStaticWallpaper(item.video) ? "rgba(100,200,255,0.15)" : "rgba(255,100,150,0.15)", color: isStaticWallpaper(item.video) ? "#8ae" : "#f8a", borderRadius: "4px", fontWeight: 500, letterSpacing: "0.5px" }}>
+                      {isStaticWallpaper(item.video) ? "STATIC" : "LIVE"}
+                    </span>
+                    {item.video.local_path && (
+                      <span style={{ padding: "2px 6px", fontSize: "9px", backgroundColor: "rgba(255,255,255,0.1)", color: "#aaa", borderRadius: "4px", fontWeight: 500, letterSpacing: "0.5px" }}>LOCAL</span>
+                    )}
                   </div>
                 </div>
               </article>

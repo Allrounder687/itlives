@@ -152,6 +152,32 @@ export function useWallpaper() {
     } catch (e) { console.error("setLightweightMode failed", e); }
   }, [setState]);
 
+  const setPerfConfig = useCallback(async (
+    fullscreen: string,
+    focused: string,
+    battery: string,
+    batterySaver: string,
+    remoteDesktop: string,
+    restartLockScreen: boolean,
+    displayPauseRule: string,
+    pauseAlgorithm: string
+  ) => {
+    try {
+      const { invoke } = await getCoreApi();
+      const persisted = await invoke<PersistedState>("set_perf_config", {
+        fullscreen,
+        focused,
+        battery,
+        batterySaver,
+        remoteDesktop,
+        restartLockScreen,
+        displayPauseRule,
+        pauseAlgorithm
+      });
+      setState((s) => applyPersistedState(persisted, s));
+    } catch (e) { console.error("setPerfConfig failed", e); }
+  }, [setState]);
+
 
 
   const isFavorite = useCallback((video: VideoResult) => {
@@ -199,6 +225,7 @@ export function useWallpaper() {
     setWindowBehavior,
     setAutostartEnabled,
     setLightweightMode,
+    setPerfConfig,
     browseLocalVideo,
     browseFolderToQueue,
     isFavorite,

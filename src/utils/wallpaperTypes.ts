@@ -59,6 +59,14 @@ export interface PersistedState {
   slideshow_source: string;
   discover_provider: string;
   lightweight_mode: boolean;
+  perf_fullscreen: string;
+  perf_focused: string;
+  perf_battery: string;
+  perf_battery_saver: string;
+  perf_remote_desktop: string;
+  perf_restart_lock_screen: boolean;
+  perf_display_pause_rule: string;
+  perf_pause_algorithm: string;
 }
 
 export interface WallpaperState {
@@ -110,6 +118,14 @@ export interface WallpaperState {
   slideshowSource: string;
   discoverProvider: string;
   lightweightMode: boolean;
+  perfFullscreen: string;
+  perfFocused: string;
+  perfBattery: string;
+  perfBatterySaver: string;
+  perfRemoteDesktop: string;
+  perfRestartLockScreen: boolean;
+  perfDisplayPauseRule: string;
+  perfPauseAlgorithm: string;
 }
 
 export function applyPersistedState(persisted: PersistedState, current: WallpaperState): WallpaperState {
@@ -150,6 +166,14 @@ export function applyPersistedState(persisted: PersistedState, current: Wallpape
     slideshowSource: persisted.slideshow_source ?? "local",
     discoverProvider: persisted.discover_provider ?? "unified",
     lightweightMode: persisted.lightweight_mode ?? false,
+    perfFullscreen: persisted.perf_fullscreen ?? "pause",
+    perfFocused: persisted.perf_focused ?? "play",
+    perfBattery: persisted.perf_battery ?? "pause",
+    perfBatterySaver: persisted.perf_battery_saver ?? "pause",
+    perfRemoteDesktop: persisted.perf_remote_desktop ?? "pause",
+    perfRestartLockScreen: persisted.perf_restart_lock_screen ?? false,
+    perfDisplayPauseRule: persisted.perf_display_pause_rule ?? "Per screen",
+    perfPauseAlgorithm: persisted.perf_pause_algorithm ?? "Grid",
   };
 }
 
@@ -168,4 +192,13 @@ export function isStaticWallpaper(video?: { video_url?: string; local_path?: str
          path.endsWith(".jpg") || path.endsWith(".jpeg") || path.endsWith(".png") || path.endsWith(".webp") ||
          src === "wallhaven" || src === "pinterest";
 }
-
+export function formatVideoTitle(id: string) {
+  if (!id) return "Untitled";
+  let title = id.replace(/[-_]/g, " ");
+  title = title.replace(/^(interactive|local|we)\s+/i, "");
+  title = title.split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+  if (/^\d+$/.test(title)) {
+    return "Local Media";
+  }
+  return title;
+}

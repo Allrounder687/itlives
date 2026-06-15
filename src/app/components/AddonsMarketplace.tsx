@@ -8,6 +8,7 @@ export const AddonsMarketplace = React.memo(function AddonsMarketplace() {
   const [remoteAddons, setRemoteAddons] = useState<Addon[]>([]);
   const [isFetching, setIsFetching] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
+  const [addonToConfirm, setAddonToConfirm] = useState<Addon | null>(null);
 
   useEffect(() => {
     fetchRemoteAddons();
@@ -160,7 +161,7 @@ export const AddonsMarketplace = React.memo(function AddonsMarketplace() {
                   ) : (
                     <button 
                       className="action-btn action-btn--primary" 
-                      onClick={() => handleInstall(addon)}
+                      onClick={() => setAddonToConfirm(addon)}
                       disabled={processing}
                       style={{ width: "100%" }}
                     >
@@ -177,6 +178,41 @@ export const AddonsMarketplace = React.memo(function AddonsMarketplace() {
               No addons found in the remote registry.
             </div>
           )}
+        </div>
+      )}
+
+      {addonToConfirm && (
+        <div style={{
+          position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+          background: "rgba(0,0,0,0.8)", backdropFilter: "blur(10px)",
+          display: "flex", justifyContent: "center", alignItems: "center", zIndex: 9999
+        }}>
+          <div style={{
+            background: "var(--panel-bg)", padding: "32px", borderRadius: "16px",
+            border: "1px solid rgba(255, 107, 107, 0.3)", maxWidth: "400px",
+            boxShadow: "0 20px 40px rgba(0,0,0,0.5)"
+          }}>
+            <h3 style={{ margin: "0 0 16px 0", color: "#ff6b6b", display: "flex", alignItems: "center", gap: "8px" }}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+              Security Warning
+            </h3>
+            <p style={{ fontSize: "14px", color: "var(--text-soft)", marginBottom: "24px", lineHeight: 1.5 }}>
+              You are about to install <strong>{addonToConfirm.name}</strong>, a third-party addon.
+              <br/><br/>
+              Scripts have full access to your environment. <strong>Only install addons from authors you trust.</strong>
+            </p>
+            <div style={{ display: "flex", gap: "12px" }}>
+              <button className="action-btn action-btn--ghost" style={{ flex: 1 }} onClick={() => setAddonToConfirm(null)}>
+                Cancel
+              </button>
+              <button className="action-btn action-btn--primary" style={{ flex: 1, background: "#ff6b6b", color: "#fff", border: "none" }} onClick={() => {
+                handleInstall(addonToConfirm);
+                setAddonToConfirm(null);
+              }}>
+                Accept Risk and Install
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </section>

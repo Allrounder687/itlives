@@ -35,11 +35,6 @@ const ICONS = {
       <polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02" />
     </svg>
   ),
-  parallax: (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M22 17L12 22L2 17M2 12L12 17L22 12M12 2L2 7L12 12L22 7L12 2Z" />
-    </svg>
-  ),
   settings: (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44 a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
@@ -56,7 +51,7 @@ const ICONS = {
   ),
 };
 
-export type TabState = "discover" | "library" | "direct" | "preview" | "editor" | "youtube" | "parallax" | "settings" | "community" | "addons";
+export type TabState = "discover" | "library" | "editor" | "youtube" | "settings" | "addons";
 
 interface SidebarProps {
   activeTab: TabState;
@@ -129,33 +124,7 @@ export const Sidebar = React.memo(function Sidebar({ activeTab, setActiveTab, is
             <div className="tab-icon">{ICONS.library}</div>
             <span>Library</span>
           </button>
-          <button
-            type="button"
-            className={`sidebar-list__item sidebar-list__item--clickable ${activeTab === "direct" ? "sidebar-list__item--active" : ""}`}
-            onClick={() => setActiveTab("direct")}
-            title="Direct Launch"
-          >
-            <div className="tab-icon">{ICONS.direct}</div>
-            <span>Direct Launch</span>
-          </button>
-          <button
-            type="button"
-            className={`sidebar-list__item sidebar-list__item--clickable ${activeTab === "preview" ? "sidebar-list__item--active" : ""}`}
-            onClick={() => setActiveTab("preview")}
-            title="Preview Deck"
-          >
-            <div className="tab-icon">{ICONS.preview}</div>
-            <span>Preview Deck</span>
-          </button>
-          <button
-            type="button"
-            className={`sidebar-list__item sidebar-list__item--clickable ${activeTab === "parallax" ? "sidebar-list__item--active" : ""}`}
-            onClick={() => setActiveTab("parallax")}
-            title="Parallax Engine"
-          >
-            <div className="tab-icon">{ICONS.parallax}</div>
-            <span>Parallax Engine</span>
-          </button>
+
           <button
             type="button"
             className={`sidebar-list__item sidebar-list__item--clickable ${activeTab === "editor" ? "sidebar-list__item--active" : ""}`}
@@ -178,15 +147,7 @@ export const Sidebar = React.memo(function Sidebar({ activeTab, setActiveTab, is
             </button>
           )}
 
-          <button
-            type="button"
-            className={`sidebar-list__item sidebar-list__item--clickable ${activeTab === "community" ? "sidebar-list__item--active" : ""}`}
-            onClick={() => setActiveTab("community")}
-            title="Community"
-          >
-            <div className="tab-icon">{ICONS.community}</div>
-            <span>Community</span>
-          </button>
+
           <button
             type="button"
             className={`sidebar-list__item sidebar-list__item--clickable ${activeTab === "addons" ? "sidebar-list__item--active" : ""}`}

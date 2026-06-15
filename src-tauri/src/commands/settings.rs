@@ -261,6 +261,31 @@ pub fn set_discover_provider(
 }
 
 #[tauri::command]
+pub fn set_perf_config(
+    state: State<'_, AppStateStore>,
+    fullscreen: String,
+    focused: String,
+    battery: String,
+    battery_saver: String,
+    remote_desktop: String,
+    restart_lock_screen: bool,
+    display_pause_rule: String,
+    pause_algorithm: String,
+) -> Result<WallpaperState, String> {
+    wallpaper::state::set_perf_config(
+        &state,
+        fullscreen,
+        focused,
+        battery,
+        battery_saver,
+        remote_desktop,
+        restart_lock_screen,
+        display_pause_rule,
+        pause_algorithm,
+    )
+}
+
+#[tauri::command]
 pub fn get_system_wallpaper() -> Result<String, String> {
     #[cfg(target_os = "windows")]
     {

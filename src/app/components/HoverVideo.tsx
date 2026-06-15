@@ -16,7 +16,14 @@ interface HoverVideoProps {
 export function HoverVideo({ video, className, gridSize = "M", onClick, priority = false }: HoverVideoProps) {
   const [isHovered, setIsHovered] = useState(false);
   const [imgError, setImgError] = useState(false);
+  const [thumbnail, setThumbnail] = useState(video.thumbnail_url);
   const videoRef = useRef<HTMLVideoElement>(null);
+  
+  useEffect(() => {
+    setThumbnail(video.thumbnail_url);
+    setImgError(false);
+  }, [video.thumbnail_url, video.id]);
+
   const isLocalFile = video.local_path && !video.local_path.startsWith("http");
   let src = isLocalFile
     ? convertFileSrc(video.local_path)
@@ -30,11 +37,11 @@ export function HoverVideo({ video, className, gridSize = "M", onClick, priority
   const isHtml = video.local_path?.toLowerCase().endsWith(".html") || video.video_url?.toLowerCase().endsWith(".html");
   const isStaticRender = isStaticImage || isHtml;
 
-  const effectiveThumbUrl = video.thumbnail_url && !video.thumbnail_url.startsWith("http") && !video.thumbnail_url.startsWith("/")
-    ? convertFileSrc(video.thumbnail_url)
-    : video.thumbnail_url;
+  const effectiveThumbUrl = thumbnail && !thumbnail.startsWith("http") && !thumbnail.startsWith("/") && !thumbnail.startsWith("data:")
+    ? convertFileSrc(thumbnail)
+    : thumbnail;
 
-  let thumbSrc = isStaticImage && (!video.thumbnail_url || imgError) 
+  let thumbSrc = isStaticImage && (!thumbnail || imgError) 
     ? src 
     : effectiveThumbUrl;
 
@@ -52,7 +59,8 @@ export function HoverVideo({ video, className, gridSize = "M", onClick, priority
     }
   }
 
-  const shouldRenderVideo = isHovered && !isStaticRender;
+  const hasValidThumb = !!effectiveThumbUrl && !imgError;
+  const shouldRenderVideo = (isHovered || !hasValidThumb) && !isStaticRender;
 
   const handleMouseEnter = () => {
     setIsHovered(true);
@@ -62,8 +70,14 @@ export function HoverVideo({ video, className, gridSize = "M", onClick, priority
     setIsHovered(false);
   };
 
+  const handleLoadedMetadata = () => {
+    if (videoRef.current && (!hasValidThumb || imgError)) {
+      videoRef.current.currentTime = 0.1; // Seek slightly to force frame decode
+    }
+  };
+
   const handleLoadedData = async () => {
-    if (videoRef.current && (!video.thumbnail_url || imgError)) {
+    if (videoRef.current && (!thumbnail || imgError) && videoRef.current.videoWidth > 0) {
       try {
         const canvas = document.createElement("canvas");
         canvas.width = videoRef.current.videoWidth;
@@ -73,8 +87,12 @@ export function HoverVideo({ video, className, gridSize = "M", onClick, priority
           ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
           const dataUrl = canvas.toDataURL("image/jpeg", 0.7);
           video.thumbnail_url = dataUrl;
+          setThumbnail(dataUrl);
           setImgError(false);
           import("@tauri-apps/api/core").then(({ invoke }) => {
+            if (video.local_path) {
+              invoke("save_thumbnail", { localPath: video.local_path, base64Data: dataUrl }).catch(console.error);
+            }
             invoke("import_local_video", { video }).catch(console.error);
           });
         }
@@ -84,7 +102,6 @@ export function HoverVideo({ video, className, gridSize = "M", onClick, priority
     }
   };
 
-  const hasValidThumb = !!effectiveThumbUrl && !imgError;
   const isPortrait = video.height && video.width && video.height > video.width;
   const objectPosition = isPortrait ? "center 20%" : "center";
 
@@ -147,7 +164,8 @@ export function HoverVideo({ video, className, gridSize = "M", onClick, priority
           loop
           playsInline
           autoPlay={isHovered}
-          preload="metadata"
+          preload={!hasValidThumb ? "auto" : "metadata"}
+          onLoadedMetadata={handleLoadedMetadata}
           onLoadedData={handleLoadedData}
           onSeeked={handleLoadedData}
           style={{ 
@@ -157,7 +175,7 @@ export function HoverVideo({ video, className, gridSize = "M", onClick, priority
             height: "100%", 
             objectFit: "cover",
             objectPosition,
-            opacity: isHovered ? 1 : 0,
+            opacity: isHovered ? 1 : (hasValidThumb ? 0 : 0.01),
             transition: "opacity 0.3s ease"
           }}
         />

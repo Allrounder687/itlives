@@ -46,7 +46,7 @@ pub fn start_monitor(state_store: AppStateStore, app_handle: tauri::AppHandle) {
         #[cfg(windows)]
         {
             if !should_pause && state.auto_pause_enabled {
-                if let Some(r) = check_should_pause_detailed() {
+                if let Some(r) = check_should_pause_detailed(&state) {
                     should_pause = true;
                     reason = r;
                 }
@@ -105,18 +105,32 @@ fn set_mpv_pause(app: &tauri::AppHandle, pause: bool) -> bool {
 
 /// Run diagnostics to determine if wallpaper loop should be paused to preserve system resources
 #[cfg(windows)]
-fn check_should_pause_detailed() -> Option<&'static str> {
+fn check_should_pause_detailed(state: &crate::wallpaper::state::WallpaperState) -> Option<&'static str> {
     unsafe {
-        // 1. Check for manual/forced conditions that override auto-logic
-        // (Previously battery check was here, removed to avoid immediate pause on apply)
+        // 1. Check Battery status
+        let mut power_status = windows::Win32::System::Power::SYSTEM_POWER_STATUS::default();
+        if windows::Win32::System::Power::GetSystemPowerStatus(&mut power_status).is_ok() {
+            if power_status.ACLineStatus == 0 && state.perf_battery == "pause" {
+                return Some("Running on battery power");
+            }
+            if power_status.SystemStatusFlag == 1 && state.perf_battery_saver == "pause" {
+                return Some("Running on battery saver");
+            }
+        }
 
-        // 2. Check current active window
+        // 2. Check Remote Session status
+        use windows::Win32::UI::WindowsAndMessaging::SM_REMOTESESSION;
+        if GetSystemMetrics(SM_REMOTESESSION) != 0 && state.perf_remote_desktop == "pause" {
+            return Some("Running on Remote Desktop session");
+        }
+
+        // 3. Check current active window
         let hwnd = GetForegroundWindow();
         if hwnd.0.is_null() {
             return Some("No foreground window (PC locked?)");
         }
 
-        // 3. Identify if the foreground window belongs to our app.
+        // 4. Identify if the foreground window belongs to our app.
         //    WebView2 (msedgewebview2.exe) runs in a separate process but is
         //    a child of our main Tauri window, so we must check BOTH the
         //    direct foreground HWND and its root ancestor.
@@ -152,9 +166,24 @@ fn check_should_pause_detailed() -> Option<&'static str> {
             return None;
         }
 
-        // 4. Check for foreground application
+        // 5. Check for foreground application and apply pause rules
         if fg_class != "WorkerW" && fg_class != "Progman" && fg_class != "mpv" {
-            return Some("Focused window is active (Non-Desktop, Non-App)");
+            // Check if active window is fullscreen
+            let mut rect = RECT::default();
+            let _ = GetWindowRect(hwnd, &mut rect);
+            let cx = GetSystemMetrics(SM_CXSCREEN);
+            let cy = GetSystemMetrics(SM_CYSCREEN);
+            let is_fullscreen = rect.left == 0 && rect.top == 0 && rect.right == cx && rect.bottom == cy;
+
+            if is_fullscreen {
+                if state.perf_fullscreen == "pause" {
+                    return Some("Fullscreen application is active");
+                }
+            } else {
+                if state.perf_focused == "pause" {
+                    return Some("Focused window is active");
+                }
+            }
         }
 
         None

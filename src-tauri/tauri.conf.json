@@ -89,7 +89,7 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "publisher": "OpenClaw",
+    "publisher": "itLives",
     "windows": {
       "nsis": {
         "installMode": "currentUser",

@@ -46,6 +46,14 @@ pub struct WallpaperState {
     pub slideshow_source: String,
     pub discover_provider: String,
     pub lightweight_mode: bool,
+    pub perf_fullscreen: String,
+    pub perf_focused: String,
+    pub perf_battery: String,
+    pub perf_battery_saver: String,
+    pub perf_remote_desktop: String,
+    pub perf_restart_lock_screen: bool,
+    pub perf_display_pause_rule: String,
+    pub perf_pause_algorithm: String,
 }
 
 impl Default for WallpaperState {
@@ -81,6 +89,14 @@ impl Default for WallpaperState {
             slideshow_source: "local".to_string(),
             discover_provider: "unified".to_string(),
             lightweight_mode: false,
+            perf_fullscreen: "pause".to_string(),
+            perf_focused: "play".to_string(),
+            perf_battery: "pause".to_string(),
+            perf_battery_saver: "pause".to_string(),
+            perf_remote_desktop: "pause".to_string(),
+            perf_restart_lock_screen: false,
+            perf_display_pause_rule: "Per screen".to_string(),
+            perf_pause_algorithm: "Grid".to_string(),
         }
     }
 }
@@ -729,6 +745,30 @@ pub fn toggle_hide_video(
         Ok(())
     })?;
     Ok(state)
+}
+
+pub fn set_perf_config(
+    store: &AppStateStore,
+    fullscreen: String,
+    focused: String,
+    battery: String,
+    battery_saver: String,
+    remote_desktop: String,
+    restart_lock_screen: bool,
+    display_pause_rule: String,
+    pause_algorithm: String,
+) -> Result<WallpaperState, String> {
+    store.update(|state| {
+        state.perf_fullscreen = fullscreen;
+        state.perf_focused = focused;
+        state.perf_battery = battery;
+        state.perf_battery_saver = battery_saver;
+        state.perf_remote_desktop = remote_desktop;
+        state.perf_restart_lock_screen = restart_lock_screen;
+        state.perf_display_pause_rule = display_pause_rule;
+        state.perf_pause_algorithm = pause_algorithm;
+        Ok(())
+    })
 }
 
 pub fn set_lightweight_mode(

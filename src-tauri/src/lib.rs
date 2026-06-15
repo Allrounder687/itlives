@@ -262,6 +262,7 @@ pub fn run() {
             commands::wallpaper_control::get_file_modified_time,
             commands::settings::get_app_state,
             commands::settings::set_lightweight_mode,
+            commands::settings::set_perf_config,
             commands::queue::add_to_queue,
             commands::queue::remove_from_queue,
             commands::queue::clear_queue,

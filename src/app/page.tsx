@@ -10,11 +10,7 @@ import { useAddons } from "@/hooks/useAddons";
 const MasterHUD = dynamic(() => import("./components/MasterHUD").then((m) => m.MasterHUD), { ssr: false });
 const ControlBar = dynamic(() => import("./components/ControlBar").then((m) => m.ControlBar), { ssr: false });
 const SearchResults = dynamic(() => import("./components/SearchResults").then((m) => m.SearchResults), { ssr: false, loading: () => <div className="skeleton skeleton-preview" /> });
-const AutomationPanel = dynamic(() => import("./components/AutomationPanel").then((m) => m.AutomationPanel), { ssr: false });
-const QueuePanel = dynamic(() => import("./components/QueuePanel").then((m) => m.QueuePanel), { ssr: false });
-const ThemeSelector = dynamic(() => import("./components/ThemeSelector").then((m) => m.ThemeSelector), { ssr: false });
-
-const WallpaperSourcePanel = dynamic(() => import("./components/WallpaperSourcePanel").then((m) => m.WallpaperSourcePanel), { ssr: false });
+const SettingsPanel = dynamic(() => import("./components/SettingsPanel").then((m) => m.SettingsPanel), { ssr: false });
 const DownloadProgressOverlay = dynamic(() => import("./components/DownloadProgressOverlay").then((m) => m.DownloadProgressOverlay), { ssr: false });
 
 const UnifiedLibrary = dynamic(() => import("./components/LibraryList").then((m) => m.UnifiedLibrary), { ssr: false });
@@ -23,15 +19,16 @@ const YouTubePanel = dynamic(() => import("./components/YouTubePanel").then((m) 
 const EditorWorkspace = dynamic(() => import("./components/EditorWorkspace").then((m) => m.EditorWorkspace), { ssr: false });
 const WebGLEffectRenderer = dynamic(() => import("./components/WebGLEffectRenderer").then((m) => m.WebGLEffectRenderer), { ssr: false });
 const ParallaxWorkspace = dynamic(() => import("./components/ParallaxWorkspace").then((m) => m.ParallaxWorkspace), { ssr: false });
-const CommunityPanel = dynamic(() => import("./components/CommunityPanel").then((m) => m.CommunityPanel), { ssr: false });
 const FloatingPreview = dynamic(() => import("./components/FloatingPreview").then((m) => m.FloatingPreview), { ssr: false });
 const AddonsMarketplace = dynamic(() => import("./components/AddonsMarketplace").then((m) => m.AddonsMarketplace), { ssr: false });
+const OnboardingWizard = dynamic(() => import("./components/OnboardingWizard").then((m) => m.OnboardingWizard), { ssr: false });
+const SplashScreen = dynamic(() => import("./components/SplashScreen").then((m) => m.SplashScreen), { ssr: false });
 
 function Home() {
   const wallpaper = useWallpaper();
   const { isAddonInstalled } = useAddons();
-  const [activeTab, setActiveTab] = useState<TabState>("discover");
-  const [renderedTab, setRenderedTab] = useState<TabState>("discover");
+  const [activeTab, setActiveTab] = useState<TabState>("library");
+  const [renderedTab, setRenderedTab] = useState<TabState>("library");
   const [isPending, startTransition] = useTransition();
 
   const isSourceAvailable = useCallback((src: string) => {
@@ -440,121 +437,14 @@ function Home() {
     handleLibraryApplyOverlay
   ]);
 
-  const communityPanel = useMemo(() => {
-    if (renderedTab !== "community") return null;
-    return <CommunityPanel currentWallpaper={wallpaper.currentVideo} />;
-  }, [renderedTab, wallpaper.currentVideo]);
+
 
   const settingsPanel = useMemo(() => {
     if (renderedTab !== "settings") return null;
-    return (
-      <section className="panel" style={{ padding: "16px", marginTop: "1rem" }}>
-        <div className="section-head" style={{ marginBottom: "1.5rem" }}>
-          <span className="eyebrow">Controls & Appearance</span>
-          <h2>Application Settings</h2>
-        </div>
-        <div className="support-grid">
-          <ThemeSelector currentTheme={wallpaper.theme} onThemeChange={wallpaper.setTheme} />
-          <WallpaperSourcePanel wallpaper={wallpaper} />
-          <AutomationPanel wallpaper={wallpaper} />
-          <QueuePanel wallpaper={wallpaper} />
-        </div>
-      </section>
-    );
-  }, [
-    renderedTab,
-    wallpaper.theme,
-    wallpaper.setTheme,
-    wallpaper
-  ]);
+    return <SettingsPanel wallpaper={wallpaper} />;
+  }, [renderedTab, wallpaper]);
 
-  const directPanel = useMemo(() => {
-    if (renderedTab !== "direct") return null;
-    return (
-      <section className="panel panel--main">
-        <ControlBar
-          source={wallpaper.source} query={wallpaper.query} isLoading={wallpaper.isLoading}
-          onSourceChange={wallpaper.setSource} onQueryChange={wallpaper.setQuery}
-          onCategoryChange={wallpaper.setCategory} onBrowseLocalFile={wallpaper.browseLocalVideo}
-          onFetch={() => wallpaper.fetchVideosList()} onFetchAndApply={handleFetchAndApply}
-          onStop={wallpaper.stopWallpaper}
-        />
-        <div className="hud-ready-zone">
-          <div className="hud-ring" />
-          <div className="hud-center">
-            <span className="eyebrow">Ready to Deploy</span>
-            <p className="muted">Paste a stream URL or browse for a local file to override the current desktop scene.</p>
-          </div>
-        </div>
-      </section>
-    );
-  }, [
-    renderedTab,
-    wallpaper.source,
-    wallpaper.query,
-    wallpaper.isLoading,
-    wallpaper.setSource,
-    wallpaper.setQuery,
-    wallpaper.setCategory,
-    wallpaper.browseLocalVideo,
-    wallpaper.fetchVideosList,
-    handleFetchAndApply,
-    wallpaper.stopWallpaper
-  ]);
 
-  const previewPanel = useMemo(() => {
-    if (renderedTab !== "preview") return null;
-    return (
-      <section className="panel preview-deck">
-        <div className="section-head">
-          <span className="eyebrow">Dedicated Preview</span>
-          <h2>Wallpaper Playback</h2>
-        </div>
-        {wallpaper.currentVideo && !wallpaper.isLoading ? (
-          <VideoPreview
-            video={wallpaper.currentVideo}
-            volumePercent={wallpaper.volumePercent}
-            filterPreset={wallpaper.videoFilter}
-            isFavorite={wallpaper.isFavorite(wallpaper.currentVideo)}
-            isQueued={wallpaper.isQueued(wallpaper.currentVideo)}
-            playbackSpeed={wallpaper.playbackSpeed}
-            blurStrength={wallpaper.blurStrength}
-            onApply={handleApplyCurrent}
-            onToggleFavorite={handleToggleFavoriteCurrent}
-            onToggleQueue={toggleCurrentQueue}
-            onSetSpeed={wallpaper.setPlaybackSpeed}
-            onSetBlur={wallpaper.setBlurStrength}
-            isHidden={wallpaper.hiddenVideos.includes(wallpaper.currentVideo.id)}
-            onToggleHide={handleToggleHideCurrent}
-            onEditEffects={handleEditEffectsCurrent}
-          />
-        ) : !wallpaper.isLoading ? (
-          <div className="preview-empty">
-            <span className="eyebrow">No Media Loaded</span>
-            <h3>Fetch a wallpaper from the Studio tab</h3>
-          </div>
-        ) : null}
-      </section>
-    );
-  }, [
-    renderedTab,
-    wallpaper.currentVideo,
-    wallpaper.isLoading,
-    wallpaper.volumePercent,
-    wallpaper.videoFilter,
-    wallpaper.favorites,
-    wallpaper.queue,
-    wallpaper.playbackSpeed,
-    wallpaper.blurStrength,
-    handleApplyCurrent,
-    handleToggleFavoriteCurrent,
-    toggleCurrentQueue,
-    wallpaper.setPlaybackSpeed,
-    wallpaper.setBlurStrength,
-    wallpaper.hiddenVideos,
-    handleToggleHideCurrent,
-    handleEditEffectsCurrent
-  ]);
 
   const youtubePanel = useMemo(() => {
     if (renderedTab !== "youtube") return null;
@@ -585,10 +475,6 @@ function Home() {
     wallpaper.recents
   ]);
 
-  const parallaxPanel = useMemo(() => {
-    if (renderedTab !== "parallax") return null;
-    return <ParallaxWorkspace />;
-  }, [renderedTab]);
 
   const addonsPanel = useMemo(() => {
     if (renderedTab !== "addons") return null;
@@ -620,7 +506,7 @@ function Home() {
   const isCurrentQueued = wallpaper.currentVideo ? wallpaper.isQueued(wallpaper.currentVideo) : false;
 
   const floatingPreviewElement = useMemo(() => {
-    if (!wallpaper.currentVideo || activeTab === "preview" || wallpaper.previewDismissed) return null;
+    if (!wallpaper.currentVideo || wallpaper.previewDismissed) return null;
     return (
       <FloatingPreview
         video={wallpaper.currentVideo}
@@ -694,8 +580,20 @@ function Home() {
     );
   }
 
+  if (wallpaper.isLoading) {
+    if (process.env.NODE_ENV === "production") {
+      return <SplashScreen />;
+    }
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-black">
+        <div className="loader"></div>
+      </div>
+    );
+  }
+
   return (
     <div className="shell">
+      <OnboardingWizard />
       {wallpaper.isLoading && (
         <div style={{
           position: "fixed",
@@ -806,13 +704,9 @@ function Home() {
         <main className="workspace">
           {discoverPanel}
           {libraryPanel}
-          {communityPanel}
           {settingsPanel}
-          {directPanel}
-          {previewPanel}
           {youtubePanel}
           {editorPanel}
-          {parallaxPanel}
           {addonsPanel}
 
           {masterHudElement}

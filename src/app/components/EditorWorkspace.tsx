@@ -3,11 +3,21 @@
 import { useState, useEffect, startTransition, useRef, memo } from "react";
 import { EffectLayer } from "./CanvasEffectRenderer";
 import { WebGLEffectRenderer } from "./WebGLEffectRenderer";
+import { DownloadProgressOverlay } from "./DownloadProgressOverlay";
 import { VideoResult } from "@/hooks/useWallpaper";
 import { LibraryItem } from "@/utils/wallpaperTypes";
 import "./editor.css";
 import { EFFECT_TEMPLATES, EFFECT_DROPDOWN, TIME_PRESETS, DEMO_PRESETS } from './editor/constants';
 
+const EDITOR_ICONS = {
+  eyeOpen: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>,
+  eyeClosed: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>,
+  trash: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>,
+  refresh: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="1 4 1 10 7 10"></polyline><polyline points="23 20 23 14 17 14"></polyline><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"></path></svg>,
+  solo: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>,
+  save: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>,
+  load: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+};
 
 interface EditorWorkspaceProps {
   currentVideo: VideoResult | null;
@@ -38,9 +48,27 @@ export const EditorWorkspace = memo(function EditorWorkspace({ currentVideo, onS
   const [brushFeather, setBrushFeather] = useState(0.5);
   const maskCanvasRef = useRef<HTMLCanvasElement>(null);
   const isPainting = useRef(false);
-  const lastPos = useRef<{x: number, y: number} | null>(null);
+  const lastPos = useRef<{x: number, y: number} | null>(null);  const [effectSearchQuery, setEffectSearchQuery] = useState("");
 
+  const moveLayerUp = (id: string) => {
+    const index = layers.findIndex(l => l.id === id);
+    if (index === -1 || index === 0) return;
+    const newLayers = [...layers];
+    const temp = newLayers[index];
+    newLayers[index] = newLayers[index - 1];
+    newLayers[index - 1] = temp;
+    setLayers(newLayers);
+  };
 
+  const moveLayerDown = (id: string) => {
+    const index = layers.findIndex(l => l.id === id);
+    if (index === -1 || index === layers.length - 1) return;
+    const newLayers = [...layers];
+    const temp = newLayers[index];
+    newLayers[index] = newLayers[index + 1];
+    newLayers[index + 1] = temp;
+    setLayers(newLayers);
+  };
 
   const addEffect = (type: keyof typeof EFFECT_TEMPLATES) => {
     const template = EFFECT_TEMPLATES[type];
@@ -362,192 +390,57 @@ export const EditorWorkspace = memo(function EditorWorkspace({ currentVideo, onS
   }
 
   return (
-    <div className="editor-workspace panel">
-      {/* Left Sidebar: Layers & Add Tool */}
-      <div className="editor-sidebar" style={{ borderRight: "1px solid var(--panel-stroke)" }}>
-        <div className="editor-sidebar-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <h3>My Effects</h3>
-          <div style={{ display: "flex", gap: "6px" }}>
-            <button 
-              onClick={() => openProfileModal("save")}
-              className="action-btn action-btn--secondary"
-              style={{ padding: "4px 8px", fontSize: "11px", minHeight: "24px", borderRadius: "8px" }}
-              title="Save Profile"
-            >
-              💾 Save
-            </button>
+    <div className="editor-workspace">
+      {/* 1. TOP HEADER BAR */}
+      <div className="editor-header">
+        <div className="editor-header-left">
+          <span className="editor-logo-badge">IT LIVES</span>
+          <div className="editor-header-title-info">
+            <span className="editor-header-eyebrow">Visual Effects Studio</span>
+            <h4 className="editor-header-title">
+              {currentVideo.local_path ? currentVideo.local_path.split(/[/\\]/).pop() : "Unnamed Wallpaper"}
+            </h4>
+          </div>
+        </div>
+
+        <div className="editor-header-center">
+          <div className="editor-profile-actions">
             <button 
               onClick={() => openProfileModal("load")}
-              className="action-btn action-btn--secondary"
-              style={{ padding: "4px 8px", fontSize: "11px", minHeight: "24px", borderRadius: "8px" }}
-              title="Load Profile"
+              className="editor-header-btn"
+              title="Load Saved Profile"
             >
-              📂 Load
+              {EDITOR_ICONS.load} <span>Load Preset</span>
+            </button>
+            <button 
+              onClick={() => openProfileModal("save")}
+              className="editor-header-btn"
+              title="Save Current Profile"
+            >
+              {EDITOR_ICONS.save} <span>Save Preset</span>
+            </button>
+            <button 
+              onClick={handleImportItl}
+              className="editor-header-btn"
+              disabled={isImporting}
+              title="Import .itl Package"
+            >
+              <span>📥 Import .itl</span>
+            </button>
+            <button 
+              onClick={handleExportItl}
+              className="editor-header-btn"
+              title="Export as .itl Package"
+            >
+              <span>📦 Export .itl</span>
             </button>
           </div>
         </div>
 
-        {/* Global Scene Properties */}
-        <div style={{ padding: "12px", borderBottom: "1px solid var(--panel-stroke)", backgroundColor: "rgba(0,0,0,0.1)" }}>
-          <span className="eyebrow" style={{ fontSize: "10px", marginBottom: "8px", display: "block" }}>🌍 Background Settings</span>
-          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <label style={{ fontSize: "11px", color: "var(--text-dim)" }}>Fill Mode:</label>
-              <select className="input" value={bgMode} onChange={(e) => setBgMode(e.target.value as any)} style={{ fontSize: "11px", padding: "2px 6px", width: "100px" }}>
-                <option value="blur-fill">Blur-Fill</option>
-                <option value="triptych">Triptych</option>
-                <option value="mirror">Mirror</option>
-                <option value="tiles">Tiles</option>
-                <option value="contain">Contain</option>
-                <option value="cover">Cover</option>
-                <option value="stretch">Stretch</option>
-              </select>
-            </div>
-            {bgMode === "blur-fill" && (
-              <>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <label style={{ fontSize: "11px", color: "var(--text-dim)" }}>Bg Blur:</label>
-                  <input type="range" min="0" max="50" step="1" value={bgBlur} onChange={(e) => setBgBlur(parseInt(e.target.value))} style={{ width: "100px" }} />
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <label style={{ fontSize: "11px", color: "var(--text-dim)" }}>Bg Brightness:</label>
-                  <input type="range" min="0" max="1" step="0.05" value={bgBrightness} onChange={(e) => setBgBrightness(parseFloat(e.target.value))} style={{ width: "100px" }} />
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-
-        <div className="editor-layer-list" style={{ flex: 1 }}>
-          {layers.length === 0 ? (
-            <p style={{ textAlign: "center", color: "var(--text-dim)", padding: "20px" }}>No effects added yet</p>
-          ) : (
-            layers.map((layer) => (
-              <div 
-                key={layer.id} 
-                className={`editor-layer-item ${selectedLayerId === layer.id ? "editor-layer-item--active" : ""}`}
-                onClick={() => setSelectedLayerId(layer.id)}
-              >
-                <div className="editor-layer-item__info">
-                  <input 
-                    type="checkbox" 
-                    checked={layer.enabled} 
-                    onChange={(e) => setLayers(layers.map(l => l.id === layer.id ? { ...l, enabled: e.target.checked } : l))}
-                    onClick={(e) => e.stopPropagation()} 
-                    style={{ cursor: "pointer", width: "16px", height: "16px" }}
-                  />
-                  <strong style={{ fontSize: "14px" }}>{layer.name}</strong>
-                </div>
-                <div style={{ display: "flex", gap: "4px" }}>
-                  <button 
-                    type="button" 
-                    className="action-btn action-btn--secondary-ghost"
-                    style={{ padding: "4px 8px", fontSize: "11px", minHeight: "26px", borderRadius: "8px" }}
-                    onClick={(e) => { 
-                      e.stopPropagation(); 
-                      setLayers(layers.map(l => ({ ...l, enabled: l.id === layer.id })));
-                    }}
-                    title="Solo this effect (disable all others)"
-                  >
-                    Solo
-                  </button>
-                  <button 
-                    type="button" 
-                    className="action-btn action-btn--secondary-ghost"
-                    style={{ padding: "4px 8px", fontSize: "11px", minHeight: "26px", borderRadius: "8px" }}
-                    onClick={(e) => { 
-                      e.stopPropagation(); 
-                      setLayers(layers.map(l => l.id === layer.id ? { ...l, id: l.id.replace(/-restart-\d+$/, '') + '-restart-' + Date.now() } : l));
-                    }}
-                    title="Restart this effect (fixes stuck animations/state)"
-                  >
-                    ↻
-                  </button>
-                  <button 
-                    type="button" 
-                    className="action-btn action-btn--danger-ghost"
-                    style={{ padding: "4px 8px", fontSize: "11px", minHeight: "26px", borderRadius: "8px" }}
-                    onClick={(e) => { e.stopPropagation(); removeEffect(layer.id); }}
-                  >
-                    ✕
-                  </button>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-
-        {/* Add Effect Dropdown */}
-        <div style={{ borderTop: "1px solid var(--panel-stroke)", paddingTop: "12px" }}>
-          <span className="eyebrow" style={{ fontSize: "10px", marginBottom: "6px", display: "block" }}>Add Effect</span>
-          <select
-            className="input"
-            value=""
-            onChange={(e) => { if (e.target.value) addEffect(e.target.value); e.target.value = ""; }}
-            style={{ width: "100%", padding: "8px 10px", borderRadius: "10px", fontSize: "13px", cursor: "pointer" }}
-          >
-            <option value="" disabled>＋ Choose an effect...</option>
-            {EFFECT_DROPDOWN.map(group => (
-              <optgroup key={group.group} label={group.group}>
-                {group.items.map(item => (
-                  <option key={item.key} value={item.key}>{item.icon} {item.label}</option>
-                ))}
-              </optgroup>
-            ))}
-          </select>
-        </div>
-
-        {/* Time-of-Day Preset Skins */}
-        <div style={{ borderTop: "1px solid var(--panel-stroke)", paddingTop: "12px", marginTop: "8px" }}>
-          <span className="eyebrow" style={{ fontSize: "10px", marginBottom: "6px", display: "block" }}>⏰ Scene Skins</span>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "6px" }}>
-            {TIME_PRESETS.map(preset => (
-              <button
-                key={preset.key}
-                type="button"
-                className="action-btn action-btn--secondary"
-                style={{ padding: "8px 6px", fontSize: "11px", borderRadius: "10px", fontWeight: "600", textAlign: "center" }}
-                onClick={() => {
-                  const newLayers = preset.layers.map((l, i) => ({
-                    ...l,
-                    id: `${preset.key}-${l.type}-${Date.now()}-${i}`,
-                  }));
-                  setLayers(prev => [...prev, ...newLayers as EffectLayer[]]);
-                }}
-              >
-                {preset.name}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Built-in Demos */}
-        <div style={{ borderTop: "1px solid var(--panel-stroke)", paddingTop: "12px", marginTop: "8px" }}>
-          <span className="eyebrow" style={{ fontSize: "10px", marginBottom: "6px", display: "block" }}>🌟 Demo Presets</span>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "6px" }}>
-            {DEMO_PRESETS.map(preset => (
-              <div
-                key={preset.key}
-                className="action-btn action-btn--secondary"
-                style={{ display: "flex", alignItems: "center", gap: "8px", padding: "6px", borderRadius: "10px", cursor: "pointer", textAlign: "left" }}
-                onClick={() => handleSelectDemo(preset)}
-              >
-                <img src={preset.thumbnail} alt="" style={{ width: "40px", height: "24px", objectFit: "cover", borderRadius: "4px" }} />
-                <span style={{ fontSize: "11px", fontWeight: "600", flex: 1 }}>{preset.name}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-
-      {/* Center: Canvas overlay Preview */}
-      <div className="editor-preview" style={{ position: "relative" }}>
-        <div style={{ position: "absolute", top: "12px", right: "12px", zIndex: 20, display: "flex", gap: "8px" }}>
+        <div className="editor-header-right">
           <button 
             type="button" 
-            className="action-btn action-btn--secondary"
-            style={{ padding: "10px 16px", borderRadius: "12px", fontWeight: "600", boxShadow: "0 4px 12px rgba(0,0,0,0.2)" }}
+            className="editor-header-btn editor-header-btn--danger"
             onClick={async () => {
               if (typeof window !== "undefined") {
                 const emptyConfig = { videoSrc: currentVideo?.local_path || currentVideo?.video_url || "", layers: [], bgMode: "blur-fill", bgBlur: 20, bgBrightness: 0.4 };
@@ -559,7 +452,6 @@ export const EditorWorkspace = memo(function EditorWorkspace({ currentVideo, onS
                 try {
                   const { invoke } = await import("@tauri-apps/api/core");
                   await invoke("apply_desktop_effects", { layersJson: JSON.stringify(emptyConfig) });
-                  // We removed onStopWallpaper so we don't clear the background video!
                 } catch (err) {
                   console.error("[Editor] Invoke failed:", err);
                 }
@@ -569,39 +461,10 @@ export const EditorWorkspace = memo(function EditorWorkspace({ currentVideo, onS
             Clear Effects
           </button>
           
-          {onUploadMedia && (
-            <button 
-              type="button" 
-              className="action-btn action-btn--ghost"
-              style={{ padding: "8px 12px", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "8px" }}
-              onClick={onUploadMedia}
-            >
-              Upload Media
-            </button>
-          )}
-
-          {recentWallpapers && recentWallpapers.length > 0 && onSelectVideo && (
-            <div style={{ display: "flex", gap: "8px", alignItems: "center", marginLeft: "12px", paddingLeft: "12px", borderLeft: "1px solid rgba(255,255,255,0.1)" }}>
-              <span style={{ fontSize: "11px", color: "rgba(255,255,255,0.5)" }}>Recent:</span>
-              {recentWallpapers.slice(0, 3).map((item, i) => (
-                <div 
-                  key={i} 
-                  style={{ width: "32px", height: "32px", borderRadius: "6px", overflow: "hidden", cursor: "pointer", border: "1px solid rgba(255,255,255,0.2)" }}
-                  title={item.video.id}
-                  onClick={() => onSelectVideo(item.video)}
-                >
-                  <img src={item.video.thumbnail_url || item.video.preview_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                </div>
-              ))}
-            </div>
-          )}
-          
           <button 
             type="button" 
-            className="action-btn action-btn--primary"
-            style={{ padding: "10px 16px", borderRadius: "12px", fontWeight: "600", boxShadow: "0 4px 12px rgba(0,0,0,0.2)" }}
+            className="editor-header-btn editor-header-btn--primary"
             onClick={async () => {
-              console.log("[Editor] Apply to Desktop button clicked!");
               if (typeof window !== "undefined" && currentVideo) {
                 const config = {
                   videoSrc: currentVideo.local_path || currentVideo.video_url,
@@ -610,116 +473,357 @@ export const EditorWorkspace = memo(function EditorWorkspace({ currentVideo, onS
                   bgBlur,
                   bgBrightness
                 };
-                console.log("[Editor] Saving config to localStorage & invoking tauri:", config);
                 localStorage.setItem("desktop_effects", JSON.stringify(config));
                 
                 try {
                   const { invoke } = await import("@tauri-apps/api/core");
-                  console.log("[Editor] Invoking onApplyWallpaper for video...");
                   if (onApplyWallpaper) {
                     await onApplyWallpaper(currentVideo);
                   }
-                  console.log("[Editor] Invoking apply_desktop_effects... size:", JSON.stringify(config).length);
                   await invoke("apply_desktop_effects", { layersJson: JSON.stringify(config) });
                   alert("✨ Effects Applied to Desktop Overlay Mode!");
                 } catch (err) {
                   console.error("[Editor] Invoke failed:", err);
                   alert("Sync complete! (Ensure transparent overlay mode is enabled for full auto-binds)");
                 }
-              } else {
-                console.warn("[Editor] Clicked but currentVideo is missing or window is undefined.", { currentVideo });
               }
             }}
           >
             Apply to Desktop
           </button>
         </div>
-        
-        {/* Play/Pause Overlay */}
-        {isPreviewPaused && !isBrushMode && (
-          <div 
-            style={{ position: "absolute", inset: 0, zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "rgba(0,0,0,0.4)", backdropFilter: "blur(2px)", cursor: "pointer" }}
-            onClick={() => setIsPreviewPaused(false)}
-          >
-            <div style={{ padding: "20px 40px", backgroundColor: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.3)", borderRadius: "20px", display: "flex", alignItems: "center", gap: "10px", color: "white", fontSize: "1.2rem", fontWeight: "bold" }}>
-              ▶️ Preview Paused
-            </div>
-          </div>
-        )}
-        
-        {!isPreviewPaused && !isBrushMode && (
-           <button
-             style={{ position: "absolute", bottom: "16px", left: "16px", zIndex: 60, padding: "8px 16px", borderRadius: "8px", backgroundColor: "rgba(0,0,0,0.6)", color: "white", border: "1px solid rgba(255,255,255,0.2)", cursor: "pointer" }}
-             onClick={() => setIsPreviewPaused(true)}
-           >
-             ⏸ Pause Preview
-           </button>
-        )}
-
-        {/* Brush Mask Drawing Canvas */}
-        <canvas
-          ref={maskCanvasRef}
-          className="mask-paint-canvas"
-          style={{
-            position: "absolute",
-            inset: 0,
-            width: "100%",
-            height: "100%",
-            zIndex: 100,
-            pointerEvents: isBrushMode ? "auto" : "none",
-            display: isBrushMode ? "block" : "none",
-            cursor: "crosshair"
-          }}
-          onPointerDown={(e) => {
-            if (!isBrushMode) return;
-            isPainting.current = true;
-            const rect = e.currentTarget.getBoundingClientRect();
-            const x = (e.clientX - rect.left) * (e.currentTarget.width / rect.width);
-            const y = (e.clientY - rect.top) * (e.currentTarget.height / rect.height);
-            lastPos.current = { x, y };
-            drawOnMask(x, y, true);
-            e.currentTarget.setPointerCapture(e.pointerId);
-          }}
-          onPointerMove={(e) => {
-            if (!isPainting.current || !isBrushMode) return;
-            const rect = e.currentTarget.getBoundingClientRect();
-            const x = (e.clientX - rect.left) * (e.currentTarget.width / rect.width);
-            const y = (e.clientY - rect.top) * (e.currentTarget.height / rect.height);
-            drawOnMask(x, y, false);
-            lastPos.current = { x, y };
-          }}
-          onPointerUp={(e) => {
-            if (!isPainting.current) return;
-            isPainting.current = false;
-            e.currentTarget.releasePointerCapture(e.pointerId);
-            saveMaskData();
-          }}
-          onPointerCancel={(e) => {
-            isPainting.current = false;
-            e.currentTarget.releasePointerCapture(e.pointerId);
-          }}
-        />
-
-        <WebGLEffectRenderer 
-          videoSrc={currentVideo ? (currentVideo.local_path || currentVideo.video_url) : ""} 
-          effects={layers} 
-          selectedLayerId={selectedLayerId}
-          onUpdateParam={updateParam}
-          onRemoveLayer={removeEffect}
-          isPaused={isPreviewPaused}
-          bgMode={bgMode}
-          bgBlur={bgBlur}
-          bgBrightness={bgBrightness}
-        />
-
       </div>
 
+      <div className="editor-main-layout">
+        {/* 2. LEFT SIDEBAR: Library, Presets & Actions */}
+        <div className="editor-left-pane">
+          <div className="pane-section-header">
+            <h3>Effects Palette</h3>
+          </div>
+          
+          <div className="effect-search-wrapper">
+            <input 
+              type="text" 
+              placeholder="Search effects..." 
+              value={effectSearchQuery}
+              onChange={(e) => setEffectSearchQuery(e.target.value)}
+              className="effect-search-input"
+            />
+            {effectSearchQuery && (
+              <button className="search-clear-btn" onClick={() => setEffectSearchQuery("")}>✕</button>
+            )}
+          </div>
 
-      {/* Right Sidebar: Properties Layout */}
-      <div className="editor-sidebar" style={{ borderLeft: "1px solid var(--panel-stroke)" }}>
-        <div className="editor-sidebar-header">
-          <h3>Properties</h3>
+          <div className="pane-scrollable-content">
+            {/* Visual Effect Cards */}
+            <div className="effects-palette-list">
+              {EFFECT_DROPDOWN.map(group => {
+                const filteredItems = group.items.filter(item => 
+                  item.label.toLowerCase().includes(effectSearchQuery.toLowerCase()) ||
+                  item.key.toLowerCase().includes(effectSearchQuery.toLowerCase())
+                );
+                if (filteredItems.length === 0) return null;
+                return (
+                  <div key={group.group} className="effects-palette-group">
+                    <span className="effects-group-title">{group.group}</span>
+                    <div className="effects-palette-grid">
+                      {filteredItems.map(item => (
+                        <button 
+                          key={item.key} 
+                          type="button"
+                          className="effect-palette-card"
+                          onClick={() => addEffect(item.key as any)}
+                        >
+                          <span className="effect-card-icon">{item.icon}</span>
+                          <span className="effect-card-label">{item.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Scene Skins */}
+            <div className="presets-section">
+              <span className="presets-section-title">⏰ Scene Skins</span>
+              <div className="scene-skins-grid">
+                {TIME_PRESETS.map(preset => (
+                  <button
+                    key={preset.key}
+                    type="button"
+                    className="scene-skin-card"
+                    onClick={() => {
+                      const newLayers = preset.layers.map((l, i) => ({
+                        ...l,
+                        id: `${preset.key}-${l.type}-${Date.now()}-${i}`,
+                      }));
+                      setLayers(prev => [...prev, ...newLayers as EffectLayer[]]);
+                    }}
+                  >
+                    <span className="skin-card-name">{preset.name}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Built-in Demos */}
+            <div className="presets-section">
+              <span className="presets-section-title">🌟 Demo Wallpapers</span>
+              <div className="demo-presets-grid">
+                {DEMO_PRESETS.map(preset => (
+                  <button
+                    key={preset.key}
+                    type="button"
+                    className="demo-preset-card"
+                    onClick={() => handleSelectDemo(preset)}
+                  >
+                    <img src={preset.thumbnail} alt="" className="demo-preset-thumb" />
+                    <div className="demo-preset-info">
+                      <span className="demo-preset-name">{preset.name}</span>
+                      <span className="demo-preset-sub">{preset.layers.length} pre-applied effects</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
+
+        {/* 3. CENTER PANEL: Canvas & Timeline */}
+        <div className="editor-center-pane">
+          <div className="editor-viewport-panel">
+            <div className="editor-viewport-frame">
+              {/* Play/Pause Overlay */}
+              {isPreviewPaused && !isBrushMode && (
+                <div 
+                  className="viewport-paused-overlay"
+                  onClick={() => setIsPreviewPaused(false)}
+                >
+                  <div className="paused-badge">
+                    ▶️ Preview Paused
+                  </div>
+                </div>
+              )}
+              
+              {!isPreviewPaused && !isBrushMode && (
+                 <button
+                   type="button"
+                   className="viewport-pause-btn"
+                   onClick={() => setIsPreviewPaused(true)}
+                 >
+                   ⏸ Pause Preview
+                 </button>
+              )}
+
+              {/* Brush Mask Drawing Canvas */}
+              <canvas
+                ref={maskCanvasRef}
+                className="mask-paint-canvas"
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  width: "100%",
+                  height: "100%",
+                  zIndex: 100,
+                  pointerEvents: isBrushMode ? "auto" : "none",
+                  display: isBrushMode ? "block" : "none",
+                  cursor: "crosshair"
+                }}
+                onPointerDown={(e) => {
+                  if (!isBrushMode) return;
+                  isPainting.current = true;
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const x = (e.clientX - rect.left) * (e.currentTarget.width / rect.width);
+                  const y = (e.clientY - rect.top) * (e.currentTarget.height / rect.height);
+                  lastPos.current = { x, y };
+                  drawOnMask(x, y, true);
+                  e.currentTarget.setPointerCapture(e.pointerId);
+                }}
+                onPointerMove={(e) => {
+                  if (!isPainting.current || !isBrushMode) return;
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const x = (e.clientX - rect.left) * (e.currentTarget.width / rect.width);
+                  const y = (e.clientY - rect.top) * (e.currentTarget.height / rect.height);
+                  drawOnMask(x, y, false);
+                  lastPos.current = { x, y };
+                }}
+                onPointerUp={(e) => {
+                  if (!isPainting.current) return;
+                  isPainting.current = false;
+                  e.currentTarget.releasePointerCapture(e.pointerId);
+                  saveMaskData();
+                }}
+                onPointerCancel={(e) => {
+                  isPainting.current = false;
+                  e.currentTarget.releasePointerCapture(e.pointerId);
+                }}
+              />
+
+              <WebGLEffectRenderer 
+                videoSrc={currentVideo ? (currentVideo.local_path || currentVideo.video_url) : ""} 
+                effects={layers} 
+                selectedLayerId={selectedLayerId}
+                onUpdateParam={updateParam}
+                onRemoveLayer={removeEffect}
+                isPaused={isPreviewPaused}
+                bgMode={bgMode}
+                bgBlur={bgBlur}
+                bgBrightness={bgBrightness}
+              />
+            </div>
+
+            {/* Floating Viewport Options Overlay (e.g. Media control) */}
+            <div className="viewport-toolbar">
+              {onUploadMedia && (
+                <button 
+                  type="button" 
+                  className="viewport-tool-btn"
+                  onClick={onUploadMedia}
+                >
+                  📁 Upload Media
+                </button>
+              )}
+
+              {recentWallpapers && recentWallpapers.length > 0 && onSelectVideo && (
+                <div className="viewport-recent-list">
+                  <span className="recent-label">Recent:</span>
+                  {recentWallpapers.slice(0, 3).map((item, i) => (
+                    <button 
+                      key={i} 
+                      type="button"
+                      className="viewport-recent-thumb"
+                      title={item.video.id}
+                      onClick={() => onSelectVideo(item.video)}
+                    >
+                      <img src={item.video.thumbnail_url || item.video.preview_url} alt="" />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* 4. BOTTOM TIMELINE / LAYERS PANEL */}
+          <div className="editor-timeline-panel">
+            <div className="timeline-panel-header">
+              <div className="timeline-title-group">
+                <span className="timeline-title-icon">🎞️</span>
+                <h4>Timeline Layers</h4>
+              </div>
+              <span className="layers-count-badge">{layers.length} Layers</span>
+            </div>
+
+            <div className="timeline-tracks-container">
+              {layers.length === 0 ? (
+                <div className="timeline-empty-state">
+                  <p>No visual effects applied to this canvas.</p>
+                  <span>Select an effect from the palette on the left to begin editing.</span>
+                </div>
+              ) : (
+                layers.map((layer, index) => (
+                  <div 
+                    key={layer.id} 
+                    className={`timeline-track-row ${selectedLayerId === layer.id ? "timeline-track-row--active" : ""}`}
+                    onClick={() => setSelectedLayerId(layer.id)}
+                  >
+                    <div className="track-left-controls">
+                      <button 
+                        type="button" 
+                        className="track-action-btn"
+                        onClick={(e) => { 
+                          e.stopPropagation(); 
+                          setLayers(layers.map(l => l.id === layer.id ? { ...l, enabled: !l.enabled } : l));
+                        }}
+                        title={layer.enabled ? "Hide Layer" : "Show Layer"}
+                        style={{ color: layer.enabled ? "var(--accent)" : "var(--text-dim)" }}
+                      >
+                        {layer.enabled ? EDITOR_ICONS.eyeOpen : EDITOR_ICONS.eyeClosed}
+                      </button>
+                      
+                      <button 
+                        type="button" 
+                        className="track-action-btn"
+                        onClick={(e) => { 
+                          e.stopPropagation(); 
+                          setLayers(layers.map(l => ({ ...l, enabled: l.id === layer.id })));
+                        }}
+                        title="Solo this layer"
+                      >
+                        {EDITOR_ICONS.solo}
+                      </button>
+                    </div>
+
+                    <div className="track-layer-stack-arrows">
+                      <button
+                        type="button"
+                        className="track-arrow-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          moveLayerUp(layer.id);
+                        }}
+                        disabled={index === 0}
+                        title="Move layer backward (underneath)"
+                      >
+                        ▲
+                      </button>
+                      <button
+                        type="button"
+                        className="track-arrow-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          moveLayerDown(layer.id);
+                        }}
+                        disabled={index === layers.length - 1}
+                        title="Move layer forward (on top)"
+                      >
+                        ▼
+                      </button>
+                    </div>
+
+                    <div className="track-layer-info">
+                      <span className="track-layer-name" style={{ opacity: layer.enabled ? 1 : 0.5 }}>{layer.name}</span>
+                      <span className="track-layer-type">{layer.type}</span>
+                    </div>
+
+                    <div className="track-timeline-bar-wrapper">
+                      <div className="track-timeline-bar" style={{ opacity: layer.enabled ? 1 : 0.3 }} />
+                    </div>
+
+                    <div className="track-right-controls">
+                      <button 
+                        type="button" 
+                        className="track-action-btn"
+                        onClick={(e) => { 
+                          e.stopPropagation(); 
+                          setLayers(layers.map(l => l.id === layer.id ? { ...l, id: l.id.replace(/-restart-\d+$/, '') + '-restart-' + Date.now() } : l));
+                        }}
+                        title="Reset/Restart Layer Animation"
+                      >
+                        {EDITOR_ICONS.refresh}
+                      </button>
+                      
+                      <button 
+                        type="button" 
+                        className="track-action-btn track-action-btn--danger"
+                        onClick={(e) => { e.stopPropagation(); removeEffect(layer.id); }}
+                        title="Delete Layer"
+                      >
+                        {EDITOR_ICONS.trash}
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* 5. RIGHT SIDEBAR: Properties Inspector */}
+        <div className="editor-right-pane">
+          <div className="editor-sidebar-header">
+            <h3>{selectedLayer ? "Layer Properties" : "Global Properties"}</h3>
+          </div>
 
         {selectedLayer ? (
           <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
@@ -1970,11 +2074,38 @@ export const EditorWorkspace = memo(function EditorWorkspace({ currentVideo, onS
             )}
           </div>
         ) : (
-          <div className="editor-empty">
-            <p>Select a layer to edit properties.</p>
+          <div style={{ display: "flex", flexDirection: "column", gap: "16px", padding: "8px" }}>
+            <p style={{ fontSize: "12px", color: "var(--text-dim)", lineHeight: 1.5, marginBottom: "8px" }}>
+              Select a layer to edit its properties, or adjust global scene settings below.
+            </p>
+            <div className="property-group" style={{ padding: "16px", background: "rgba(0,0,0,0.2)", borderRadius: "12px", border: "1px solid var(--panel-stroke)" }}>
+              <span className="eyebrow" style={{ fontSize: "11px", marginBottom: "12px", display: "block", color: "var(--accent)" }}>🌍 Background Settings</span>
+              
+              <label style={{ fontSize: "12px", marginBottom: "4px" }}>Fill Mode</label>
+              <select className="input" value={bgMode} onChange={(e) => setBgMode(e.target.value as any)} style={{ fontSize: "12px", padding: "8px", width: "100%", borderRadius: "6px", marginBottom: "16px" }}>
+                <option value="blur-fill">Blur-Fill</option>
+                <option value="triptych">Triptych</option>
+                <option value="mirror">Mirror</option>
+                <option value="tiles">Tiles</option>
+                <option value="contain">Contain</option>
+                <option value="cover">Cover</option>
+                <option value="stretch">Stretch</option>
+              </select>
+
+              {bgMode === "blur-fill" && (
+                <>
+                  <label style={{ fontSize: "12px", marginBottom: "4px", display: "block" }}>Background Blur ({bgBlur}px)</label>
+                  <input type="range" min="0" max="50" step="1" value={bgBlur} onChange={(e) => setBgBlur(parseInt(e.target.value))} style={{ width: "100%", marginBottom: "16px" }} className="property-control" />
+                  
+                  <label style={{ fontSize: "12px", marginBottom: "4px", display: "block" }}>Background Brightness ({Math.round(bgBrightness * 100)}%)</label>
+                  <input type="range" min="0" max="1" step="0.05" value={bgBrightness} onChange={(e) => setBgBrightness(parseFloat(e.target.value))} style={{ width: "100%" }} className="property-control" />
+                </>
+              )}
+            </div>
           </div>
         )}
       </div>
+      </div> {/* close editor-main-layout */}
 
       {/* Profile Manager Modal */}
       {isProfileModalOpen && (

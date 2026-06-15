@@ -57,6 +57,14 @@ export function useAppState() {
     slideshowSource: "local",
     discoverProvider: "unified",
     lightweightMode: false,
+    perfFullscreen: "pause",
+    perfFocused: "play",
+    perfBattery: "pause",
+    perfBatterySaver: "pause",
+    perfRemoteDesktop: "pause",
+    perfRestartLockScreen: false,
+    perfDisplayPauseRule: "Per screen",
+    perfPauseAlgorithm: "Grid",
   });
 
   useEffect(() => {

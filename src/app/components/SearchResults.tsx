@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, memo } from "react";
-import { VideoResult, isStaticWallpaper } from "@/utils/wallpaperTypes";
+import { VideoResult, isStaticWallpaper, formatVideoTitle } from "@/utils/wallpaperTypes";
 import { HoverVideo } from "./HoverVideo";
 
 interface SearchResultsProps {
@@ -455,9 +455,20 @@ const SearchCard = memo(function SearchCard({
           </button>
         )}
       </div>
-      <div className="search-card__copy">
-        <strong>{/^[0-9-]+$/.test(item.id) ? "Live Wallpaper" : item.id.replace(/-/g, " ")}</strong>
-        <span>{isStaticWallpaper(item) ? "STATIC IMAGE" : "LIVE WALLPAPER"}</span>
+      <div className="search-card__copy" style={{ padding: "10px 12px", background: "rgba(0,0,0,0.3)" }}>
+        <strong style={{ fontSize: "13px", fontWeight: 600, color: "#fff", display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginBottom: "6px" }} title={formatVideoTitle(item.id)}>
+          {formatVideoTitle(item.id)}
+        </strong>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", alignItems: "center" }}>
+          <span style={{ padding: "2px 6px", fontSize: "9px", backgroundColor: isStaticWallpaper(item) ? "rgba(100,200,255,0.15)" : "rgba(255,100,150,0.15)", color: isStaticWallpaper(item) ? "#8ae" : "#f8a", borderRadius: "4px", fontWeight: 500, letterSpacing: "0.5px" }}>
+            {isStaticWallpaper(item) ? "STATIC" : "LIVE"}
+          </span>
+          {item.width > 0 && (
+            <span style={{ padding: "2px 6px", fontSize: "9px", backgroundColor: "rgba(255,255,255,0.1)", color: "#eee", borderRadius: "4px", fontWeight: 500, letterSpacing: "0.5px" }}>
+              {item.width >= 3840 ? "4K" : item.width >= 1920 ? "1080p" : item.width >= 1280 ? "720p" : `${item.width}p`}
+            </span>
+          )}
+        </div>
       </div>
     </article>
   );
