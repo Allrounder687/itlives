@@ -14,9 +14,31 @@ function MiniPlayer() {
   const [systemWallpaper, setSystemWallpaper] = useState<string>("");
   const videoRef = useRef<HTMLVideoElement>(null);
 
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartPos = useRef({ x: 0, y: 0 });
+
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (mounted && typeof document !== "undefined") {
+      document.documentElement.style.background = "transparent";
+      document.documentElement.style.backgroundColor = "transparent";
+      document.body.style.background = "transparent";
+      document.body.style.backgroundColor = "transparent";
+
+      // Force transparency on all direct wrapper divs inside body (Next.js route portals/wrappers)
+      const children = document.body.children;
+      for (let i = 0; i < children.length; i++) {
+        const child = children[i] as HTMLElement;
+        if (child.tagName === "DIV") {
+          child.style.background = "transparent";
+          child.style.backgroundColor = "transparent";
+        }
+      }
+    }
+  }, [mounted]);
 
   useEffect(() => {
     const fetchSystemWallpaper = async () => {
@@ -35,10 +57,56 @@ function MiniPlayer() {
     }
   }, [mounted, wallpaper.currentVideo]);
 
+  const startDrag = async (e: React.MouseEvent) => {
+    if (e.button !== 0) return; // Only left click
+    const target = e.target as HTMLElement;
+    if (target.closest("button") || target.closest("input") || target.closest("select")) return;
+
+    setIsDragging(true);
+    dragStartPos.current = { x: e.screenX, y: e.screenY };
+  };
+
+  useEffect(() => {
+    const handleMouseMove = async (e: MouseEvent) => {
+      if (!isDragging) return;
+      const dx = e.screenX - dragStartPos.current.x;
+      const dy = e.screenY - dragStartPos.current.y;
+      if (dx === 0 && dy === 0) return;
+
+      try {
+        const { getCurrentWindow } = await import("@tauri-apps/api/window");
+        const win = getCurrentWindow();
+        const pos = await win.outerPosition();
+        const { PhysicalPosition } = await import("@tauri-apps/api/window");
+        await win.setPosition(new PhysicalPosition(pos.x + dx, pos.y + dy));
+        dragStartPos.current = { x: e.screenX, y: e.screenY };
+      } catch (err) {
+        console.error("Drag move failed:", err);
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+    };
+
+    if (isDragging) {
+      window.addEventListener("mousemove", handleMouseMove);
+      window.addEventListener("mouseup", handleMouseUp);
+    }
+
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [isDragging]);
+
   const closeWindow = async () => {
-    const { getCurrentWindow } = await import("@tauri-apps/api/window");
-    let win = getCurrentWindow();
-    await win.hide();
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("hide_mini_player");
+    } catch (e) {
+      console.error("Failed to hide mini player", e);
+    }
   };
 
   const restoreMainWindow = async () => {
@@ -79,17 +147,28 @@ function MiniPlayer() {
       flexDirection: "column",
       color: "#fff",
       overflow: "hidden",
-      fontFamily: "system-ui, -apple-system, sans-serif"
+      fontFamily: "system-ui, -apple-system, sans-serif",
+      padding: "10px",
+      boxSizing: "border-box",
+      background: "transparent"
     }}>
       {/* Global CSS injection for transparent body, animations, and custom slider */}
       <style dangerouslySetInnerHTML={{__html: `
-        html, body {
+        html, body, #__next, body > div, [data-reactroot] {
           background: transparent !important;
           background-color: transparent !important;
           margin: 0;
           padding: 0;
           overflow: hidden !important;
           user-select: none;
+        }
+        nextjs-portal, #nextjs-dev-overlay-container, [data-nextjs-toast], [data-nextjs-portal] {
+          display: none !important;
+          opacity: 0 !important;
+          visibility: hidden !important;
+          width: 0 !important;
+          height: 0 !important;
+          pointer-events: none !important;
         }
         @keyframes pulseGlow {
           0% { box-shadow: 0 0 6px #00ff88, 0 0 10px #00ff88; opacity: 0.8; }
@@ -98,6 +177,17 @@ function MiniPlayer() {
         }
         .pulse-active {
           animation: pulseGlow 2s infinite ease-in-out;
+        }
+        @keyframes loadingPulse {
+          0% { transform: scale(1); opacity: 0.5; }
+          50% { transform: scale(1.35); opacity: 1; }
+          100% { transform: scale(1); opacity: 0.5; }
+        }
+        .loading-pulse {
+          animation: loadingPulse 1s infinite ease-in-out;
+        }
+        @keyframes spin {
+          to { transform: rotate(360deg); }
         }
         .hover-btn {
           transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
@@ -142,11 +232,16 @@ function MiniPlayer() {
       {/* Adaptive Background Layer */}
       <div style={{
         position: "absolute",
-        inset: 0,
+        top: "10px",
+        left: "10px",
+        right: "10px",
+        bottom: "10px",
         zIndex: 0,
         pointerEvents: "none",
         overflow: "hidden",
-        borderRadius: "20px"
+        borderRadius: "20px",
+        clipPath: "inset(0 round 20px)",
+        isolation: "isolate"
       }}>
         {currentVideo ? (
           <>
@@ -228,6 +323,7 @@ function MiniPlayer() {
         {/* Header - Drag Region */}
         <div 
           data-tauri-drag-region
+          onMouseDown={startDrag}
           style={{
             height: "44px",
             display: "flex",
@@ -240,18 +336,24 @@ function MiniPlayer() {
           {/* Status Indicator */}
           <div data-tauri-drag-region style={{ display: "flex", alignItems: "center", gap: "8px", pointerEvents: "none" }}>
             <div 
-              className={wallpaper.isPlaying && !wallpaper.paused ? "pulse-active" : ""}
+              className={wallpaper.isLoading ? "loading-pulse" : (wallpaper.isPlaying && !wallpaper.paused ? "pulse-active" : "")}
               style={{ 
                 width: "8px", 
                 height: "8px", 
                 borderRadius: "50%", 
-                background: wallpaper.isPlaying && !wallpaper.paused ? "#00ff88" : (wallpaper.paused ? "#ffaa00" : "#666"),
-                boxShadow: wallpaper.isPlaying && !wallpaper.paused ? "0 0 10px #00ff88" : "none",
+                background: wallpaper.isLoading 
+                  ? "#00bfff" 
+                  : (wallpaper.isPlaying && !wallpaper.paused ? "#00ff88" : (wallpaper.paused ? "#ffaa00" : "#666")),
+                boxShadow: wallpaper.isLoading 
+                  ? "0 0 10px #00bfff" 
+                  : (wallpaper.isPlaying && !wallpaper.paused ? "0 0 10px #00ff88" : "none"),
                 transition: "all 0.3s ease"
               }} 
             />
             <span style={{ fontSize: "12px", fontWeight: "600", letterSpacing: "0.5px", color: "rgba(255, 255, 255, 0.85)" }}>
-              {wallpaper.isPlaying && !wallpaper.paused ? "Active" : (wallpaper.paused ? "Paused" : "Standby")}
+              {wallpaper.isLoading 
+                ? "Loading..." 
+                : (wallpaper.isPlaying && !wallpaper.paused ? "Active" : (wallpaper.paused ? "Paused" : "Standby"))}
             </span>
           </div>
 
@@ -360,6 +462,31 @@ function MiniPlayer() {
                 letterSpacing: "0.5px"
               }}>
                 No wallpaper active
+              </div>
+            )}
+            
+            {/* Subtle Loading Spinner Overlay */}
+            {wallpaper.isLoading && (
+              <div style={{
+                position: "absolute",
+                inset: 0,
+                background: "rgba(10, 15, 12, 0.45)",
+                backdropFilter: "blur(4px)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                zIndex: 5,
+                transition: "all 0.3s ease"
+              }}>
+                <div style={{
+                  width: "28px",
+                  height: "28px",
+                  borderRadius: "50%",
+                  border: "2.5px solid rgba(255, 255, 255, 0.1)",
+                  borderTopColor: "#00ff88",
+                  animation: "spin 0.8s linear infinite",
+                  boxShadow: "0 0 15px rgba(0, 255, 136, 0.3)"
+                }} />
               </div>
             )}
           </div>

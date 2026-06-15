@@ -44,9 +44,19 @@ next-env.d.ts
 /runtime/
 
 # scratch debugging tools
-/motionbgs_test.html
-/test_scrape.js
-/thumbnails.txt
+/scratch/
+/temp_test/
+/test_dir/
+/test_out_dir/
+/*.rmskin
+/*.log
+/*.ps1
+/*.html
+/*.txt
+/*.evtx
+/*.js
+!/scripts/scrape.js
+!/next.config.js
 
 # tauri debug logs and cache
 /src-tauri/target-check/

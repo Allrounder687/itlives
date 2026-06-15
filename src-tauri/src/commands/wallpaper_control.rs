@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 static TRACKING_STARTED: AtomicBool = AtomicBool::new(false);
 
 #[tauri::command]
-pub async fn apply_wallpaper(
+pub async fn apply_wallpaper_inner(
     app: tauri::AppHandle,
     state: State<'_, AppStateStore>,
     mut video: VideoResult,
@@ -100,6 +100,22 @@ pub async fn apply_wallpaper(
     }
 
     wallpaper::state::mark_active(&state, video)
+}
+
+#[tauri::command]
+pub async fn apply_wallpaper(
+    app: tauri::AppHandle,
+    state: State<'_, AppStateStore>,
+    video: VideoResult,
+    scale_percent: u64,
+    start_time: Option<f64>,
+    end_time: Option<f64>,
+    monitor: Option<String>,
+) -> Result<WallpaperState, String> {
+    let _ = app.emit("wallpaper-loading", true);
+    let result = apply_wallpaper_inner(app.clone(), state, video, scale_percent, start_time, end_time, monitor).await;
+    let _ = app.emit("wallpaper-loading", false);
+    result
 }
 
 #[tauri::command]

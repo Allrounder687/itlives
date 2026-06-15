@@ -87,17 +87,29 @@ export function useAppState() {
 
     hydrate();
 
-    let unlisten: () => void;
+    const unlistens: (() => void)[] = [];
     import("@tauri-apps/api/event").then(({ listen }) => {
+      if (!active) return;
       listen("wallpaper-paused", (e: any) => {
         if (!active) return;
         setState((current) => ({ ...current, paused: e.payload.paused }));
-      }).then((u) => { unlisten = u; });
+      }).then((u) => unlistens.push(u));
+
+      listen("state-updated", (e: any) => {
+        if (!active) return;
+        const persisted = e.payload as PersistedState;
+        setState((current) => applyPersistedState(persisted, current));
+      }).then((u) => unlistens.push(u));
+
+      listen("wallpaper-loading", (e: any) => {
+        if (!active) return;
+        setState((current) => ({ ...current, isLoading: e.payload as boolean }));
+      }).then((u) => unlistens.push(u));
     });
 
     return () => { 
       active = false; 
-      if (unlisten) unlisten();
+      unlistens.forEach((u) => u());
     };
   }, []);
 

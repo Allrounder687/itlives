@@ -294,6 +294,23 @@ pub fn set_discover_provider(
 pub fn get_system_wallpaper() -> Result<String, String> {
     #[cfg(target_os = "windows")]
     {
+        let app_data = std::env::var("APPDATA").unwrap_or_default();
+        let transcoded_path = std::path::Path::new(&app_data)
+            .join("Microsoft")
+            .join("Windows")
+            .join("Themes")
+            .join("TranscodedWallpaper");
+            
+        if transcoded_path.exists() {
+            let temp_dir = std::env::temp_dir();
+            let target_path = temp_dir.join("itlives_current_wallpaper.jpg");
+            if let Err(e) = std::fs::copy(&transcoded_path, &target_path) {
+                log::warn!("Failed to copy transcoded wallpaper: {}", e);
+            } else {
+                return Ok(target_path.to_string_lossy().to_string());
+            }
+        }
+
         use windows::Win32::UI::WindowsAndMessaging::{SystemParametersInfoW, SPI_GETDESKWALLPAPER, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS};
         let mut buffer = [0u16; 512];
         unsafe {
@@ -313,4 +330,145 @@ pub fn get_system_wallpaper() -> Result<String, String> {
         }
     }
     Err("System wallpaper not found".to_string())
+}
+
+#[tauri::command]
+pub fn show_mini_player(app: tauri::AppHandle) -> Result<(), String> {
+    use tauri::Manager;
+    #[cfg(target_os = "windows")]
+    {
+        if let Some(window) = app.get_webview_window("mini_player") {
+            if let Ok(hwnd) = window.hwnd() {
+                let hwnd = windows::Win32::Foundation::HWND(hwnd.0 as *mut std::ffi::c_void);
+                unsafe {
+                    use windows::Win32::UI::WindowsAndMessaging::{
+                        ShowWindow, SetWindowPos, HWND_TOP, SW_SHOW,
+                        GetWindowLongW, SetWindowLongW, GWL_STYLE, GWL_EXSTYLE,
+                        WS_POPUP, WS_CAPTION, WS_THICKFRAME, WS_MINIMIZEBOX, WS_MAXIMIZEBOX, WS_SYSMENU,
+                        WS_EX_TOOLWINDOW, GWL_HWNDPARENT
+                    };
+                    
+                    let workerw = crate::wallpaper::desktop::win32::get_desktop_workerw().unwrap_or(0);
+                    if workerw != 0 {
+                        // 1. Set the window owner to WorkerW.
+                        // Setting the owner (GWL_HWNDPARENT) on a WS_POPUP window pins it to the desktop layer
+                        // (above WorkerW wallpaper, but below all normal application windows), prevents it from
+                        // minimizing on Win+D (Show Desktop), and retains full interactivity.
+                        let _ = SetWindowLongW(hwnd, GWL_HWNDPARENT, workerw as i32);
+                        
+                        // 2. Ensure WS_POPUP style and remove standard caption/thickframes/system menus
+                        let old_style = GetWindowLongW(hwnd, GWL_STYLE) as u32;
+                        let mut new_style = old_style;
+                        new_style |= WS_POPUP.0;
+                        new_style &= !WS_CAPTION.0;
+                        new_style &= !WS_THICKFRAME.0;
+                        new_style &= !WS_MINIMIZEBOX.0;
+                        new_style &= !WS_MAXIMIZEBOX.0;
+                        new_style &= !WS_SYSMENU.0;
+                        let _ = SetWindowLongW(hwnd, GWL_STYLE, new_style as i32);
+                        
+                        // 3. Set extended window styles (exStyle: tool window, no taskbar)
+                        let old_ex = GetWindowLongW(hwnd, GWL_EXSTYLE) as u32;
+                        let new_ex = old_ex | WS_EX_TOOLWINDOW.0;
+                        let _ = SetWindowLongW(hwnd, GWL_EXSTYLE, new_ex as i32);
+                        
+                        // 4. Position it relative to the monitor
+                        if let Ok(Some(monitor)) = window.current_monitor() {
+                            let monitor_size = monitor.size();
+                            let scale = monitor.scale_factor();
+                            let w = (320.0 * scale) as i32;
+                            let h = (420.0 * scale) as i32;
+                            let x = monitor_size.width as i32 - w - (20.0 * scale) as i32;
+                            let y = (monitor_size.height as i32 - h) / 2;
+                            
+                            let _ = SetWindowPos(
+                                hwnd,
+                                HWND_TOP,
+                                x,
+                                y,
+                                w,
+                                h,
+                                windows::Win32::UI::WindowsAndMessaging::SWP_SHOWWINDOW,
+                            );
+                        }
+                    }
+                    
+                    let _ = ShowWindow(hwnd, SW_SHOW);
+                }
+            }
+        }
+        return Ok(());
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        if let Some(window) = app.get_webview_window("mini_player") {
+            let _ = window.show();
+            let _ = window.unminimize();
+            let _ = window.set_focus();
+        }
+        return Ok(());
+    }
+}
+
+#[tauri::command]
+pub fn hide_mini_player(app: tauri::AppHandle) -> Result<(), String> {
+    use tauri::Manager;
+    #[cfg(target_os = "windows")]
+    {
+        if let Some(window) = app.get_webview_window("mini_player") {
+            if let Ok(hwnd) = window.hwnd() {
+                let hwnd = windows::Win32::Foundation::HWND(hwnd.0 as *mut std::ffi::c_void);
+                unsafe {
+                    let _ = windows::Win32::UI::WindowsAndMessaging::ShowWindow(hwnd, windows::Win32::UI::WindowsAndMessaging::SW_HIDE);
+                }
+            }
+        }
+        return Ok(());
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        if let Some(window) = app.get_webview_window("mini_player") {
+            let _ = window.hide();
+        }
+        return Ok(());
+    }
+}
+
+#[tauri::command]
+pub fn toggle_mini_player(app: tauri::AppHandle) -> Result<(), String> {
+    use tauri::Manager;
+    #[cfg(target_os = "windows")]
+    {
+        if let Some(window) = app.get_webview_window("mini_player") {
+            if let Ok(hwnd) = window.hwnd() {
+                let hwnd = windows::Win32::Foundation::HWND(hwnd.0 as *mut std::ffi::c_void);
+                unsafe {
+                    let visible = windows::Win32::UI::WindowsAndMessaging::IsWindowVisible(hwnd).as_bool();
+                    if visible {
+                        let _ = hide_mini_player(app);
+                    } else {
+                        let _ = show_mini_player(app);
+                    }
+                }
+            }
+        }
+        return Ok(());
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        if let Some(window) = app.get_webview_window("mini_player") {
+            let visible = window.is_visible().unwrap_or(false);
+            if visible {
+                let _ = window.hide();
+            } else {
+                let _ = window.show();
+                let _ = window.unminimize();
+                let _ = window.set_focus();
+            }
+        }
+        return Ok(());
+    }
 }

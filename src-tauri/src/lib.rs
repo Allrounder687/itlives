@@ -109,16 +109,7 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
                 }
             }
             "mini_player" => {
-                if let Some(window) = app_handle.get_webview_window("mini_player") {
-                    let visible = window.is_visible().unwrap_or(false);
-                    if visible {
-                        let _ = window.hide();
-                    } else {
-                        let _ = window.show();
-                        let _ = window.unminimize();
-                        let _ = window.set_focus();
-                    }
-                }
+                let _ = commands::settings::toggle_mini_player(app_handle.clone());
             }
             "restore_last" => {
                 let store = app_handle.state::<AppStateStore>();
@@ -210,8 +201,10 @@ pub fn run() {
                     }
                 }
             }
+
         })
         .setup(move |app| {
+            state_store.set_app_handle(app.handle().clone());
             if cfg!(debug_assertions) {
                 app.handle().plugin(
                     tauri_plugin_log::Builder::default()
@@ -294,6 +287,9 @@ pub fn run() {
             commands::settings::set_slideshow_source,
             commands::settings::set_discover_provider,
             commands::settings::get_system_wallpaper,
+            commands::settings::show_mini_player,
+            commands::settings::hide_mini_player,
+            commands::settings::toggle_mini_player,
             commands::settings::check_dependencies,
             commands::settings::install_mpv,
             commands::settings::launch_external_app,

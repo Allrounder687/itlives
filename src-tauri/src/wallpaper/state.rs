@@ -93,6 +93,7 @@ pub struct QueueAdvanceResult {
 pub struct AppStateStore {
     inner: Arc<RwLock<WallpaperState>>,
     path: Arc<PathBuf>,
+    app_handle: Arc<std::sync::Mutex<Option<tauri::AppHandle>>>,
 }
 
 impl AppStateStore {
@@ -110,6 +111,13 @@ impl AppStateStore {
         Self {
             inner: Arc::new(RwLock::new(state)),
             path: Arc::new(path),
+            app_handle: Arc::new(std::sync::Mutex::new(None)),
+        }
+    }
+
+    pub fn set_app_handle(&self, handle: tauri::AppHandle) {
+        if let Ok(mut lock) = self.app_handle.lock() {
+            *lock = Some(handle);
         }
     }
 
@@ -141,6 +149,15 @@ impl AppStateStore {
             state.queue_cursor = 0;
         }
         self.persist(&state)?;
+
+        // Emit state update event
+        use tauri::Emitter;
+        if let Ok(lock) = self.app_handle.lock() {
+            if let Some(app) = lock.as_ref() {
+                let _ = app.emit("state-updated", state.clone());
+            }
+        }
+
         Ok(state.clone())
     }
 }

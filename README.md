@@ -1,36 +1,62 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# OpenClaw LWP (Live Wallpaper)
 
-## Getting Started
+OpenClaw LWP is an advanced, high-performance Live Wallpaper engine and desktop customization suite for Windows. Combining the power of Next.js, React Three Fiber, and a low-level native Rust backend via Tauri, OpenClaw LWP transforms your static desktop into a dynamic, interactive workspace without sacrificing system performance.
 
-First, run the development server:
+## 🚀 Epic Feature Suite
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+### 📡 Unrivaled Content Providers
+Stop relying on local files. OpenClaw seamlessly streams and scrapes from the web's best platforms:
+- **Streaming Platforms**: Full native integration for **YouTube** and **Twitch** (`youtube.rs`), allowing you to set live streams or VODs directly as your desktop background.
+- **Premium Wallpaper Sources**: Native scrapers and integration for **Wallhaven.cc**, **Alphacoders**, **MotionBGs**, **Pinterest**, and **WallpaperWaves**.
+- **Direct URLs**: Pass any valid media URL directly to the rendering engine.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 🔌 Deep Wallhaven.cc API Integration
+A power-user's dream for Wallhaven enthusiasts:
+- **API Authentication**: Link your Wallhaven API key directly in the app.
+- **Personal Collections**: Browse, manage, and set your private Wallhaven collections as rotating wallpapers.
+- **Smart Batch Downloader**: Download massive collections directly to your local drive. The built-in downloader (`BatchDownloadModal.tsx`) automatically respects Wallhaven's rate limits, pausing between requests to prevent IP bans.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 🎨 Advanced Image Editing & Rendering Engine
+Why use Photoshop when your wallpaper engine does it for you?
+- **Static Image Editor (`EditorWorkspace.tsx`)**: A fully-featured editing suite built right into the app. Crop, color-correct, apply filters, and manipulate your static wallpapers before applying them.
+- **Interactive 3D WebGL**: Built on `@react-three/fiber` and `three.js`. Render massive 3D scenes (`WebGLEffectRenderer.tsx`) that react to your mouse and system state.
+- **Parallax Environments**: Multi-layered 2.5D parallax environments (`ParallaxRenderer.tsx`) that shift as you move your cursor.
+- **Audio Reactivity**: Watch your desktop pulse to your music with real-time audio monitoring (`audio.rs`).
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 🖥️ Power User Controls
+- **Multi-Display Support**: Individually configure different wallpapers, streams, or 3D scenes for every monitor you own (`DisplaySelector.tsx`).
+- **Automation & Scheduling**: Set up robust rules in the `AutomationPanel.tsx` to change wallpapers based on time of day, system theme, or battery life.
+- **True Desktop Reparenting**: The Rust backend hooks your wallpaper directly behind the Windows desktop icons using the deep `WorkerW` API, ensuring flawless integration without blocking your workflow.
+- **Performance Throttling**: The engine automatically pauses rendering when full-screen games or heavy applications are launched (`performance.rs`).
 
-## Learn More
+## 🏗️ Architecture Stack
 
-To learn more about Next.js, take a look at the following resources:
+- **Frontend**: Next.js (App Router), React 19, Tailwind CSS v4.
+- **3D Engine**: Three.js, React Three Fiber, React Three Drei.
+- **Backend**: Tauri 2.0 (Rust) handling deep OS-level APIs (Windows Themes, HWND reparenting, audio loopback).
+- **Automation Scripts**: Unified Node.js CLI scraper `scripts/scrape.js`.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 🛠️ Development Setup
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Prerequisites
+- [Node.js](https://nodejs.org/) (v18+)
+- [Rust](https://www.rust-lang.org/tools/install)
 
-## Deploy on Vercel
+### Installation
+1. Install dependencies:
+   ```bash
+   npm install
+   ```
+2. Start the full desktop application (Next.js + Tauri):
+   ```bash
+   npm run tauri dev
+   ```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Included CLI Tools
+- `npm run scrape -- --source=<pinterest|alphacoders> --query="<search>"`: Run the built-in scraper locally.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 📜 Changelog
+Check the [CHANGELOG.md](./CHANGELOG.md) to see recent updates and history.
+
+## 📄 License
+*Private / All Rights Reserved.*
