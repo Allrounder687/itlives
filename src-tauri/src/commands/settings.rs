@@ -114,6 +114,143 @@ pub fn set_wallhaven_api_key(
 }
 
 #[tauri::command]
+pub async fn start_oauth_flow(
+    provider: String,
+    client_id: String,
+    client_secret: String,
+    app_handle: tauri::AppHandle,
+    state: tauri::State<'_, AppStateStore>,
+) -> Result<(), String> {
+    use tauri_plugin_shell::ShellExt;
+    use tauri_plugin_dialog::DialogExt;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    
+    if provider != "deviantart" {
+        return Err("Only deviantart is supported".into());
+    }
+
+    let redirect_uri = "http://localhost:34567/callback";
+    
+    // Generate PKCE code verifier and challenge
+    use rand::RngCore;
+    use sha2::{Digest, Sha256};
+    use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+    
+    let mut verifier_bytes = [0u8; 32];
+    rand::thread_rng().fill_bytes(&mut verifier_bytes);
+    let code_verifier = URL_SAFE_NO_PAD.encode(verifier_bytes);
+    
+    let mut hasher = Sha256::new();
+    hasher.update(code_verifier.as_bytes());
+    let code_challenge = URL_SAFE_NO_PAD.encode(hasher.finalize());
+
+    let auth_url = format!(
+        "https://www.deviantart.com/oauth2/authorize?response_type=code&client_id={}&redirect_uri={}&scope=browse&code_challenge={}&code_challenge_method=S256",
+        client_id, redirect_uri, code_challenge
+    );
+
+    // Launch browser
+    app_handle.shell().open(auth_url, None).map_err(|e| e.to_string())?;
+
+    // Start local server
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:34567").await.map_err(|e| e.to_string())?;
+    
+    let mut code = String::new();
+    let mut last_request = String::new();
+    let timeout_duration = std::time::Duration::from_secs(120); // 2 minutes timeout
+    
+    let _ = tokio::time::timeout(timeout_duration, async {
+        loop {
+            if let Ok((mut stream, _)) = listener.accept().await {
+                let mut buffer = [0; 2048];
+                if let Ok(n) = stream.read(&mut buffer).await {
+                    let request = String::from_utf8_lossy(&buffer[..n]);
+                    
+                    if request.contains("GET /favicon.ico") {
+                        let response = "HTTP/1.1 404 Not Found\r\n\r\n";
+                        let _ = stream.write_all(response.as_bytes()).await;
+                        continue;
+                    }
+                    
+                    last_request = request.to_string();
+                    
+                    if let Some(code_idx) = request.find("code=") {
+                        let start = code_idx + 5;
+                        let end = request[start..].find(&[' ', '&', '\r', '\n'][..]).unwrap_or(request.len() - start);
+                        code = request[start..start+end].to_string();
+                        
+                        let response = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nConnection: close\r\n\r\n<html><body><h2>Login Successful!</h2><p>You can safely close this window and return to itLives.</p><script>window.close();</script></body></html>";
+                        let _ = stream.write_all(response.as_bytes()).await;
+                        break;
+                    } else if request.contains("GET /callback") {
+                        let response = "HTTP/1.1 400 Bad Request\r\nContent-Type: text/html\r\nConnection: close\r\n\r\n<html><body><h2>Invalid Request</h2><p>No authorization code found.</p></body></html>";
+                        let _ = stream.write_all(response.as_bytes()).await;
+                        break; // Stop if it's a callback without a code (e.g. error)
+                    }
+                }
+            }
+        }
+    }).await;
+
+    if code.is_empty() {
+        app_handle.dialog().message(&format!("Failed to capture authorization code.\n\nRaw request received:\n{}", last_request)).title("OAuth Error").show(|_| {});
+        return Err("Failed to capture authorization code".into());
+    }
+
+    // Exchange code for token
+    let client = reqwest::Client::new();
+    let res = client.post("https://www.deviantart.com/oauth2/token")
+        .form(&[
+            ("grant_type", "authorization_code"),
+            ("client_id", &client_id),
+            ("redirect_uri", redirect_uri),
+            ("code", &code),
+            ("code_verifier", &code_verifier),
+        ])
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if res.status().is_success() {
+        let json: serde_json::Value = res.json().await.map_err(|e| e.to_string())?;
+        
+        let mut creds = std::collections::HashMap::new();
+        creds.insert("client_id".to_string(), serde_json::Value::String(client_id));
+        creds.insert("client_secret".to_string(), serde_json::Value::String(client_secret));
+        if let Some(at) = json.get("access_token") {
+            creds.insert("access_token".to_string(), at.clone());
+        }
+        if let Some(rt) = json.get("refresh_token") {
+            creds.insert("refresh_token".to_string(), rt.clone());
+        }
+        
+        // Save to state
+        let mut all_creds = crate::wallpaper::state::get(&state).addon_credentials.clone();
+        all_creds.insert(provider, serde_json::Value::Object(creds.into_iter().map(|(k, v)| (k, v)).collect()));
+        
+        crate::wallpaper::state::set_addon_credentials(&state, all_creds)?;
+        
+        app_handle.dialog().message("DeviantArt account successfully linked!")
+            .title("OAuth Integration")
+            .show(|_| {});
+            
+        Ok(())
+    } else {
+        let err_text = res.text().await.unwrap_or_default();
+        app_handle.dialog().message(&format!("Token exchange failed: {}", err_text)).title("OAuth Error").show(|_| {});
+        Err(format!("Token exchange failed: {}", err_text))
+    }
+}
+
+#[tauri::command]
+pub fn set_addon_credentials(
+    state: State<'_, AppStateStore>,
+    credentials: std::collections::HashMap<String, serde_json::Value>,
+) -> Result<WallpaperState, String> {
+    wallpaper::state::set_addon_credentials(&state, credentials)
+}
+
+#[tauri::command]
 pub fn set_disabled_sources(
     state: State<'_, AppStateStore>,
     disabled: Vec<String>,

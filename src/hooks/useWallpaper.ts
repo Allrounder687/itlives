@@ -55,6 +55,14 @@ export function useWallpaper() {
     } catch (e) { console.error("API Key failed", e); }
   }, [setState]);
 
+  const setAddonCredentials = useCallback(async (credentials: Record<string, any>) => {
+    try {
+      const { invoke } = await getCoreApi();
+      const persisted = await invoke<PersistedState>("set_addon_credentials", { credentials });
+      setState((s) => applyPersistedState(persisted, s));
+    } catch (e) { console.error("Credentials failed", e); }
+  }, [setState]);
+
   const setDisabledSources = useCallback(async (disabled: string[]) => {
     try {
       const { invoke } = await getCoreApi();
@@ -226,6 +234,7 @@ export function useWallpaper() {
     setAutostartEnabled,
     setLightweightMode,
     setPerfConfig,
+    setAddonCredentials,
     browseLocalVideo,
     browseFolderToQueue,
     isFavorite,

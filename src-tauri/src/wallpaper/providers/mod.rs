@@ -261,7 +261,7 @@ pub fn get_provider(source: &str) -> Result<Box<dyn VideoProvider>, String> {
         "motionbgs" => Ok(Box::new(motionbgs::MotionBgsProvider)),
         "alphacoders" => Ok(Box::new(alphacoders::AlphaCodersProvider)),
         "youtube" | "yt" => Ok(Box::new(youtube::YouTubeProvider)),
-        "direct" | "url" => Ok(Box::new(direct_url::DirectUrlProvider)),
+        "direct" | "url" | "deviantart" => Ok(Box::new(direct_url::DirectUrlProvider)),
         "wallhaven" => Ok(Box::new(wallhaven::WallhavenProvider)),
         "pinterest" => Ok(Box::new(pinterest::PinterestProvider)),
         "wallpaperwaves" => Ok(Box::new(wallpaperwaves::WallpaperWavesProvider)),

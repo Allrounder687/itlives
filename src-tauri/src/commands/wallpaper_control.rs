@@ -206,7 +206,10 @@ pub fn stop_wallpaper(
         let _ = window.hide();
     }
     for (label, window) in app_handle.webview_windows() {
-        if label.starts_with("web_wallpaper_") || label == "effects_overlay" {
+        if label.starts_with("web_wallpaper_")
+            || label.starts_with("interactive_overlay_")
+            || label == "effects_overlay"
+        {
             let _ = window.close();
         }
     }
@@ -511,14 +514,48 @@ pub async fn apply_desktop_effects(
                             windows::Win32::UI::WindowsAndMessaging::SM_CYVIRTUALSCREEN,
                         );
 
+                        let mut points = [
+                            windows::Win32::Foundation::POINT { x: v_x, y: v_y },
+                            windows::Win32::Foundation::POINT {
+                                x: v_x + v_w,
+                                y: v_y + v_h,
+                            },
+                        ];
+                        let _ = windows::Win32::Graphics::Gdi::MapWindowPoints(
+                            windows::Win32::Foundation::HWND(0 as _),
+                            windows::Win32::Foundation::HWND(workerw as _),
+                            &mut points,
+                        );
+                        let local_x = points[0].x;
+                        let local_y = points[0].y;
+                        let local_width = points[1].x - points[0].x;
+                        let local_height = points[1].y - points[0].y;
+
+                        let old_ex_style = windows::Win32::UI::WindowsAndMessaging::GetWindowLongW(
+                            windows::Win32::Foundation::HWND(effects_overlay_hwnd as _),
+                            windows::Win32::UI::WindowsAndMessaging::GWL_EXSTYLE,
+                        );
+                        let mut new_ex_style = old_ex_style as u32;
+                        new_ex_style &= !windows::Win32::UI::WindowsAndMessaging::WS_EX_CLIENTEDGE.0;
+                        new_ex_style &= !windows::Win32::UI::WindowsAndMessaging::WS_EX_WINDOWEDGE.0;
+                        new_ex_style &= !windows::Win32::UI::WindowsAndMessaging::WS_EX_STATICEDGE.0;
+                        new_ex_style &= !windows::Win32::UI::WindowsAndMessaging::WS_EX_DLGMODALFRAME.0;
+                        let _ = windows::Win32::UI::WindowsAndMessaging::SetWindowLongW(
+                            windows::Win32::Foundation::HWND(effects_overlay_hwnd as _),
+                            windows::Win32::UI::WindowsAndMessaging::GWL_EXSTYLE,
+                            new_ex_style as i32,
+                        );
+
                         let _ = windows::Win32::UI::WindowsAndMessaging::SetWindowPos(
                             windows::Win32::Foundation::HWND(effects_overlay_hwnd as _),
                             target_z,
-                            v_x,
-                            v_y,
-                            v_w,
-                            v_h,
-                            windows::Win32::UI::WindowsAndMessaging::SWP_SHOWWINDOW,
+                            local_x,
+                            local_y,
+                            local_width,
+                            local_height,
+                            windows::Win32::UI::WindowsAndMessaging::SWP_SHOWWINDOW
+                                | windows::Win32::UI::WindowsAndMessaging::SWP_FRAMECHANGED
+                                | windows::Win32::UI::WindowsAndMessaging::SWP_NOACTIVATE,
                         );
                     }
 
@@ -569,7 +606,7 @@ pub fn start_mouse_tracking(app_handle: tauri::AppHandle) {
 
                     let vx = GetSystemMetrics(SM_XVIRTUALSCREEN);
                     let vy = GetSystemMetrics(SM_YVIRTUALSCREEN);
-                    let payload = CursorPayload {
+                    let _payload = CursorPayload {
                         x: pt.x - vx,
                         y: pt.y - vy,
                         button: None,
@@ -578,8 +615,8 @@ pub fn start_mouse_tracking(app_handle: tauri::AppHandle) {
                     // Dispatch mousemove to all active interactive webviews safely without __TAURI__
                     use tauri::Manager;
                     for (label, window) in app_handle.webview_windows() {
-                        if label.starts_with("web_wallpaper_") || label == "effects_overlay" {
-                            let mut client_pt = pt;
+                        if label.starts_with("web_wallpaper_") || label.starts_with("interactive_overlay_") || label == "effects_overlay" {
+                            let mut _client_pt = pt;
                             if let Ok(hwnd) = window.hwnd() {
                                 let mut rect = windows::Win32::Foundation::RECT::default();
                                 unsafe {
@@ -603,8 +640,8 @@ pub fn start_mouse_tracking(app_handle: tauri::AppHandle) {
 
                     if is_l_down && !was_l_down {
                         for (label, window) in app_handle.webview_windows() {
-                            if label.starts_with("web_wallpaper_") || label == "effects_overlay" {
-                                let mut client_pt = pt;
+                            if label.starts_with("web_wallpaper_") || label.starts_with("interactive_overlay_") || label == "effects_overlay" {
+                                let mut _client_pt = pt;
                                 if let Ok(hwnd) = window.hwnd() {
                                     let mut rect = windows::Win32::Foundation::RECT::default();
                                     unsafe {
@@ -630,8 +667,8 @@ pub fn start_mouse_tracking(app_handle: tauri::AppHandle) {
 
                     if is_r_down && !was_r_down {
                         for (label, window) in app_handle.webview_windows() {
-                            if label.starts_with("web_wallpaper_") || label == "effects_overlay" {
-                                let mut client_pt = pt;
+                            if label.starts_with("web_wallpaper_") || label.starts_with("interactive_overlay_") || label == "effects_overlay" {
+                                let mut _client_pt = pt;
                                 if let Ok(hwnd) = window.hwnd() {
                                     let mut rect = windows::Win32::Foundation::RECT::default();
                                     unsafe {
@@ -657,8 +694,8 @@ pub fn start_mouse_tracking(app_handle: tauri::AppHandle) {
 
                     if is_m_down && !was_m_down {
                         for (label, window) in app_handle.webview_windows() {
-                            if label.starts_with("web_wallpaper_") || label == "effects_overlay" {
-                                let mut client_pt = pt;
+                            if label.starts_with("web_wallpaper_") || label.starts_with("interactive_overlay_") || label == "effects_overlay" {
+                                let mut _client_pt = pt;
                                 if let Ok(hwnd) = window.hwnd() {
                                     let mut rect = windows::Win32::Foundation::RECT::default();
                                     unsafe {
@@ -714,4 +751,13 @@ pub fn get_file_modified_time(path: String) -> Result<u64, String> {
                 .as_millis() as u64
         })
         .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn apply_interactive_overlay_cmd(
+    app: tauri::AppHandle,
+    video: VideoResult,
+    monitor: Option<String>,
+) -> Result<String, String> {
+    wallpaper::desktop::apply_interactive_overlay(app, &video.local_path, monitor)
 }

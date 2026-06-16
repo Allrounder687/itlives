@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { 
   Monitor, 
   Volume2, 
@@ -29,18 +29,20 @@ import {
   Folder,
   Compass,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  Search
 } from "lucide-react";
 import { ThemeSelector } from "./ThemeSelector";
 import { WallpaperSourcePanel } from "./WallpaperSourcePanel";
 import { QueuePanel } from "./QueuePanel";
 import { invoke } from "@tauri-apps/api/core";
+import { useTranslation } from "@/hooks/useTranslation";
 
 interface SettingsPanelProps {
   wallpaper: any; // Context hook from useWallpaper
 }
 
-type SubTab = "general" | "performance" | "wallpaper" | "screensaver" | "system";
+type SubTab = "general" | "performance" | "wallpaper" | "screensaver" | "system" | "accounts";
 
 // Reusable Custom Styled Dropdown Selector Component
 interface SelectOption {
@@ -96,7 +98,10 @@ function CustomSelect({ value, options, onChange }: CustomSelectProps) {
 }
 
 export function SettingsPanel({ wallpaper }: SettingsPanelProps) {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<SubTab>("general");
+  const [searchQuery, setSearchQuery] = useState("");
+  const settingsContainerRef = useRef<HTMLDivElement>(null);
 
   // --- LOCALPERSISTED FRONTEND ONLY STATES ---
   const [uiAnimations, setUiAnimations] = useState(true);
@@ -298,6 +303,34 @@ export function SettingsPanel({ wallpaper }: SettingsPanelProps) {
       console.error(e);
     }
   };
+  // --- UNIVERSAL SEARCH EFFECT ---
+  useEffect(() => {
+    if (!settingsContainerRef.current) return;
+    
+    const container = settingsContainerRef.current;
+    const cards = container.querySelectorAll('.settings-card');
+    const headers = container.querySelectorAll('.settings-section-header, .settings-danger-zone');
+    
+    if (!searchQuery.trim()) {
+      cards.forEach(card => (card as HTMLElement).style.display = '');
+      headers.forEach(h => (h as HTMLElement).style.display = '');
+      return;
+    }
+    
+    const q = searchQuery.toLowerCase();
+    
+    // Hide headers during search for a flat list
+    headers.forEach(h => (h as HTMLElement).style.display = 'none');
+    
+    cards.forEach(card => {
+      const text = card.textContent?.toLowerCase() || '';
+      if (text.includes(q)) {
+        (card as HTMLElement).style.display = '';
+      } else {
+        (card as HTMLElement).style.display = 'none';
+      }
+    });
+  }, [searchQuery, activeTab]);
 
   return (
     <section className="settings-dashboard">
@@ -308,13 +341,37 @@ export function SettingsPanel({ wallpaper }: SettingsPanelProps) {
           <h2>Preferences</h2>
         </div>
         
+        <div style={{ padding: "0 16px 20px 16px" }}>
+          <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+            <Search size={16} style={{ position: "absolute", left: "14px", color: "var(--accent)" }} />
+            <input 
+              type="text" 
+              placeholder="Search settings..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              style={{ 
+                width: "100%", 
+                background: "rgba(0,0,0,0.3)", 
+                border: "1px solid var(--accent)", 
+                borderRadius: "8px", 
+                padding: "10px 12px 10px 38px", 
+                color: "white", 
+                fontSize: "14px",
+                fontWeight: "500",
+                outline: "none",
+                boxShadow: "0 0 10px rgba(162, 255, 0, 0.1)"
+              }} 
+            />
+          </div>
+        </div>
+        
         <button 
           type="button" 
           className={`settings-tab-btn ${activeTab === "general" ? "active" : ""}`}
           onClick={() => setActiveTab("general")}
         >
           <span className="settings-tab-icon"><Sliders size={18} /></span>
-          <span>General</span>
+          <span>{t("general")}</span>
         </button>
 
         <button 
@@ -323,7 +380,7 @@ export function SettingsPanel({ wallpaper }: SettingsPanelProps) {
           onClick={() => setActiveTab("performance")}
         >
           <span className="settings-tab-icon"><Activity size={18} /></span>
-          <span>Performance</span>
+          <span>{t("performance")}</span>
         </button>
 
         <button 
@@ -332,7 +389,7 @@ export function SettingsPanel({ wallpaper }: SettingsPanelProps) {
           onClick={() => setActiveTab("wallpaper")}
         >
           <span className="settings-tab-icon"><Image size={18} /></span>
-          <span>Wallpaper</span>
+          <span>{t("wallpaper")}</span>
         </button>
 
         <button 
@@ -341,7 +398,7 @@ export function SettingsPanel({ wallpaper }: SettingsPanelProps) {
           onClick={() => setActiveTab("screensaver")}
         >
           <span className="settings-tab-icon"><Clock size={18} /></span>
-          <span>Screensaver</span>
+          <span>{t("screensaver")}</span>
         </button>
 
         <button 
@@ -350,15 +407,24 @@ export function SettingsPanel({ wallpaper }: SettingsPanelProps) {
           onClick={() => setActiveTab("system")}
         >
           <span className="settings-tab-icon"><Settings size={18} /></span>
-          <span>System</span>
+          <span>{t("system")}</span>
+        </button>
+
+        <button 
+          type="button" 
+          className={`settings-tab-btn ${activeTab === "accounts" ? "active" : ""}`}
+          onClick={() => setActiveTab("accounts")}
+        >
+          <span className="settings-tab-icon"><Lock size={18} /></span>
+          <span>{t("accounts") || "Accounts"}</span>
         </button>
       </div>
 
       {/* 2. Right Workspace Content Panel */}
-      <div className="settings-panel-body">
+      <div className="settings-panel-body" ref={settingsContainerRef}>
 
         {/* ================= GENERAL PAGE ================= */}
-        {activeTab === "general" && (
+        {(activeTab === "general" || searchQuery) && (
           <>
             <div>
               <span className="settings-section-title">Appearance & behavior</span>
@@ -434,8 +500,8 @@ export function SettingsPanel({ wallpaper }: SettingsPanelProps) {
                   <div className="settings-card-top">
                     <div className="settings-card-icon-container"><Globe size={18} /></div>
                     <div className="settings-card-info">
-                      <span className="settings-card-title">Language</span>
-                      <span className="settings-card-desc">Lively will restart to apply the new language.</span>
+                      <span className="settings-card-title">{t("language")}</span>
+                      <span className="settings-card-desc">{t("languageDesc")}</span>
                     </div>
                   </div>
                   <div className="settings-card-control">
@@ -444,6 +510,7 @@ export function SettingsPanel({ wallpaper }: SettingsPanelProps) {
                       onChange={(val) => {
                         setLanguage(val);
                         localStorage.setItem("settings_language", val);
+                        window.dispatchEvent(new Event("settings-language-changed"));
                       }}
                       options={[
                         { value: "Same as System", label: "Same as System" },
@@ -452,6 +519,11 @@ export function SettingsPanel({ wallpaper }: SettingsPanelProps) {
                         { value: "Français", label: "Français" },
                         { value: "Deutsch", label: "Deutsch" },
                         { value: "日本語", label: "日本語" },
+                        { value: "简体中文", label: "简体中文" },
+                        { value: "Русский", label: "Русский" },
+                        { value: "Português", label: "Português" },
+                        { value: "한국어", label: "한국어" },
+                        { value: "Italiano", label: "Italiano" },
                       ]}
                     />
                   </div>
@@ -578,7 +650,7 @@ export function SettingsPanel({ wallpaper }: SettingsPanelProps) {
         )}
 
         {/* ================= PERFORMANCE PAGE ================= */}
-        {activeTab === "performance" && (
+        {(activeTab === "performance" || searchQuery) && (
           <>
             <div>
               <span className="settings-section-title">Wallpaper playback</span>
@@ -932,7 +1004,7 @@ export function SettingsPanel({ wallpaper }: SettingsPanelProps) {
         )}
 
         {/* ================= WALLPAPER PAGE ================= */}
-        {activeTab === "wallpaper" && (
+        {(activeTab === "wallpaper" || searchQuery) && (
           <>
             <div>
               <span className="settings-section-title">Appearance & behavior</span>
@@ -1254,7 +1326,7 @@ export function SettingsPanel({ wallpaper }: SettingsPanelProps) {
         )}
 
         {/* ================= SCREENSAVER PAGE ================= */}
-        {activeTab === "screensaver" && (
+        {(activeTab === "screensaver" || searchQuery) && (
           <>
             <div>
               <span className="settings-section-title">Appearance & behavior</span>
@@ -1389,7 +1461,7 @@ export function SettingsPanel({ wallpaper }: SettingsPanelProps) {
         )}
 
         {/* ================= SYSTEM PAGE ================= */}
-        {activeTab === "system" && (
+        {(activeTab === "system" || searchQuery) && (
           <>
             <div>
               <span className="settings-section-title">Appearance & behavior</span>
@@ -1484,6 +1556,89 @@ export function SettingsPanel({ wallpaper }: SettingsPanelProps) {
               </div>
             </div>
           </>
+        )}
+
+        {/* ================= ACCOUNTS PAGE ================= */}
+        {(activeTab === "accounts" || searchQuery) && (
+          <div className="animate-fade-in">
+            <span className="settings-section-title">Connected Accounts</span>
+            <div className="settings-grid-layout">
+              {/* DeviantArt Account Card */}
+              <div className="settings-card">
+                <div className="settings-card-top">
+                  <div className="settings-card-icon-container"><Globe size={18} /></div>
+                  <div className="settings-card-info">
+                    <span className="settings-card-title" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      DeviantArt
+                      {wallpaper.addonCredentials?.deviantart?.access_token && (
+                        <span style={{ fontSize: "10px", backgroundColor: "var(--accent)", color: "#000", padding: "2px 6px", borderRadius: "4px", fontWeight: "bold" }}>CONNECTED</span>
+                      )}
+                    </span>
+                    <span className="settings-card-desc">Connect official DeviantArt developer credentials to access high-quality original images.</span>
+                  </div>
+                </div>
+                
+                <div className="settings-card-control" style={{ width: "100%", marginTop: "12px", flexDirection: "column", gap: "10px" }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "4px", width: "100%" }}>
+                    <label style={{ fontSize: "11px", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Client ID</label>
+                    <input 
+                      type="text" 
+                      className="text-input" 
+                      placeholder="e.g. 23812" 
+                      style={{ width: "100%", padding: "8px 12px" }}
+                      value={wallpaper.addonCredentials?.deviantart?.client_id || ""}
+                      onChange={(e) => {
+                        const newCreds = { ...wallpaper.addonCredentials, deviantart: { ...wallpaper.addonCredentials?.deviantart, client_id: e.target.value } };
+                        wallpaper.setAddonCredentials(newCreds);
+                      }}
+                    />
+                  </div>
+                  
+                  {wallpaper.addonCredentials?.deviantart?.access_token && (
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", padding: "4px 0", marginTop: "4px" }}>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                        <label style={{ fontSize: "12px", color: "var(--text-bright)", fontWeight: "500" }}>Enhanced Mode</label>
+                        <span style={{ fontSize: "11px", color: "var(--text-dim)" }}>Include unfiltered and mature content in search results.</span>
+                      </div>
+                      <label className="switch-label">
+                        <input 
+                          type="checkbox" 
+                          checked={wallpaper.addonCredentials?.deviantart?.enhancedMode || false}
+                          onChange={(e) => {
+                            const newCreds = { 
+                              ...wallpaper.addonCredentials, 
+                              deviantart: { 
+                                ...wallpaper.addonCredentials?.deviantart, 
+                                enhancedMode: e.target.checked
+                              } 
+                            };
+                            wallpaper.setAddonCredentials(newCreds);
+                          }}
+                        />
+                        <span className="switch-slider"></span>
+                      </label>
+                    </div>
+                  )}
+                  <button 
+                    type="button" 
+                    className="action-btn action-btn--primary"
+                    style={{ minHeight: "36px", width: "100%", justifyContent: "center", marginTop: "4px" }}
+                    onClick={() => {
+                      const daCreds = wallpaper.addonCredentials?.deviantart;
+                      if (!daCreds?.client_id) return;
+                      invoke("start_oauth_flow", { provider: "deviantart", clientId: daCreds.client_id, clientSecret: "" })
+                        .catch(e => console.error("OAuth Error:", e));
+                    }}
+                  >
+                    {wallpaper.addonCredentials?.deviantart?.access_token ? "Reconnect with DeviantArt" : "Connect with DeviantArt"}
+                  </button>
+                  <a href="https://www.deviantart.com/developers/" target="_blank" rel="noreferrer" style={{ fontSize: "12px", color: "var(--accent)", textAlign: "center", textDecoration: "none", cursor: "pointer" }}>
+                    Get your developer credentials here <ExternalLink size={12} style={{ display: "inline", verticalAlign: "middle" }}/>
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </section>

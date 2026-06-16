@@ -54,6 +54,7 @@ pub struct WallpaperState {
     pub perf_restart_lock_screen: bool,
     pub perf_display_pause_rule: String,
     pub perf_pause_algorithm: String,
+    pub addon_credentials: std::collections::HashMap<String, serde_json::Value>,
 }
 
 impl Default for WallpaperState {
@@ -97,6 +98,7 @@ impl Default for WallpaperState {
             perf_restart_lock_screen: false,
             perf_display_pause_rule: "Per screen".to_string(),
             perf_pause_algorithm: "Grid".to_string(),
+            addon_credentials: std::collections::HashMap::new(),
         }
     }
 }
@@ -742,6 +744,17 @@ pub fn toggle_hide_video(
         } else {
             s.hidden_videos.push(video_id);
         }
+        Ok(())
+    })?;
+    Ok(state)
+}
+
+pub fn set_addon_credentials(
+    store: &AppStateStore,
+    credentials: std::collections::HashMap<String, serde_json::Value>,
+) -> Result<WallpaperState, String> {
+    let state = store.update(|s| {
+        s.addon_credentials = credentials;
         Ok(())
     })?;
     Ok(state)

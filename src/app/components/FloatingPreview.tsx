@@ -49,13 +49,16 @@ export const FloatingPreview = memo(function FloatingPreview(props: FloatingPrev
     >
       <div className="floating-preview-container panel" onClick={(e) => e.stopPropagation()}>
         <div className="floating-header">
-          <strong>{props.video.id} Preview</strong>
+          <div style={{ display: "flex", flexDirection: "column", gap: "2px", textAlign: "left" }}>
+            <span className="eyebrow" style={{ fontSize: "9px", color: "var(--accent)" }}>Scene Preview</span>
+            <strong style={{ fontSize: "14px", color: "#fff", textTransform: "none", letterSpacing: "normal" }}>{props.video.id}</strong>
+          </div>
           <div className="floating-actions">
             <button className="mini-btn" onClick={() => setIsFullscreen(!isFullscreen)} disabled={props.isLoading}>
               {isFullscreen ? (
                 <>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3v5H3M21 8h-5V3M3 16h5v5M16 21v-5h5"/></svg>
-                  <span>Exit Fullscreen</span>
+                  <span>Windowed</span>
                 </>
               ) : (
                 <>
@@ -68,9 +71,9 @@ export const FloatingPreview = memo(function FloatingPreview(props: FloatingPrev
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/></svg>
               <span>Minimize</span>
             </button>
-            <button className="mini-btn mini-btn--accent" onClick={props.onClose} disabled={props.isLoading}>
+            <button className="mini-btn mini-btn--accent" style={{ background: "rgba(255, 91, 103, 0.1)", border: "1px solid rgba(255, 91, 103, 0.2)", color: "#ff5b67" }} onClick={props.onClose} disabled={props.isLoading}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
-              <span>Close Preview</span>
+              <span>Close</span>
             </button>
           </div>
         </div>

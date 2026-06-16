@@ -51,17 +51,61 @@ export function useWallpaperActions(state: WallpaperState, setState: React.Dispa
 
 
       const { invoke } = await getCoreApi();
-      const results = await invoke<VideoResult[]>("fetch_videos_list", {
-        source: state.source,
-        query: finalQuery,
-        order: "random",
-        page: state.page,
-        resolutions: state.resolutions,
-        ratios: state.ratios,
-        colors: state.colors,
-        categories: state.categoriesFilter,
-        purity: state.purityFilter,
-      });
+      const builtinSources = ["wallhaven", "motionbgs", "pinterest", "youtube", "alphacoders", "wpwaves"];
+      let results: VideoResult[] = [];
+
+      if (!builtinSources.includes(state.source)) {
+        // It's a custom addon source!
+        try {
+          const script = await invoke<string>("get_addon_script", { id: `scraper-${state.source}` });
+          if (script) {
+            let fn;
+            try {
+              const module = { exports: {} as any };
+              fn = new Function("module", "exports", "fetch", script + "\nreturn module.exports;");
+            } catch (err: any) {
+              throw new Error(`SyntaxError during parsing: ${err.message}. Script start: ${script.substring(0, 100)}`);
+            }
+            const module = { exports: {} as any };
+            
+            // Bypass CORS by injecting Tauri's native HTTP fetch
+            const { fetch: tauriFetch } = await import('@tauri-apps/plugin-http');
+            const addon = fn(module, module.exports, tauriFetch);
+            
+            if (addon && typeof addon.fetchWallpapers === "function") {
+              const filters = {
+                search: finalQuery,
+                resolutions: state.resolutions,
+                ratios: state.ratios,
+                colors: state.colors,
+                categories: state.categoriesFilter,
+                purity: state.purityFilter,
+                credentials: state.addonCredentials,
+              };
+              results = await addon.fetchWallpapers(filters, state.page);
+            } else {
+              throw new Error("Addon does not export fetchWallpapers function");
+            }
+          } else {
+            throw new Error("Addon script not found");
+          }
+        } catch (e) {
+          console.error(`Failed to fetch from custom addon ${state.source}:`, e);
+          throw e;
+        }
+      } else {
+        results = await invoke<VideoResult[]>("fetch_videos_list", {
+          source: state.source,
+          query: finalQuery,
+          order: "random",
+          page: state.page,
+          resolutions: state.resolutions,
+          ratios: state.ratios,
+          colors: state.colors,
+          categories: state.categoriesFilter,
+          purity: state.purityFilter,
+        });
+      }
       setState((s) => {
         // If this is page 1, we start clean and don't count existing results as duplicates
         const existingKeys = s.page === 1 ? new Set<string>() : new Set(s.searchResults.map(item => `${item.source}:${item.id}`));
@@ -110,16 +154,66 @@ export function useWallpaperActions(state: WallpaperState, setState: React.Dispa
     setState((s) => ({ ...s, isLoading: true, error: null }));
     try {
       const { invoke } = await getCoreApi();
-      const video = await invoke<VideoResult>("fetch_video", {
-        source: state.source,
-        query: state.query,
-        order: "trending",
-        resolutions: state.resolutions,
-        ratios: state.ratios,
-        colors: state.colors,
-        categories: state.categoriesFilter,
-        purity: state.purityFilter,
-      });
+      const builtinSources = ["wallhaven", "motionbgs", "pinterest", "youtube", "alphacoders", "wpwaves"];
+      let video: VideoResult | null = null;
+
+      if (!builtinSources.includes(state.source)) {
+        try {
+          const script = await invoke<string>("get_addon_script", { id: `scraper-${state.source}` });
+          if (script) {
+            let fn;
+            try {
+              const module = { exports: {} as any };
+              fn = new Function("module", "exports", "fetch", script + "\nreturn module.exports;");
+            } catch (err: any) {
+              throw new Error(`SyntaxError during parsing: ${err.message}. Script start: ${script.substring(0, 100)}`);
+            }
+            const module = { exports: {} as any };
+            const { fetch: tauriFetch } = await import('@tauri-apps/plugin-http');
+            const addon = fn(module, module.exports, tauriFetch);
+            
+            if (addon && typeof addon.fetchWallpapers === "function") {
+              const found = state.searchResults.find(v => v.id === id);
+              if (found) {
+                video = found;
+              } else {
+                // Fallback for recents/favorites: if we can't find it in the current search results,
+                // we'll just reconstruct a basic VideoResult since addons don't have a fetch_video endpoint yet.
+                video = {
+                  id,
+                  source: state.source,
+                  title: "Addon Media",
+                  thumbnail_url: "",
+                  video_url: `https://backend.deviantart.com/rss.xml?q=${id}`, // Dummy
+                  local_path: "",
+                  duration: 0,
+                  width: 1920,
+                  height: 1080
+                };
+              }
+            } else {
+              throw new Error("Addon does not export fetchWallpapers function");
+            }
+          } else {
+            throw new Error("Addon script not found");
+          }
+        } catch (e) {
+          console.error(`Failed to fetch from custom addon ${state.source}:`, e);
+          throw e;
+        }
+      } else {
+        video = await invoke<VideoResult>("fetch_video", {
+          source: state.source,
+          query: state.query,
+          order: "trending",
+          resolutions: state.resolutions,
+          ratios: state.ratios,
+          colors: state.colors,
+          categories: state.categoriesFilter,
+          purity: state.purityFilter,
+        });
+      }
+
       setState((s) => ({ ...s, isLoading: false }));
       return video;
     } catch (error: any) {

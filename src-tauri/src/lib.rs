@@ -287,6 +287,7 @@ pub fn run() {
             commands::queue::reorder_queue,
             commands::video::save_thumbnail,
             commands::wallpaper_control::apply_desktop_effects,
+            commands::wallpaper_control::apply_interactive_overlay_cmd,
             commands::wallpaper_control::get_current_effects,
             commands::wallpaper_control::set_wallpaper_speed,
             commands::wallpaper_control::set_wallpaper_blur,
@@ -299,7 +300,8 @@ pub fn run() {
             commands::settings::show_mini_player,
             commands::settings::hide_mini_player,
             commands::settings::toggle_mini_player,
-
+            commands::settings::start_oauth_flow,
+            commands::settings::set_addon_credentials,
             commands::settings::launch_external_app,
             commands::settings::extract_icon_base64,
             commands::settings::set_wallhaven_api_key,
@@ -324,6 +326,8 @@ pub fn run() {
             commands::addon_manager::install_addon,
             commands::addon_manager::uninstall_addon,
             commands::addon_manager::list_installed_addons,
+            commands::addon_manager::get_addon_script,
+            commands::addon_manager::open_addons_folder,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

@@ -8,8 +8,7 @@ import { Sidebar, TabState } from "./components/Sidebar";
 import { useAddons } from "@/hooks/useAddons";
 
 const MasterHUD = dynamic(() => import("./components/MasterHUD").then((m) => m.MasterHUD), { ssr: false });
-const ControlBar = dynamic(() => import("./components/ControlBar").then((m) => m.ControlBar), { ssr: false });
-const SearchResults = dynamic(() => import("./components/SearchResults").then((m) => m.SearchResults), { ssr: false, loading: () => <div className="skeleton skeleton-preview" /> });
+const DiscoverPanel = dynamic(() => import("./components/DiscoverPanel").then((m) => m.DiscoverPanel), { ssr: false });
 const SettingsPanel = dynamic(() => import("./components/SettingsPanel").then((m) => m.SettingsPanel), { ssr: false });
 const DownloadProgressOverlay = dynamic(() => import("./components/DownloadProgressOverlay").then((m) => m.DownloadProgressOverlay), { ssr: false });
 
@@ -37,6 +36,7 @@ function Home() {
     if (src === "alphacoders") return isAddonInstalled("scraper-alphacoders");
     if (src === "wallhaven") return isAddonInstalled("scraper-wallhaven");
     if (src === "pinterest") return isAddonInstalled("scraper-pinterest");
+    if (src === "motionbgs") return isAddonInstalled("scraper-motionbgs");
     return true; // direct, youtube (handled in its own tab)
   }, [isAddonInstalled]);
 
@@ -326,81 +326,13 @@ function Home() {
   const discoverPanel = useMemo(() => {
     if (renderedTab !== "discover") return null;
     return (
-      <section className="panel panel--main">
-        <ControlBar
-          source={wallpaper.source} query={wallpaper.query} isLoading={wallpaper.isLoading}
-          onSourceChange={wallpaper.setSource} onQueryChange={wallpaper.setQuery}
-          onCategoryChange={wallpaper.setCategory} onBrowseLocalFile={wallpaper.browseLocalVideo}
-          onFetch={wallpaper.fetchVideosList} onFetchAndApply={handleFetchAndApply}
-          onStop={wallpaper.stopWallpaper}
-          pinterestUrls={wallpaper.pinterestUrls}
-          onSetPinterestUrls={wallpaper.setPinterestUrls}
-          category={wallpaper.category}
-          colorFilter={wallpaper.colorFilter}
-          onColorFilterChange={wallpaper.setColorFilter}
-          resolutions={wallpaper.resolutions}
-          ratios={wallpaper.ratios}
-          colors={wallpaper.colors}
-          onResolutionsChange={wallpaper.setResolutions}
-          onRatiosChange={wallpaper.setRatios}
-          onColorsChange={wallpaper.setColors}
-          categoriesFilter={wallpaper.categoriesFilter}
-          purityFilter={wallpaper.purityFilter}
-          onCategoriesFilterChange={wallpaper.setCategoriesFilter}
-          onPurityFilterChange={wallpaper.setPurityFilter}
-        />
-        {isSourceAvailable(wallpaper.source) ? (
-          <SearchResults
-            results={wallpaper.searchResults} onSelect={wallpaper.selectVideo}
-            page={wallpaper.page} onPageChange={wallpaper.setPage}
-            isLoading={wallpaper.isLoading}
-            hasMore={wallpaper.hasMore ?? true}
-            duplicateNotice={wallpaper.duplicateNotice}
-            onEditEffects={handleEditEffects}
-          />
-        ) : (
-          <div style={{ padding: "40px", textAlign: "center", color: "var(--text-soft)" }}>
-            <p>Source requires an addon. Please go to the <strong>Addons Marketplace</strong>.</p>
-          </div>
-        )}
-        {wallpaper.isLoading && wallpaper.page === 1 && <div className="skeleton skeleton-preview" />}
-      </section>
+      <DiscoverPanel
+        wallpaper={wallpaper}
+        setActiveTab={handleTabChange}
+        onEditEffects={handleEditEffects}
+      />
     );
-  }, [
-    renderedTab,
-    wallpaper.source,
-    wallpaper.query,
-    wallpaper.isLoading,
-    wallpaper.pinterestUrls,
-    wallpaper.category,
-    wallpaper.colorFilter,
-    wallpaper.resolutions,
-    wallpaper.ratios,
-    wallpaper.colors,
-    wallpaper.categoriesFilter,
-    wallpaper.purityFilter,
-    wallpaper.searchResults,
-    wallpaper.page,
-    wallpaper.hasMore,
-    wallpaper.duplicateNotice,
-    wallpaper.setSource,
-    wallpaper.setQuery,
-    wallpaper.setCategory,
-    wallpaper.browseLocalVideo,
-    wallpaper.fetchVideosList,
-    handleFetchAndApply,
-    wallpaper.stopWallpaper,
-    wallpaper.setPinterestUrls,
-    wallpaper.setColorFilter,
-    wallpaper.setResolutions,
-    wallpaper.setRatios,
-    wallpaper.setColors,
-    wallpaper.setCategoriesFilter,
-    wallpaper.setPurityFilter,
-    wallpaper.setPage,
-    handleEditEffects,
-    isSourceAvailable
-  ]);
+  }, [renderedTab, wallpaper, handleTabChange, handleEditEffects]);
 
   const libraryPanel = useMemo(() => {
     if (renderedTab !== "library") return null;
@@ -556,10 +488,17 @@ function Home() {
 
   if (isOverlayMode) {
     return (
-      <main className="workspace-overlay" style={{ background: "transparent", width: "100vw", height: "100vh", overflow: "hidden" }}>
+      <main className="workspace-overlay" style={{ background: "transparent", width: "100%", height: "100%", overflow: "hidden" }}>
         <style dangerouslySetInnerHTML={{
           __html: `
-          html, body { background: transparent !important; }
+          html, body {
+            background: transparent !important;
+            width: 100% !important;
+            height: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: hidden !important;
+          }
           nextjs-portal, #nextjs-dev-overlay-container, [data-nextjs-toast], [data-nextjs-portal] {
             display: none !important; opacity: 0 !important; visibility: hidden !important; width: 0 !important; height: 0 !important;
           }
@@ -580,7 +519,7 @@ function Home() {
     );
   }
 
-  if (wallpaper.isLoading) {
+  if (wallpaper.isHydrating) {
     if (process.env.NODE_ENV === "production") {
       return <SplashScreen />;
     }

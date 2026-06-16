@@ -404,24 +404,45 @@ pub fn set_video(
                                 target_z = effects_hwnd;
                             }
 
+                            let mut points = [
+                                windows::Win32::Foundation::POINT { x, y },
+                                windows::Win32::Foundation::POINT {
+                                    x: x + width as i32,
+                                    y: y + height as i32,
+                                },
+                            ];
+                            let _ = windows::Win32::Graphics::Gdi::MapWindowPoints(
+                                windows::Win32::Foundation::HWND(0 as _),
+                                windows::Win32::Foundation::HWND(workerw as _),
+                                &mut points,
+                            );
+                            let local_x = points[0].x;
+                            let local_y = points[0].y;
+                            let local_width = points[1].x - points[0].x;
+                            let local_height = points[1].y - points[0].y;
+
                             let _ = windows::Win32::UI::WindowsAndMessaging::SetWindowPos(
                                 windows::Win32::Foundation::HWND(hwnd as _),
                                 target_z,
-                                x,
-                                y,
-                                width as i32,
-                                height as i32,
-                                windows::Win32::UI::WindowsAndMessaging::SWP_SHOWWINDOW,
+                                local_x,
+                                local_y,
+                                local_width,
+                                local_height,
+                                windows::Win32::UI::WindowsAndMessaging::SWP_SHOWWINDOW
+                                    | windows::Win32::UI::WindowsAndMessaging::SWP_FRAMECHANGED
+                                    | windows::Win32::UI::WindowsAndMessaging::SWP_NOACTIVATE,
                             );
 
                             let _ = windows::Win32::UI::WindowsAndMessaging::SetWindowPos(
                                 windows::Win32::Foundation::HWND(hwnd as _),
                                 target_z,
-                                x,
-                                y,
-                                width as i32,
-                                height as i32,
-                                windows::Win32::UI::WindowsAndMessaging::SWP_SHOWWINDOW,
+                                local_x,
+                                local_y,
+                                local_width,
+                                local_height,
+                                windows::Win32::UI::WindowsAndMessaging::SWP_SHOWWINDOW
+                                    | windows::Win32::UI::WindowsAndMessaging::SWP_FRAMECHANGED
+                                    | windows::Win32::UI::WindowsAndMessaging::SWP_NOACTIVATE,
                             );
                         }
                         log::info!(
@@ -531,19 +552,6 @@ pub fn set_web_wallpaper(
         tauri::Url::parse(&asset_url).map_err(|e| format!("Failed to parse asset URL: {}", e))?
     };
 
-    if let Some(window) = app.get_webview_window(&window_label) {
-        window
-            .eval(&format!(
-                "window.location.replace('{}');",
-                parsed_url.as_str().replace("'", "\\'")
-            ))
-            .map_err(|e| e.to_string())?;
-        if let Ok(mut current) = CURRENT_VIDEO.lock() {
-            current.insert(m_key.clone(), url.to_string());
-        }
-        return Ok(format!("Web wallpaper updated to {} on {}", url, m_key));
-    }
-
     let event_bridge_script = r#"
         window.__isPaused = false;
         window.__pendingFrames = [];
@@ -587,19 +595,58 @@ pub fn set_web_wallpaper(
                 setTimeout(() => document.dispatchEvent(new MouseEvent('click', { clientX, clientY, button: btn, bubbles: true })), 50);
             }
         };
+
+        // Ensure web page overrides any margins/paddings or body limits to fill the webview fully
+        const style = document.createElement('style');
+        style.innerHTML = `
+          html, body {
+            width: 100% !important;
+            height: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: hidden !important;
+            background: transparent !important;
+          }
+        `;
+        if (document.head) {
+            document.head.appendChild(style);
+        } else {
+            document.addEventListener('DOMContentLoaded', () => {
+                document.head.appendChild(style);
+            });
+        }
     "#;
 
-    let window = tauri::WebviewWindowBuilder::new(
-        &app,
-        &window_label,
-        tauri::WebviewUrl::External(parsed_url),
-    )
-    .decorations(false)
-    .transparent(true)
-    .skip_taskbar(true)
-    .initialization_script(event_bridge_script)
-    .build()
-    .map_err(|e| format!("Failed to build webview: {}", e))?;
+    let window = if let Some(w) = app.get_webview_window(&window_label) {
+        w.eval(&format!(
+            "window.location.replace('{}');",
+            parsed_url.as_str().replace("'", "\\'")
+        ))
+        .map_err(|e| e.to_string())?;
+        // Inject styling directly on existing window as well
+        w.eval(r#"
+            const style = document.createElement('style');
+            style.innerHTML = 'html, body { width: 100% !important; height: 100% !important; margin: 0 !important; padding: 0 !important; overflow: hidden !important; background: transparent !important; }';
+            if (document.head) document.head.appendChild(style);
+            else document.addEventListener('DOMContentLoaded', () => document.head.appendChild(style));
+        "#)
+        .map_err(|e| e.to_string())?;
+        w
+    } else {
+        tauri::WebviewWindowBuilder::new(
+            &app,
+            &window_label,
+            tauri::WebviewUrl::External(parsed_url),
+        )
+        .decorations(false)
+        .transparent(true)
+        .skip_taskbar(true)
+        .shadow(false)
+        .resizable(false)
+        .initialization_script(event_bridge_script)
+        .build()
+        .map_err(|e| format!("Failed to build webview: {}", e))?
+    };
 
     let _ = window.set_size(tauri::PhysicalSize::new(width, height));
     let _ = window.set_position(tauri::PhysicalPosition::new(x, y));
@@ -669,14 +716,49 @@ pub fn set_web_wallpaper(
                 target_z = effects_hwnd;
             }
 
+            let mut points = [
+                windows::Win32::Foundation::POINT { x, y },
+                windows::Win32::Foundation::POINT {
+                    x: x + width as i32,
+                    y: y + height as i32,
+                },
+            ];
+            let _ = windows::Win32::Graphics::Gdi::MapWindowPoints(
+                windows::Win32::Foundation::HWND(0 as _),
+                windows::Win32::Foundation::HWND(workerw as _),
+                &mut points,
+            );
+            let local_x = points[0].x;
+            let local_y = points[0].y;
+            let local_width = points[1].x - points[0].x;
+            let local_height = points[1].y - points[0].y;
+
+            // Strip extended borders
+            let old_ex_style = windows::Win32::UI::WindowsAndMessaging::GetWindowLongW(
+                windows::Win32::Foundation::HWND(hwnd.0 as _),
+                windows::Win32::UI::WindowsAndMessaging::GWL_EXSTYLE,
+            );
+            let mut new_ex_style = old_ex_style as u32;
+            new_ex_style &= !windows::Win32::UI::WindowsAndMessaging::WS_EX_CLIENTEDGE.0;
+            new_ex_style &= !windows::Win32::UI::WindowsAndMessaging::WS_EX_WINDOWEDGE.0;
+            new_ex_style &= !windows::Win32::UI::WindowsAndMessaging::WS_EX_STATICEDGE.0;
+            new_ex_style &= !windows::Win32::UI::WindowsAndMessaging::WS_EX_DLGMODALFRAME.0;
+            let _ = windows::Win32::UI::WindowsAndMessaging::SetWindowLongW(
+                windows::Win32::Foundation::HWND(hwnd.0 as _),
+                windows::Win32::UI::WindowsAndMessaging::GWL_EXSTYLE,
+                new_ex_style as i32,
+            );
+
             let _ = windows::Win32::UI::WindowsAndMessaging::SetWindowPos(
                 windows::Win32::Foundation::HWND(hwnd.0 as _),
                 target_z,
-                x,
-                y,
-                width as i32,
-                height as i32,
-                windows::Win32::UI::WindowsAndMessaging::SWP_SHOWWINDOW,
+                local_x,
+                local_y,
+                local_width,
+                local_height,
+                windows::Win32::UI::WindowsAndMessaging::SWP_SHOWWINDOW
+                    | windows::Win32::UI::WindowsAndMessaging::SWP_FRAMECHANGED
+                    | windows::Win32::UI::WindowsAndMessaging::SWP_NOACTIVATE,
             );
         }
     }
@@ -770,16 +852,6 @@ pub fn apply_interactive_overlay(
         tauri::Url::parse(&asset_url).map_err(|e| format!("Failed to parse asset URL: {}", e))?
     };
 
-    if let Some(window) = app.get_webview_window(&window_label) {
-        window
-            .eval(&format!(
-                "window.location.replace('{}');",
-                parsed_url.as_str().replace("'", "\\'")
-            ))
-            .map_err(|e| e.to_string())?;
-        return Ok(format!("Interactive overlay updated to {} on {}", url, m_key));
-    }
-
     let event_bridge_script = r#"
         window.__isPaused = false;
         window.__pendingFrames = [];
@@ -823,19 +895,58 @@ pub fn apply_interactive_overlay(
                 setTimeout(() => document.dispatchEvent(new MouseEvent('click', { clientX, clientY, button: btn, bubbles: true })), 50);
             }
         };
+
+        // Ensure web page overrides any margins/paddings or body limits to fill the webview fully
+        const style = document.createElement('style');
+        style.innerHTML = `
+          html, body {
+            width: 100% !important;
+            height: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: hidden !important;
+            background: transparent !important;
+          }
+        `;
+        if (document.head) {
+            document.head.appendChild(style);
+        } else {
+            document.addEventListener('DOMContentLoaded', () => {
+                document.head.appendChild(style);
+            });
+        }
     "#;
 
-    let window = tauri::WebviewWindowBuilder::new(
-        &app,
-        &window_label,
-        tauri::WebviewUrl::External(parsed_url),
-    )
-    .decorations(false)
-    .transparent(true)
-    .skip_taskbar(true)
-    .initialization_script(event_bridge_script)
-    .build()
-    .map_err(|e| format!("Failed to build webview: {}", e))?;
+    let window = if let Some(w) = app.get_webview_window(&window_label) {
+        w.eval(&format!(
+            "window.location.replace('{}');",
+            parsed_url.as_str().replace("'", "\\'")
+        ))
+        .map_err(|e| e.to_string())?;
+        // Inject styling directly on existing window as well
+        w.eval(r#"
+            const style = document.createElement('style');
+            style.innerHTML = 'html, body { width: 100% !important; height: 100% !important; margin: 0 !important; padding: 0 !important; overflow: hidden !important; background: transparent !important; }';
+            if (document.head) document.head.appendChild(style);
+            else document.addEventListener('DOMContentLoaded', () => document.head.appendChild(style));
+        "#)
+        .map_err(|e| e.to_string())?;
+        w
+    } else {
+        tauri::WebviewWindowBuilder::new(
+            &app,
+            &window_label,
+            tauri::WebviewUrl::External(parsed_url),
+        )
+        .decorations(false)
+        .transparent(true)
+        .skip_taskbar(true)
+        .shadow(false)
+        .resizable(false)
+        .initialization_script(event_bridge_script)
+        .build()
+        .map_err(|e| format!("Failed to build webview: {}", e))?
+    };
 
     let _ = window.set_size(tauri::PhysicalSize::new(width, height));
     let _ = window.set_position(tauri::PhysicalPosition::new(x, y));
@@ -901,14 +1012,49 @@ pub fn apply_interactive_overlay(
                 target_z = effects_hwnd;
             }
 
+            let mut points = [
+                windows::Win32::Foundation::POINT { x, y },
+                windows::Win32::Foundation::POINT {
+                    x: x + width as i32,
+                    y: y + height as i32,
+                },
+            ];
+            let _ = windows::Win32::Graphics::Gdi::MapWindowPoints(
+                windows::Win32::Foundation::HWND(0 as _),
+                windows::Win32::Foundation::HWND(workerw as _),
+                &mut points,
+            );
+            let local_x = points[0].x;
+            let local_y = points[0].y;
+            let local_width = points[1].x - points[0].x;
+            let local_height = points[1].y - points[0].y;
+
+            // Strip extended borders
+            let old_ex_style = windows::Win32::UI::WindowsAndMessaging::GetWindowLongW(
+                windows::Win32::Foundation::HWND(hwnd.0 as _),
+                windows::Win32::UI::WindowsAndMessaging::GWL_EXSTYLE,
+            );
+            let mut new_ex_style = old_ex_style as u32;
+            new_ex_style &= !windows::Win32::UI::WindowsAndMessaging::WS_EX_CLIENTEDGE.0;
+            new_ex_style &= !windows::Win32::UI::WindowsAndMessaging::WS_EX_WINDOWEDGE.0;
+            new_ex_style &= !windows::Win32::UI::WindowsAndMessaging::WS_EX_STATICEDGE.0;
+            new_ex_style &= !windows::Win32::UI::WindowsAndMessaging::WS_EX_DLGMODALFRAME.0;
+            let _ = windows::Win32::UI::WindowsAndMessaging::SetWindowLongW(
+                windows::Win32::Foundation::HWND(hwnd.0 as _),
+                windows::Win32::UI::WindowsAndMessaging::GWL_EXSTYLE,
+                new_ex_style as i32,
+            );
+
             let _ = windows::Win32::UI::WindowsAndMessaging::SetWindowPos(
                 windows::Win32::Foundation::HWND(hwnd.0 as _),
                 target_z,
-                x,
-                y,
-                width as i32,
-                height as i32,
-                windows::Win32::UI::WindowsAndMessaging::SWP_SHOWWINDOW,
+                local_x,
+                local_y,
+                local_width,
+                local_height,
+                windows::Win32::UI::WindowsAndMessaging::SWP_SHOWWINDOW
+                    | windows::Win32::UI::WindowsAndMessaging::SWP_FRAMECHANGED
+                    | windows::Win32::UI::WindowsAndMessaging::SWP_NOACTIVATE,
             );
         }
     }
@@ -1015,7 +1161,7 @@ pub fn set_speed(speed: f64) -> Result<(), String> {
 pub fn set_paused(app: &tauri::AppHandle, paused: bool) -> Result<(), String> {
     use tauri::Manager;
     for (label, window) in app.webview_windows() {
-        if label.starts_with("web_wallpaper_") {
+        if label.starts_with("web_wallpaper_") || label.starts_with("interactive_overlay_") {
             let _ = window.eval(&format!("if (window.__set_paused) window.__set_paused({});", paused));
         }
     }

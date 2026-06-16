@@ -7,6 +7,7 @@ import { isStaticWallpaper } from "@/utils/wallpaperTypes";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { EffectLayer } from "./CanvasEffectRenderer";
 import { WebGLEffectRenderer } from "./WebGLEffectRenderer";
+import { useTranslation } from "@/hooks/useTranslation";
 
 interface VideoPreviewProps {
   video: VideoResult;
@@ -45,6 +46,7 @@ export const VideoPreview = memo(function VideoPreview({
   onToggleHide,
   onEditEffects,
 }: VideoPreviewProps) {
+  const { t } = useTranslation();
   const videoRef = useRef<HTMLVideoElement>(null);
   const [startTime, setStartTime] = useState(0);
   const [endTime, setEndTime] = useState(video.duration || 0);
@@ -52,6 +54,17 @@ export const VideoPreview = memo(function VideoPreview({
   const [activeThumb, setActiveThumb] = useState<"start" | "end">("start");
   const [localPaused, setLocalPaused] = useState(false);
   const [effects, setEffects] = useState<EffectLayer[]>([]);
+
+  const [localSpeed, setLocalSpeed] = useState(playbackSpeed);
+  const [localBlur, setLocalBlur] = useState(blurStrength);
+
+  useEffect(() => {
+    setLocalSpeed(playbackSpeed);
+  }, [playbackSpeed]);
+
+  useEffect(() => {
+    setLocalBlur(blurStrength);
+  }, [blurStrength]);
 
   useEffect(() => {
     let isMounted = true;
@@ -157,7 +170,7 @@ export const VideoPreview = memo(function VideoPreview({
     element.playbackRate = playbackSpeed;
   }, [localPaused, volumePercent, videoSrc, playbackSpeed]);
 
-  const previewFilter = previewCssFilter(filterPreset, blurStrength);
+  const previewFilter = previewCssFilter(filterPreset, localBlur);
 
   const handleError = (event: React.SyntheticEvent<HTMLVideoElement>) => {
     const target = event.target as HTMLVideoElement;
@@ -168,83 +181,114 @@ export const VideoPreview = memo(function VideoPreview({
 
   return (
     <article className="preview-surface">
-      <div className="preview-stage">
-        {isStaticImage ? (
-          <img
-            className="preview-video"
-            src={videoSrc}
-            alt={video.id}
-            style={{ filter: previewFilter, objectFit: "contain", width: "100%", height: "100%" }}
-            onError={(e) => {
-              const target = e.target as HTMLImageElement;
-              if (target.src !== video.thumbnail_url && video.thumbnail_url) {
-                target.src = video.thumbnail_url;
-              }
-            }}
-          />
-        ) : isHtml ? (
-          <iframe 
-            src={videoSrc} 
-            className="preview-video"
-            style={{ filter: previewFilter, border: "none", width: "100%", aspectRatio: "16/9" }}
-          />
-        ) : (
-          <video
-            ref={videoRef}
-            className="preview-video"
-            src={videoSrc}
-            preload="metadata"
-            autoPlay
-            loop
-            muted
-            playsInline
-            controls
-            onPause={() => setLocalPaused(true)}
-            onPlay={() => setLocalPaused(false)}
-            onLoadedMetadata={(e) => {
-               const vid = e.target as HTMLVideoElement;
-               if (vid.duration > 0) {
-                   setTotalDuration(vid.duration);
-                   if (endTime === 0) setEndTime(vid.duration);
-               }
-            }}
-            style={{ filter: previewFilter }}
-          />
-        )}
-
-        {/* Render interactive ITL effects as a transparent overlay over the native video file */}
-        {effects.length > 0 && (
-          <div style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 10 }}>
-            <WebGLEffectRenderer
-              videoSrc={videoSrc}
-              effects={effects}
-              isOverlay={true}
-              isPaused={localPaused}
-            />
+      {/* Left Column (Media & Timeline) */}
+      <div className="preview-left-pane">
+        <div className="preview-stage">
+          {/* Immersive Ambient Backglow */}
+          <div className="preview-ambient-glow">
+            <img src={video.thumbnail_url || videoSrc} alt="" />
           </div>
-        )}
-        <div className="preview-overlay">
-          <span className="preview-chip">{isStaticImage ? "STATIC IMAGE" : "LIVE WALLPAPER"}</span>
-          {!isStaticImage && (
-            <span className="preview-chip">
-              {video.duration > 0 ? `${video.duration.toFixed(1)}s` : "Looping"}
-            </span>
+          {isStaticImage ? (
+            <img
+              className="preview-video"
+              src={videoSrc}
+              alt={video.id}
+              style={{ filter: previewFilter, objectFit: "contain", width: "100%", height: "100%" }}
+              onError={(e) => {
+                const target = e.target as HTMLImageElement;
+                if (target.src !== video.thumbnail_url && video.thumbnail_url) {
+                  target.src = video.thumbnail_url;
+                }
+              }}
+            />
+          ) : isHtml ? (
+            <iframe 
+              src={videoSrc} 
+              className="preview-video"
+              style={{ filter: previewFilter, border: "none", width: "100%", aspectRatio: "16/9" }}
+            />
+          ) : (
+            <video
+              ref={videoRef}
+              className="preview-video"
+              src={videoSrc}
+              preload="metadata"
+              autoPlay
+              loop
+              muted
+              playsInline
+              controls
+              onPause={() => setLocalPaused(true)}
+              onPlay={() => setLocalPaused(false)}
+              onLoadedMetadata={(e) => {
+                 const vid = e.target as HTMLVideoElement;
+                 if (vid.duration > 0) {
+                     setTotalDuration(vid.duration);
+                     if (endTime === 0) setEndTime(vid.duration);
+                 }
+              }}
+              style={{ filter: previewFilter }}
+            />
           )}
-          <span className="preview-chip">
-            {video.width > 0 && video.height > 0 ? `${video.width}x${video.height}` : "Desktop media"}
-          </span>
+
+          {/* Render interactive ITL effects as a transparent overlay over the native video file */}
+          {effects.length > 0 && (
+            <div style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 10 }}>
+              <WebGLEffectRenderer
+                videoSrc={videoSrc}
+                effects={effects}
+                isOverlay={true}
+                isPaused={localPaused}
+              />
+            </div>
+          )}
+          <div className="preview-overlay">
+            <span className="preview-chip">{isStaticImage ? t("staticImage") : t("liveWallpaper")}</span>
+            {!isStaticImage && (
+              <span className="preview-chip">
+                {video.duration > 0 ? `${video.duration.toFixed(1)}s` : "Looping"}
+              </span>
+            )}
+            <span className="preview-chip">
+              {video.width > 0 && video.height > 0 ? `${video.width}x${video.height}` : "Desktop media"}
+            </span>
+          </div>
+          
+          {/* Loading Overlay */}
+          {isLoading && (
+            <div className="preview-stage__loading-overlay" style={{
+              position: "absolute",
+              inset: 0,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              background: "rgba(0, 0, 0, 0.75)",
+              backdropFilter: "blur(6px)",
+              zIndex: 20,
+              gap: "14px",
+              animation: "preview-spawn 0.3s ease-out"
+            }}>
+              <div className="spinner" style={{
+                width: "42px",
+                height: "42px",
+                border: "3px solid rgba(255,255,255,0.1)",
+                borderTopColor: "var(--accent, #9ae600)",
+                borderRadius: "50%",
+                animation: "spin 1s linear infinite"
+              }} />
+              <span className="eyebrow" style={{ color: "#fff", letterSpacing: "1.5px", fontSize: "11px", textTransform: "uppercase" }}>{t("applyingWallpaper")}</span>
+            </div>
+          )}
         </div>
-        
+
         {/* Dual Range Slider for Trimming Previews */}
         {!isStaticImage && !isHtml && (
           <div className="yt-range-section" style={{ 
-            padding: "12px", 
-            borderTop: "1px solid rgba(255,255,255,0.05)", 
-            background: "rgba(0,0,0,0.1)",
             visibility: endTime > 0 ? "visible" : "hidden"
           }}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px", alignItems: "center" }}>
-              <span className="eyebrow" style={{ fontSize: "10px" }}>Trim Range Control</span>
+              <span className="eyebrow" style={{ fontSize: "10px" }}>{t("trimRangeControl")}</span>
               <span style={{ fontSize: "11px", color: "var(--accent)", fontWeight: 600 }}>
                 {formatTime(startTime)} → {formatTime(endTime)} ({(endTime - startTime).toFixed(1)}s)
               </span>
@@ -295,97 +339,98 @@ export const VideoPreview = memo(function VideoPreview({
             </div>
           </div>
         )}
-
-        {/* Playback & Blur Controls */}
-        <div className="preview-params-grid" style={{ padding: "12px", background: "rgba(0,0,0,0.15)", borderTop: "1px solid rgba(255,255,255,0.05)", display: "flex", gap: "20px" }}>
-           {!isStaticImage && onSetSpeed && (
-             <div className="property-group" style={{ flex: 1 }}>
-               <label className="eyebrow" style={{ fontSize: "10px" }}>Engine Speed: {playbackSpeed.toFixed(1)}x</label>
-               <input 
-                 type="range" min="0.1" max="4" step="0.1" 
-                 defaultValue={playbackSpeed} 
-                 className="property-control"
-                 onMouseUp={(e) => onSetSpeed(parseFloat((e.target as HTMLInputElement).value))} 
-                 onTouchEnd={(e) => onSetSpeed(parseFloat((e.target as HTMLInputElement).value))} 
-                 disabled={isLoading}
-               />
-             </div>
-           )}
-           {onSetBlur && (
-             <div className="property-group" style={{ flex: 1 }}>
-               <label className="eyebrow" style={{ fontSize: "10px" }}>Scene Blur: {blurStrength}px</label>
-               <input 
-                 type="range" min="0" max="100" step="1" 
-                 defaultValue={blurStrength} 
-                 className="property-control"
-                 onMouseUp={(e) => onSetBlur(parseInt((e.target as HTMLInputElement).value))} 
-                 onTouchEnd={(e) => onSetBlur(parseInt((e.target as HTMLInputElement).value))} 
-                 disabled={isLoading}
-               />
-             </div>
-           )}
-        </div>
-
-        {/* Loading Overlay */}
-        {isLoading && (
-          <div className="preview-stage__loading-overlay" style={{
-            position: "absolute",
-            inset: 0,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            background: "rgba(0, 0, 0, 0.75)",
-            backdropFilter: "blur(6px)",
-            zIndex: 20,
-            gap: "14px",
-            animation: "preview-spawn 0.3s ease-out"
-          }}>
-
-            <div className="spinner" style={{
-              width: "42px",
-              height: "42px",
-              border: "3px solid rgba(255,255,255,0.1)",
-              borderTopColor: "var(--accent, #9ae600)",
-              borderRadius: "50%",
-              animation: "spin 1s linear infinite"
-            }} />
-            <span className="eyebrow" style={{ color: "#fff", letterSpacing: "1.5px", fontSize: "11px", textTransform: "uppercase" }}>Applying Wallpaper...</span>
-          </div>
-        )}
       </div>
 
-      <div className="preview-footer">
-        <div className="preview-copy">
-          <span className="eyebrow">Preview Loaded</span>
-          <h3>{video.id}</h3>
-          <p>{video.local_path}</p>
+      {/* Right Column (Inspector Sidebar) */}
+      <div className="preview-right-pane">
+        <div className="preview-inspector-scroll">
+          <div className="preview-copy">
+            <span className="eyebrow">{t("scenePreview")}</span>
+            <h3>{video.id}</h3>
+            <p>{video.local_path || video.video_url}</p>
+          </div>
+
+          {/* Playback & Blur Controls */}
+          <div className="preview-params-grid">
+             {!isStaticImage && onSetSpeed && (
+               <div className="property-group">
+                 <label className="eyebrow">{t("engineSpeed")}: {localSpeed.toFixed(1)}x</label>
+                 <input 
+                   type="range" min="0.1" max="4" step="0.1" 
+                   value={localSpeed} 
+                   className="property-control"
+                   onChange={(e) => {
+                     const val = parseFloat(e.target.value);
+                     setLocalSpeed(val);
+                     if (videoRef.current) videoRef.current.playbackRate = val;
+                   }}
+                   onMouseUp={(e) => onSetSpeed(parseFloat((e.target as HTMLInputElement).value))} 
+                   onTouchEnd={(e) => onSetSpeed(parseFloat((e.target as HTMLInputElement).value))} 
+                   disabled={isLoading}
+                 />
+               </div>
+             )}
+             {onSetBlur && (
+               <div className="property-group">
+                 <label className="eyebrow">{t("sceneBlur")}: {localBlur}px</label>
+                 <input 
+                   type="range" min="0" max="100" step="1" 
+                   value={localBlur} 
+                   className="property-control"
+                   onChange={(e) => setLocalBlur(parseInt(e.target.value))}
+                   onMouseUp={(e) => onSetBlur(parseInt((e.target as HTMLInputElement).value))} 
+                   onTouchEnd={(e) => onSetBlur(parseInt((e.target as HTMLInputElement).value))} 
+                   disabled={isLoading}
+                 />
+               </div>
+             )}
+          </div>
+
+          {/* Secondary Actions Grid */}
+          <div className="preview-actions-grid">
+            {onToggleHide && (
+              <button className="action-btn" onClick={onToggleHide} disabled={isLoading} title="Hide from library (requires PIN)">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                <span>{isHidden ? t("unhide") : t("hide")}</span>
+              </button>
+            )}
+            {!isStaticImage && (
+              <button className="action-btn" onClick={() => setLocalPaused(!localPaused)} disabled={isLoading}>
+                {localPaused ? (
+                  <>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                    <span>{t("resume")}</span>
+                  </>
+                ) : (
+                  <>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+                    <span>{t("pause")}</span>
+                  </>
+                )}
+              </button>
+            )}
+            <button className="action-btn" onClick={onToggleFavorite} disabled={isLoading}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+              <span>{isFavorite ? t("unfavorite") : t("favorite")}</span>
+            </button>
+            <button className="action-btn" onClick={onToggleQueue} disabled={isLoading}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+              <span>{isQueued ? t("removeQueue") : t("addQueue")}</span>
+            </button>
+            {onEditEffects && (
+              <button className="action-btn" onClick={onEditEffects} disabled={isLoading}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                <span>{t("editor")}</span>
+              </button>
+            )}
+          </div>
         </div>
 
-        <div className="preview-actions">
-          {onToggleHide && (
-            <button className="action-btn action-btn--secondary" onClick={onToggleHide} disabled={isLoading} title="Hide from library (requires PIN)">
-              {isHidden ? "Unhide 👁️" : "Hide 👁️‍🗨️"}
-            </button>
-          )}
-          {!isStaticImage && (
-            <button className="action-btn action-btn--secondary" onClick={() => setLocalPaused(!localPaused)} disabled={isLoading}>
-              {localPaused ? "Resume" : "Pause"}
-            </button>
-          )}
-          <button className="action-btn action-btn--secondary" onClick={onToggleFavorite} disabled={isLoading}>
-            {isFavorite ? "Unfavorite" : "Save Favorite"}
-          </button>
-          <button className="action-btn action-btn--secondary" onClick={onToggleQueue} disabled={isLoading}>
-            {isQueued ? "Remove From Queue" : "Add To Queue"}
-          </button>
-          {onEditEffects && (
-            <button className="action-btn action-btn--secondary" onClick={onEditEffects} disabled={isLoading}>
-              Open in Editor
-            </button>
-          )}
-          <button className="action-btn action-btn--primary" onClick={() => onApply(startTime, endTime)} disabled={isLoading}>
-            {isLoading ? "Applying..." : "Apply To Desktop"}
+        {/* Primary Action Anchored Box */}
+        <div className="preview-primary-action-box">
+          <button className="action-btn" onClick={() => onApply(startTime, endTime)} disabled={isLoading}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+            <span>{isLoading ? t("applying") : t("applyToDesktop")}</span>
           </button>
         </div>
       </div>

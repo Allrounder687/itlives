@@ -83,3 +83,20 @@ pub async fn list_installed_addons(app: AppHandle) -> Result<Vec<Addon>, String>
     }
     Ok(addons)
 }
+
+#[tauri::command]
+pub async fn get_addon_script(app: AppHandle, id: String) -> Result<String, String> {
+    let addons_dir = get_addons_dir(&app);
+    let script_path = addons_dir.join(format!("{}.js", id));
+    fs::read_to_string(script_path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn open_addons_folder(app: AppHandle) -> Result<(), String> {
+    let addons_dir = get_addons_dir(&app);
+    std::process::Command::new("explorer")
+        .arg(addons_dir)
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}

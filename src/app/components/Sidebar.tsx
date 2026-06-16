@@ -4,6 +4,7 @@ import React, { useState, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useNsfw } from "@/hooks/useNsfw";
 import { useAddons } from "@/hooks/useAddons";
+import { useTranslation } from "@/hooks/useTranslation";
 
 const ICONS = {
   discover: (
@@ -61,6 +62,7 @@ interface SidebarProps {
 }
 
 export const Sidebar = React.memo(function Sidebar({ activeTab, setActiveTab, isSidebarCollapsed, setIsSidebarCollapsed }: SidebarProps) {
+  const { t } = useTranslation();
   const { isUnlocked, unlockNsfw } = useNsfw();
   const { isAddonInstalled } = useAddons();
   const [showPinModal, setShowPinModal] = useState(false);
@@ -110,29 +112,29 @@ export const Sidebar = React.memo(function Sidebar({ activeTab, setActiveTab, is
             type="button"
             className={`sidebar-list__item sidebar-list__item--clickable ${activeTab === "discover" ? "sidebar-list__item--active" : ""}`}
             onClick={() => setActiveTab("discover")}
-            title="Discover"
+            title={t("discover")}
           >
             <div className="tab-icon">{ICONS.discover}</div>
-            <span>Discover</span>
+            <span>{t("discover")}</span>
           </button>
           <button
             type="button"
             className={`sidebar-list__item sidebar-list__item--clickable ${activeTab === "library" ? "sidebar-list__item--active" : ""}`}
             onClick={() => setActiveTab("library")}
-            title="Library"
+            title={t("library")}
           >
             <div className="tab-icon">{ICONS.library}</div>
-            <span>Library</span>
+            <span>{t("library")}</span>
           </button>
 
           <button
             type="button"
             className={`sidebar-list__item sidebar-list__item--clickable ${activeTab === "editor" ? "sidebar-list__item--active" : ""}`}
             onClick={() => setActiveTab("editor")}
-            title="Effects Editor"
+            title={t("editor")}
           >
             <div className="tab-icon">✨</div>
-            <span>Effects Editor</span>
+            <span>{t("editor")}</span>
           </button>
 
           {isAddonInstalled("youtube-dl") && (
@@ -140,10 +142,10 @@ export const Sidebar = React.memo(function Sidebar({ activeTab, setActiveTab, is
               type="button"
               className={`sidebar-list__item sidebar-list__item--clickable ${activeTab === "youtube" ? "sidebar-list__item--active" : ""}`}
               onClick={() => setActiveTab("youtube")}
-              title="Web Video"
+              title={t("youtube")}
             >
               <div className="tab-icon">{ICONS.youtube}</div>
-              <span>Web Video</span>
+              <span>{t("youtube")}</span>
             </button>
           )}
 
@@ -152,19 +154,19 @@ export const Sidebar = React.memo(function Sidebar({ activeTab, setActiveTab, is
             type="button"
             className={`sidebar-list__item sidebar-list__item--clickable ${activeTab === "addons" ? "sidebar-list__item--active" : ""}`}
             onClick={() => setActiveTab("addons")}
-            title="Addons Marketplace"
+            title={t("addons")}
           >
             <div className="tab-icon">📦</div>
-            <span>Addons</span>
+            <span>{t("addons")}</span>
           </button>
           <button
             type="button"
             className={`sidebar-list__item sidebar-list__item--clickable ${activeTab === "settings" ? "sidebar-list__item--active" : ""}`}
             onClick={handleSettingsClick}
-            title="Settings"
+            title={t("settings")}
           >
             <div className="tab-icon">{ICONS.settings}</div>
-            <span>Settings</span>
+            <span>{t("settings")}</span>
           </button>
         </div>
       </div>
@@ -174,7 +176,7 @@ export const Sidebar = React.memo(function Sidebar({ activeTab, setActiveTab, is
           type="button"
           className="sidebar-list__item sidebar-list__item--clickable"
           onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-          title={isSidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+          title={isSidebarCollapsed ? t("expand") : t("collapse")}
           style={{ justifyContent: isSidebarCollapsed ? 'center' : 'flex-start' }}
         >
           <div className="tab-icon">
@@ -184,7 +186,7 @@ export const Sidebar = React.memo(function Sidebar({ activeTab, setActiveTab, is
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
             )}
           </div>
-          <span>Collapse</span>
+          <span>{isSidebarCollapsed ? t("expand") : t("collapse")}</span>
         </button>
       </div>
 

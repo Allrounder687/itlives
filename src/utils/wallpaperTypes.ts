@@ -67,6 +67,7 @@ export interface PersistedState {
   perf_restart_lock_screen: boolean;
   perf_display_pause_rule: string;
   perf_pause_algorithm: string;
+  addon_credentials: Record<string, any>;
 }
 
 export interface WallpaperState {
@@ -126,6 +127,7 @@ export interface WallpaperState {
   perfRestartLockScreen: boolean;
   perfDisplayPauseRule: string;
   perfPauseAlgorithm: string;
+  addonCredentials: Record<string, any>;
 }
 
 export function applyPersistedState(persisted: PersistedState, current: WallpaperState): WallpaperState {
@@ -174,6 +176,7 @@ export function applyPersistedState(persisted: PersistedState, current: Wallpape
     perfRestartLockScreen: persisted.perf_restart_lock_screen ?? false,
     perfDisplayPauseRule: persisted.perf_display_pause_rule ?? "Per screen",
     perfPauseAlgorithm: persisted.perf_pause_algorithm ?? "Grid",
+    addonCredentials: persisted.addon_credentials ?? {},
   };
 }
 
@@ -183,14 +186,17 @@ export function isStaticWallpaper(video?: { video_url?: string; local_path?: str
   const path = (video.local_path || "").toLowerCase();
   const src = (video.source || "").toLowerCase();
   
-  if (url.includes(".mp4") || url.includes(".webm") || url.includes(".mov") || url.includes(".m3u8") ||
-      path.includes(".mp4") || path.includes(".webm") || path.includes(".mov") || path.includes(".m3u8")) {
+  const cleanUrl = url.split("?")[0].toLowerCase();
+  const cleanPath = path.split("?")[0].toLowerCase();
+
+  if (cleanUrl.includes(".mp4") || cleanUrl.includes(".webm") || cleanUrl.includes(".mov") || cleanUrl.includes(".m3u8") ||
+      cleanPath.includes(".mp4") || cleanPath.includes(".webm") || cleanPath.includes(".mov") || cleanPath.includes(".m3u8")) {
     return false;
   }
   
-  return url.endsWith(".jpg") || url.endsWith(".jpeg") || url.endsWith(".png") || url.endsWith(".webp") ||
-         path.endsWith(".jpg") || path.endsWith(".jpeg") || path.endsWith(".png") || path.endsWith(".webp") ||
-         src === "wallhaven" || src === "pinterest";
+  return cleanUrl.endsWith(".jpg") || cleanUrl.endsWith(".jpeg") || cleanUrl.endsWith(".png") || cleanUrl.endsWith(".webp") ||
+         cleanPath.endsWith(".jpg") || cleanPath.endsWith(".jpeg") || cleanPath.endsWith(".png") || cleanPath.endsWith(".webp") ||
+         src === "wallhaven" || src === "pinterest" || src === "deviantart" || src.startsWith("scraper-");
 }
 export function formatVideoTitle(id: string) {
   if (!id) return "Untitled";

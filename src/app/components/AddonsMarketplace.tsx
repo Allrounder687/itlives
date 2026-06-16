@@ -44,6 +44,15 @@ export const AddonsMarketplace = React.memo(function AddonsMarketplace() {
           author: "it Lives"
         },
         {
+          id: "scraper-motionbgs",
+          name: "MotionBGs Scraper",
+          description: "Adds MotionBGs as a source for high-quality live video loops.",
+          install_url: "https://raw.githubusercontent.com/allrounder687/openclaw-addons/main/scripts/motionbgs.js",
+          addon_type: "script",
+          version: "1.0.0",
+          author: "it Lives"
+        },
+        {
           id: "scraper-alphacoders",
           name: "AlphaCoders Scraper",
           description: "Adds AlphaCoders as a source for high-quality live video loops.",
@@ -104,17 +113,34 @@ export const AddonsMarketplace = React.memo(function AddonsMarketplace() {
     }
   };
 
+  const handleOpenAddonsFolder = async () => {
+    try {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("open_addons_folder");
+    } catch (e) {
+      console.error("Failed to open addons folder", e);
+    }
+  };
+
   return (
     <section className="panel panel--main" style={{ padding: "32px", overflowY: "auto" }}>
-      <div className="section-head" style={{ marginBottom: "2rem" }}>
-        <span className="eyebrow">Extensions & Plugins</span>
-        <h2>Addons Marketplace</h2>
-        <p className="muted" style={{ maxWidth: "600px", marginTop: "8px" }}>
-          Enhance your OpenClaw experience by installing community-developed scrapers, features, and integrations. 
-          By installing an addon, you agree to comply with the respective platform's Terms of Service.
-        </p>
+      <div className="section-head" style={{ marginBottom: "2rem", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div>
+          <span className="eyebrow">Extensions & Plugins</span>
+          <h2>Addons Marketplace</h2>
+          <p className="muted" style={{ maxWidth: "600px", marginTop: "8px" }}>
+            Enhance your itLives experience by installing community-developed scrapers, features, and integrations. 
+            You can also add your own local `.js` scripts.
+          </p>
+        </div>
+        <button 
+          className="action-btn action-btn--primary" 
+          onClick={handleOpenAddonsFolder}
+          style={{ display: "flex", alignItems: "center", gap: "8px" }}
+        >
+          📂 Open Addons Folder
+        </button>
       </div>
-
       {isFetching ? (
         <div className="skeleton skeleton-preview" />
       ) : (

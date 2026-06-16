@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, memo } from "react";
 import { useNsfw } from "@/hooks/useNsfw";
 
 interface AdvancedFiltersProps {
+  source?: string;
   resolutionFilter?: string | null;
   ratioFilter?: string | null;
   colorFilter?: string | null;
@@ -80,6 +81,7 @@ const RESOLUTION_GROUPS = [
 ];
 
 export const AdvancedFilters = memo(function AdvancedFilters({
+  source,
   resolutionFilter,
   ratioFilter,
   colorFilter,
@@ -137,6 +139,16 @@ export const AdvancedFilters = memo(function AdvancedFilters({
     onCategoriesChange(chars.join(''));
   };
 
+  const toggleGenericCategory = (cat: string) => {
+    if (!onCategoriesChange) return;
+    const current = categoriesFilter ? categoriesFilter.split(',').filter(Boolean) : [];
+    if (current.includes(cat)) {
+      onCategoriesChange(current.filter(c => c !== cat).join(','));
+    } else {
+      onCategoriesChange([...current, cat].join(','));
+    }
+  };
+
   const togglePurityBit = (index: number) => {
     if (!onPurityChange) return;
     const current = (purityFilter || "100").padEnd(3, '0');
@@ -146,14 +158,14 @@ export const AdvancedFilters = memo(function AdvancedFilters({
   };
 
   return (
-    <div className="wh-filters-container" style={{ position: "relative", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: "8px", marginBottom: "12px" }} ref={dropdownRef}>
+    <div className="wh-filters-container" style={{ position: "relative", display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "8px", marginBottom: "12px", width: "100%" }} ref={dropdownRef}>
       
       {/* RESOLUTION BUTTON */}
-      <div style={{ position: "relative" }}>
+      <div style={{ position: "relative", width: "100%" }}>
         <button 
           className={`action-btn ${activeDropdown === "resolution" ? "action-btn--primary" : "action-btn--ghost"}`}
           onClick={() => toggleDropdown("resolution")}
-          style={{ padding: "6px 12px", fontSize: "11px", display: "flex", alignItems: "center", gap: "6px" }}
+          style={{ padding: "6px 12px", fontSize: "11px", display: "flex", alignItems: "center", gap: "6px", width: "100%", justifyContent: "center", height: "36px", minHeight: "36px" }}
         >
           {resolutionFilter ? `Res: ${resolutionFilter.replace('>=', '≥ ')}` : "Resolution"} ▾
         </button>
@@ -171,7 +183,7 @@ export const AdvancedFilters = memo(function AdvancedFilters({
               >◎ Exactly</button>
             </div>
 
-            <div style={{ display: "flex", gap: "12px" }}>
+            <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
               {RESOLUTION_GROUPS.map(group => (
                 <div key={group.title} style={{ display: "flex", flexDirection: "column", gap: "4px", flex: 1 }}>
                   <div style={{ fontSize: "10px", color: "var(--text-soft)", fontWeight: 600, textAlign: "center", marginBottom: "4px" }}>{group.title}</div>
@@ -207,18 +219,18 @@ export const AdvancedFilters = memo(function AdvancedFilters({
       </div>
 
       {/* RATIO BUTTON */}
-      <div style={{ position: "relative" }}>
+      <div style={{ position: "relative", width: "100%" }}>
         <button 
           className={`action-btn ${activeDropdown === "ratio" ? "action-btn--primary" : "action-btn--ghost"}`}
           onClick={() => toggleDropdown("ratio")}
-          style={{ padding: "6px 12px", fontSize: "11px", display: "flex", alignItems: "center", gap: "6px" }}
+          style={{ padding: "6px 12px", fontSize: "11px", display: "flex", alignItems: "center", gap: "6px", width: "100%", justifyContent: "center", height: "36px", minHeight: "36px" }}
         >
           {ratioFilter ? `Ratio: ${ratioFilter}` : "Ratio"} ▾
         </button>
 
         {activeDropdown === "ratio" && (
-          <div className="wh-dropdown" style={{...dropdownStyle, minWidth: "300px"}}>
-            <div style={{ display: "flex", gap: "12px" }}>
+          <div className="wh-dropdown" style={{...dropdownStyle, left: "auto", right: 0, width: "max-content", maxWidth: "250px"}}>
+            <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
               {RATIO_GROUPS.map(group => (
                 <div key={group.title} style={{ display: "flex", flexDirection: "column", gap: "4px", flex: 1 }}>
                   <div style={{ fontSize: "10px", color: "var(--text-soft)", fontWeight: 600, textAlign: "center", marginBottom: "4px" }}>{group.title}</div>
@@ -247,11 +259,11 @@ export const AdvancedFilters = memo(function AdvancedFilters({
 
       {/* COLOR BUTTON */}
       {showColorFilter && (
-      <div style={{ position: "relative" }}>
+      <div style={{ position: "relative", width: "100%" }}>
         <button 
           className={`action-btn ${activeDropdown === "color" || colorFilter ? "action-btn--primary" : "action-btn--ghost"}`}
           onClick={() => toggleDropdown("color")}
-          style={{ padding: "6px 12px", fontSize: "11px", display: "flex", alignItems: "center", gap: "6px" }}
+          style={{ padding: "6px 12px", fontSize: "11px", display: "flex", alignItems: "center", gap: "6px", width: "100%", justifyContent: "center", height: "36px", minHeight: "36px" }}
         >
           {colorFilter ? (
             <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
@@ -261,7 +273,7 @@ export const AdvancedFilters = memo(function AdvancedFilters({
         </button>
 
         {activeDropdown === "color" && (
-          <div className="wh-dropdown" style={{...dropdownStyle, minWidth: "220px"}}>
+          <div className="wh-dropdown" style={{...dropdownStyle, minWidth: "100%", width: "max-content", maxWidth: "250px", left: 0}}>
             <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
               {COLORS.map((c) => (
                 <button
@@ -293,30 +305,44 @@ export const AdvancedFilters = memo(function AdvancedFilters({
 
       {/* CATEGORIES BUTTON */}
       {onCategoriesChange && (
-        <div style={{ position: "relative" }}>
+        <div style={{ position: "relative", width: "100%" }}>
           <button 
             className={`action-btn ${activeDropdown === "categories" || (categoriesFilter && categoriesFilter !== "111") ? "action-btn--primary" : "action-btn--ghost"}`}
             onClick={() => toggleDropdown("categories")}
-            style={{ padding: "6px 12px", fontSize: "11px", display: "flex", alignItems: "center", gap: "6px" }}
+            style={{ padding: "6px 12px", fontSize: "11px", display: "flex", alignItems: "center", gap: "6px", width: "100%", justifyContent: "center", height: "36px", minHeight: "36px" }}
           >
             Categories ▾
           </button>
 
           {activeDropdown === "categories" && (
-            <div className="wh-dropdown" style={{...dropdownStyle, minWidth: "150px"}}>
+            <div className="wh-dropdown" style={{...dropdownStyle, left: "auto", right: 0, minWidth: "150px", width: "max-content", maxWidth: "250px"}}>
               <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                <button 
-                  onClick={() => toggleCategoryBit(0)}
-                  style={gridBtnStyle((categoriesFilter || "111")[0] === '1')}
-                >General</button>
-                <button 
-                  onClick={() => toggleCategoryBit(1)}
-                  style={gridBtnStyle((categoriesFilter || "111")[1] === '1')}
-                >Anime</button>
-                <button 
-                  onClick={() => toggleCategoryBit(2)}
-                  style={gridBtnStyle((categoriesFilter || "111")[2] === '1')}
-                >People</button>
+                {source === "deviantart" ? (
+                  <>
+                    {["Digital Art", "Photography", "Traditional", "3D", "Anime", "Fractal", "Concept Art", "Pixel Art", "Sci-Fi", "Fantasy", "Cyberpunk", "Landscape", "Abstract", "Animals", "Cars", "Gaming"].map(cat => (
+                      <button 
+                        key={cat}
+                        onClick={() => toggleGenericCategory(cat.toLowerCase().replace(' ', ''))}
+                        style={gridBtnStyle((categoriesFilter || "").split(',').includes(cat.toLowerCase().replace(' ', '')))}
+                      >{cat}</button>
+                    ))}
+                  </>
+                ) : (
+                  <>
+                    <button 
+                      onClick={() => toggleCategoryBit(0)}
+                      style={gridBtnStyle((categoriesFilter || "111")[0] === '1')}
+                    >General</button>
+                    <button 
+                      onClick={() => toggleCategoryBit(1)}
+                      style={gridBtnStyle((categoriesFilter || "111")[1] === '1')}
+                    >Anime</button>
+                    <button 
+                      onClick={() => toggleCategoryBit(2)}
+                      style={gridBtnStyle((categoriesFilter || "111")[2] === '1')}
+                    >People</button>
+                  </>
+                )}
               </div>
             </div>
           )}
@@ -325,17 +351,17 @@ export const AdvancedFilters = memo(function AdvancedFilters({
 
       {/* PURITY BUTTON */}
       {onPurityChange && (
-        <div style={{ position: "relative" }}>
+        <div style={{ position: "relative", width: "100%" }}>
           <button 
             className={`action-btn ${activeDropdown === "purity" || (purityFilter && purityFilter !== "100") ? "action-btn--primary" : "action-btn--ghost"}`}
             onClick={() => toggleDropdown("purity")}
-            style={{ padding: "6px 12px", fontSize: "11px", display: "flex", alignItems: "center", gap: "6px" }}
+            style={{ padding: "6px 12px", fontSize: "11px", display: "flex", alignItems: "center", gap: "6px", width: "100%", justifyContent: "center", height: "36px", minHeight: "36px" }}
           >
             Purity ▾
           </button>
 
           {activeDropdown === "purity" && (
-            <div className="wh-dropdown" style={{...dropdownStyle, minWidth: "150px"}}>
+            <div className="wh-dropdown" style={{...dropdownStyle, left: 0, minWidth: "150px", width: "max-content", maxWidth: "250px"}}>
               <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                 <button 
                   onClick={() => togglePurityBit(0)}
@@ -371,7 +397,9 @@ const dropdownStyle: React.CSSProperties = {
   border: "1px solid rgba(255,255,255,0.1)",
   borderRadius: "8px",
   padding: "16px",
-  minWidth: "500px",
+  minWidth: "100%",
+  width: "max-content",
+  maxWidth: "280px",
   zIndex: 100,
   boxShadow: "0 10px 40px rgba(0,0,0,0.5)",
   animation: "slideDown 0.2s cubic-bezier(0.16, 1, 0.3, 1)"
