@@ -1,109 +1,109 @@
 {
-  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "app": {
-    "security": {
-      "assetProtocol": {
-        "enable": true,
-        "scope": [
-          "**"
-        ]
-      },
-      "csp": "default-src 'self' 'unsafe-inline' asset: https:; img-src 'self' asset: https: blob: data:; media-src 'self' asset: https: blob: http://asset.localhost; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' ipc: http://ipc.localhost https://api.redgifs.com https://media.redgifs.com https://*.redgifs.com https://fonts.gstatic.com"
-    },
-    "windows": [
-      {
-        "center": true,
-        "decorations": false,
-        "fullscreen": false,
-        "height": 940,
-        "label": "main",
-        "minHeight": 600,
-        "minWidth": 860,
-        "resizable": true,
-        "shadow": true,
-        "title": "itLives - Live Wallpaper Player",
-        "width": 1480
-      },
-      {
-        "alwaysOnTop": true,
-        "decorations": false,
-        "height": 480,
-        "label": "tray_menu",
-        "resizable": false,
-        "shadow": true,
-        "skipTaskbar": true,
-        "url": "/tray",
-        "visible": false,
-        "width": 380
-      },
-      {
-        "alwaysOnTop": true,
-        "decorations": false,
-        "height": 420,
-        "label": "mini_player",
-        "minHeight": 420,
-        "minWidth": 320,
-        "resizable": false,
-        "shadow": false,
-        "skipTaskbar": true,
-        "transparent": true,
-        "url": "/mini-player",
-        "visible": false,
-        "width": 320
-      },
-      {
-        "decorations": false,
-        "fullscreen": true,
-        "label": "effects_overlay",
-        "resizable": false,
-        "shadow": false,
-        "skipTaskbar": true,
-        "transparent": true,
-        "url": "/?mode=desktop-overlay",
-        "visible": false
-      }
-    ]
-  },
-  "build": {
-    "beforeBuildCommand": "npm run build",
-    "beforeDevCommand": "npm run dev",
-    "devUrl": "http://localhost:3000",
-    "frontendDist": "../out"
-  },
-  "bundle": {
-    "active": true,
-    "externalBin": [
-      "binaries/mpv",
-      "binaries/yt-dlp"
-    ],
-    "icon": [
-      "icons/32x32.png",
-      "icons/128x128.png",
-      "icons/128x128@2x.png",
-      "icons/icon.icns",
-      "icons/icon.ico"
-    ],
-    "publisher": "itLives",
-    "resources": [
-      "binaries/d3dcompiler_43.dll"
-    ],
-    "targets": "all",
-    "windows": {
-      "nsis": {
-        "displayLanguageSelector": true,
-        "installMode": "currentUser"
-      }
-    }
-  },
-  "identifier": "com.itlives.lwp",
-  "plugins": {
-    "updater": {
-      "endpoints": [
-        "https://raw.githubusercontent.com/Allrounder687/itlives/newui/update.json"
-      ],
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDg1QzkzMDY4QTc1RjgyODAKUldTQWdsK25hRERKaGZlSmFadDAzL08vUEFMbUtDQ2JXSFRreTdWenVicGtIZ0l5R25nUXhxU2cK"
-    }
-  },
-  "productName": "itLives",
-  "version": "0.1.4"
+    "$schema":  "../node_modules/@tauri-apps/cli/config.schema.json",
+    "app":  {
+                "security":  {
+                                 "assetProtocol":  {
+                                                       "enable":  true,
+                                                       "scope":  [
+                                                                     "**"
+                                                                 ]
+                                                   },
+                                 "csp":  "default-src \u0027self\u0027 \u0027unsafe-inline\u0027 asset: https:; img-src \u0027self\u0027 asset: https: blob: data:; media-src \u0027self\u0027 asset: https: blob: http://asset.localhost; style-src \u0027self\u0027 \u0027unsafe-inline\u0027 https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src \u0027self\u0027 ipc: http://ipc.localhost https://api.redgifs.com https://media.redgifs.com https://*.redgifs.com https://fonts.gstatic.com"
+                             },
+                "windows":  [
+                                {
+                                    "center":  true,
+                                    "decorations":  false,
+                                    "fullscreen":  false,
+                                    "height":  940,
+                                    "label":  "main",
+                                    "minHeight":  600,
+                                    "minWidth":  860,
+                                    "resizable":  true,
+                                    "shadow":  true,
+                                    "title":  "itLives - Live Wallpaper Player",
+                                    "width":  1480
+                                },
+                                {
+                                    "alwaysOnTop":  true,
+                                    "decorations":  false,
+                                    "height":  480,
+                                    "label":  "tray_menu",
+                                    "resizable":  false,
+                                    "shadow":  true,
+                                    "skipTaskbar":  true,
+                                    "url":  "/tray",
+                                    "visible":  false,
+                                    "width":  380
+                                },
+                                {
+                                    "alwaysOnTop":  true,
+                                    "decorations":  false,
+                                    "height":  420,
+                                    "label":  "mini_player",
+                                    "minHeight":  420,
+                                    "minWidth":  320,
+                                    "resizable":  false,
+                                    "shadow":  false,
+                                    "skipTaskbar":  true,
+                                    "transparent":  true,
+                                    "url":  "/mini-player",
+                                    "visible":  false,
+                                    "width":  320
+                                },
+                                {
+                                    "decorations":  false,
+                                    "fullscreen":  true,
+                                    "label":  "effects_overlay",
+                                    "resizable":  false,
+                                    "shadow":  false,
+                                    "skipTaskbar":  true,
+                                    "transparent":  true,
+                                    "url":  "/?mode=desktop-overlay",
+                                    "visible":  false
+                                }
+                            ]
+            },
+    "build":  {
+                  "beforeBuildCommand":  "npm run build",
+                  "beforeDevCommand":  "npm run dev",
+                  "devUrl":  "http://localhost:3000",
+                  "frontendDist":  "../out"
+              },
+    "bundle":  {
+                   "active":  true,
+                   "externalBin":  [
+                                       "binaries/mpv",
+                                       "binaries/yt-dlp"
+                                   ],
+                   "icon":  [
+                                "icons/32x32.png",
+                                "icons/128x128.png",
+                                "icons/128x128@2x.png",
+                                "icons/icon.icns",
+                                "icons/icon.ico"
+                            ],
+                   "publisher":  "itLives",
+                   "resources":  [
+                                     "binaries/d3dcompiler_43.dll"
+                                 ],
+                   "targets":  "all",
+                   "windows":  {
+                                   "nsis":  {
+                                                "displayLanguageSelector":  true,
+                                                "installMode":  "currentUser"
+                                            }
+                               }
+               },
+    "identifier":  "com.itlives.lwp",
+    "plugins":  {
+                    "updater":  {
+                                    "endpoints":  [
+                                                      "https://raw.githubusercontent.com/Allrounder687/itlives/newui/update.json"
+                                                  ],
+                                    "pubkey":  "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDg1QzkzMDY4QTc1RjgyODAKUldTQWdsK25hRERKaGZlSmFadDAzL08vUEFMbUtDQ2JXSFRreTdWenVicGtIZ0l5R25nUXhxU2cK"
+                                }
+                },
+    "productName":  "itLives",
+    "version":  "0.1.4"
 }

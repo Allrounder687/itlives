@@ -1,44 +1,44 @@
 {
-  "dependencies": {
-    "@react-three/drei": "^10.7.7",
-    "@react-three/fiber": "^9.6.1",
-    "@react-three/postprocessing": "^3.0.4",
-    "@react-three/rapier": "^2.2.0",
-    "@tauri-apps/api": "^2.10.1",
-    "@tauri-apps/plugin-autostart": "^2.5.1",
-    "@tauri-apps/plugin-dialog": "^2.7.1",
-    "@tauri-apps/plugin-http": "^2.5.9",
-    "@tauri-apps/plugin-process": "^2.3.1",
-    "@tauri-apps/plugin-updater": "^2.10.1",
-    "@types/three": "^0.184.1",
-    "kokoro-js": "^1.2.1",
-    "lucide-react": "^1.18.0",
-    "meshline": "^3.3.1",
-    "next": "16.1.7",
-    "react": "19.2.3",
-    "react-dom": "19.2.3",
-    "three": "^0.184.0"
-  },
-  "devDependencies": {
-    "@tailwindcss/postcss": "^4",
-    "@tauri-apps/cli": "^2.10.1",
-    "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "eslint": "^9",
-    "eslint-config-next": "16.1.7",
-    "tailwindcss": "^4",
-    "typescript": "^5"
-  },
-  "name": "itlives",
-  "private": true,
-  "scripts": {
-    "build": "next build",
-    "dev": "next dev",
-    "lint": "eslint",
-    "scrape": "node scripts/scrape.js",
-    "start": "next start",
-    "tauri": "tauri"
-  },
-  "version": "0.1.4"
+    "dependencies":  {
+                         "@react-three/drei":  "^10.7.7",
+                         "@react-three/fiber":  "^9.6.1",
+                         "@react-three/postprocessing":  "^3.0.4",
+                         "@react-three/rapier":  "^2.2.0",
+                         "@tauri-apps/api":  "^2.10.1",
+                         "@tauri-apps/plugin-autostart":  "^2.5.1",
+                         "@tauri-apps/plugin-dialog":  "^2.7.1",
+                         "@tauri-apps/plugin-http":  "^2.5.9",
+                         "@tauri-apps/plugin-process":  "^2.3.1",
+                         "@tauri-apps/plugin-updater":  "^2.10.1",
+                         "@types/three":  "^0.184.1",
+                         "kokoro-js":  "^1.2.1",
+                         "lucide-react":  "^1.18.0",
+                         "meshline":  "^3.3.1",
+                         "next":  "16.1.7",
+                         "react":  "19.2.3",
+                         "react-dom":  "19.2.3",
+                         "three":  "^0.184.0"
+                     },
+    "devDependencies":  {
+                            "@tailwindcss/postcss":  "^4",
+                            "@tauri-apps/cli":  "^2.10.1",
+                            "@types/node":  "^20",
+                            "@types/react":  "^19",
+                            "@types/react-dom":  "^19",
+                            "eslint":  "^9",
+                            "eslint-config-next":  "16.1.7",
+                            "tailwindcss":  "^4",
+                            "typescript":  "^5"
+                        },
+    "name":  "itlives",
+    "private":  true,
+    "scripts":  {
+                    "build":  "next build",
+                    "dev":  "next dev",
+                    "lint":  "eslint",
+                    "scrape":  "node scripts/scrape.js",
+                    "start":  "next start",
+                    "tauri":  "tauri"
+                },
+    "version":  "0.1.4"
 }
