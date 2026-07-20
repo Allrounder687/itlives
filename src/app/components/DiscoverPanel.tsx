@@ -31,6 +31,11 @@ const WALLPAPERWAVES_CATEGORIES = [
   "Memes", "Pixel Art", "Retro", "Sci-Fi", "TV Movies", "Vehicle"
 ];
 
+const ALPHACODERS_CATEGORIES = [
+  "All", "Anime", "Games", "Movies", "TV Shows", "Nature", "Space", "Fantasy",
+  "Sci-Fi", "Abstract", "Cars", "Motorcycles", "Music", "Sports", "Photography", "Animals"
+];
+
 const WALLHAVEN_CATEGORIES = [
   { label: "All", value: "all", count: 0 },
   { label: "Nature", value: "https://wallhaven.cc/user/DeviateFish/collections/95531", count: 35786 },
@@ -149,8 +154,10 @@ export const DiscoverPanel = React.memo(function DiscoverPanel({
     }
   }, [wallpaper.source, evaluateAddon, isAddonInstalled]);
 
-  // Collapsible Sidebar
+  // Collapsible Sidebar & Filters
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [showExploreAddons, setShowExploreAddons] = useState(false);
+  const [showAllCategories, setShowAllCategories] = useState(false);
 
   // Background installation task state
   const [installingId, setInstallingId] = useState<string | null>(null);
@@ -366,15 +373,6 @@ export const DiscoverPanel = React.memo(function DiscoverPanel({
         <div className="discover-sidebar-section">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span className="discover-sidebar-title">{t("activeFeeds")}</span>
-            <button 
-              type="button"
-              className="discover-btn-link"
-              style={{ padding: "4px 8px", fontSize: "11px", height: "auto", border: "1px solid rgba(255,255,255,0.03)" }}
-              onClick={() => setIsSidebarCollapsed(true)}
-              title="Collapse Feeds Sidebar"
-            >
-              ◀ Collapse
-            </button>
           </div>
           <div className="discover-sources-list">
             {activeSources.map((src) => {
@@ -392,10 +390,11 @@ export const DiscoverPanel = React.memo(function DiscoverPanel({
                     }
                   }}
                 >
+
                   <span className="discover-source-icon">{src.icon}</span>
                   <div className="discover-source-info">
-                    <span className="discover-source-label">{src.label}</span>
-                    <span className="discover-source-desc">{src.desc}</span>
+                    <h3 className="discover-source-label">{src.label}</h3>
+                    <p className="discover-source-desc">{src.desc}</p>
                   </div>
                   <span className="discover-source-badge">{src.type}</span>
                 </div>
@@ -404,49 +403,56 @@ export const DiscoverPanel = React.memo(function DiscoverPanel({
           </div>
         </div>
 
-        {/* EXPLORE / ADDON FEEDS */}
-        {exploreSources.length > 0 && (
-          <div className="discover-sidebar-section">
-            <span className="discover-sidebar-title">{t("exploreAddons")}</span>
-            <div className="discover-sources-list">
+        {/* EXPLORE ADDONS */}
+        <div className="discover-sidebar-section">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span className="discover-sidebar-title">Explore Addons</span>
+            <button 
+              type="button"
+              className="discover-btn-link"
+              style={{ padding: "4px 8px", fontSize: "11px", height: "auto", border: "1px solid rgba(255,255,255,0.03)" }}
+              onClick={() => setShowExploreAddons(!showExploreAddons)}
+            >
+              {showExploreAddons ? "Hide" : "Browse"}
+            </button>
+          </div>
+          
+          {showExploreAddons && (
+            <div className="discover-sources-list discover-sources-list--addons">
               {exploreSources.map((src) => {
-                const isActive = wallpaper.source === src.id;
-                const isInstalling = installingId === src.addonId;
+                const installed = isAddonInstalled(src.id);
                 return (
                   <div
                     key={src.id}
-                    role="button"
-                    tabIndex={0}
-                    className={`discover-source-item uninstalled ${isActive ? "active" : ""}`}
-                    onClick={() => wallpaper.setSource(src.id)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        wallpaper.setSource(src.id);
-                      }
-                    }}
+                    className="discover-source-item discover-source-item--addon"
                   >
-                    <span className="discover-source-icon">{src.icon}</span>
-                    <div className="discover-source-info">
-                      <span className="discover-source-label">{src.label}</span>
-                      <span className="discover-source-desc">{src.desc}</span>
+                    <div className="discover-source-item__info">
+                      <span className="discover-source-item__icon">{src.icon}</span>
+                      <div className="discover-source-item__text">
+                        <span className="discover-source-item__label">{src.label}</span>
+                        {src.desc && <span className="discover-source-item__desc">{src.desc}</span>}
+                      </div>
                     </div>
-                    <button
-                      type="button"
-                      className="install-overlay-btn"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleInstallAddonInline(src.addonId);
-                      }}
-                      disabled={isInstalling}
-                    >
-                      {isInstalling ? "..." : "+ Add"}
-                    </button>
+                    {installed ? (
+                      <span className="discover-source-item__status">Installed</span>
+                    ) : (
+                      <button
+                        className="discover-btn-install"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleInstallAddonInline(src.addonId);
+                        }}
+                        disabled={installingId === src.addonId}
+                      >
+                        {installingId === src.addonId ? "Installing..." : "Install"}
+                      </button>
+                    )}
                   </div>
                 );
               })}
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
         {/* Source Configurations (Pinterest / Wallhaven / Direct) */}
         {wallpaper.source === "pinterest" && activeSources.some(s => s.id === "pinterest") && (
@@ -575,16 +581,17 @@ export const DiscoverPanel = React.memo(function DiscoverPanel({
           </div>
         )}
 
-        {/* Target Monitor Selector */}
-        <div className="discover-sidebar-section">
-          <span className="discover-sidebar-title">Screen Assignment</span>
-          <DisplaySelector />
-        </div>
-
         {/* Collapsible Advanced Filters Drawer */}
         {wallpaper.source !== "direct" && isFiltersExpanded && !wallpaper.category?.startsWith("http") && (
           <div className="discover-sidebar-section" style={{ marginTop: "auto" }}>
             <span className="discover-sidebar-title">Search Filters</span>
+
+            {/* Target Monitor Selector inside Filters */}
+            <div style={{ marginBottom: "16px" }}>
+              <span className="discover-sidebar-title" style={{ fontSize: "10px", opacity: 0.7, marginBottom: "8px", display: "block" }}>Screen Assignment</span>
+              <DisplaySelector />
+            </div>
+
             {customFiltersSchema ? (
                <div style={{ padding: "12px", background: "rgba(0,0,0,0.2)", borderRadius: "8px", fontSize: "11px", color: "var(--text-soft)" }}>
                  <p style={{ margin: "0 0 12px 0", color: "var(--accent)" }}>Custom Plugin Filters</p>
@@ -602,20 +609,9 @@ export const DiscoverPanel = React.memo(function DiscoverPanel({
                  ))}
                </div>
             ) : (
-              <AdvancedFilters
-                source={wallpaper.source}
-                resolutionFilter={wallpaper.resolutions || null}
-                ratioFilter={wallpaper.ratios || null}
-                colorFilter={wallpaper.colors || null}
-                onResolutionChange={wallpaper.setResolutions || (() => {})}
-                onRatioChange={wallpaper.setRatios || (() => {})}
-                onColorChange={wallpaper.setColors || (() => {})}
-                categoriesFilter={wallpaper.categoriesFilter}
-                purityFilter={wallpaper.purityFilter}
-                onCategoriesChange={wallpaper.setCategoriesFilter}
-                onPurityChange={wallpaper.setPurityFilter}
-                showColorFilter={true}
-              />
+               <div style={{ padding: "16px", textAlign: "center", background: "rgba(0,0,0,0.2)", borderRadius: "8px", fontSize: "11px", color: "var(--text-dim)", border: "1px dashed rgba(255,255,255,0.05)" }}>
+                 No advanced filters available for this source.
+               </div>
             )}
           </div>
         )}
@@ -631,49 +627,54 @@ export const DiscoverPanel = React.memo(function DiscoverPanel({
             {isFiltersExpanded ? "▲ Hide Search Filters" : "▼ Show Search Filters"}
           </button>
         )}
-
-        {/* REDIRECT TO ADDONS MARKETPLACE */}
-        <div style={{ marginTop: "auto" }}>
-          <button
-            type="button"
-            className="discover-btn-link"
-            onClick={() => setActiveTab("addons")}
-          >
-            🔌 Addons Marketplace
-          </button>
-        </div>
       </aside>
 
-      {isSidebarCollapsed && (
-        <button
-          type="button"
-          onClick={() => setIsSidebarCollapsed(false)}
-          style={{
-            position: "absolute",
-            left: "0",
-            top: "50%",
-            transform: "translateY(-50%)",
-            zIndex: 10,
-            background: "rgba(20,20,20,0.6)",
-            border: "1px solid rgba(255,255,255,0.1)",
-            borderLeft: "none",
-            borderRadius: "0 12px 12px 0",
-            padding: "24px 8px",
-            color: "var(--text-soft)",
-            cursor: "pointer",
-            backdropFilter: "blur(12px)",
-            boxShadow: "4px 0 15px rgba(0,0,0,0.3)",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            gap: "8px"
+      {/* Floating Toggle Button */}
+      <button
+        type="button"
+        className="sidebar-toggle-btn"
+        onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+        title={isSidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+        style={{
+          position: "absolute",
+          left: isSidebarCollapsed ? "0" : "278px",
+          top: "50%",
+          transform: "translateY(-50%)",
+          zIndex: 20,
+          background: "var(--bg-elevated)",
+          border: "1px solid var(--panel-edge)",
+          borderLeft: isSidebarCollapsed ? "none" : "1px solid var(--panel-edge)",
+          borderRadius: isSidebarCollapsed ? "0 12px 12px 0" : "50%",
+          padding: isSidebarCollapsed ? "24px 8px" : "8px",
+          color: "var(--text-soft)",
+          cursor: "pointer",
+          backdropFilter: "blur(12px)",
+          boxShadow: "4px 0 15px rgba(0,0,0,0.3)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          transition: "left 0.15s cubic-bezier(0.4, 0, 0.2, 1), border-radius 0.15s ease",
+          width: isSidebarCollapsed ? "auto" : "28px",
+          height: isSidebarCollapsed ? "auto" : "28px"
+        }}
+      >
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          style={{ 
+            transform: isSidebarCollapsed ? "rotate(180deg)" : "rotate(0deg)", 
+            transition: "transform 0.3s ease" 
           }}
-          title="Expand Feeds Sidebar"
-          className="hover-brighten"
         >
-          <span style={{ fontSize: "14px" }}>▶</span>
-        </button>
-      )}
+          <polyline points="15 18 9 12 15 6"></polyline>
+        </svg>
+      </button>
 
       {/* RIGHT CONTENT WORKSPACE */}
       <main className="discover-content">
@@ -729,40 +730,61 @@ export const DiscoverPanel = React.memo(function DiscoverPanel({
         </div>
 
         {/* Categories Bar */}
-        {wallpaper.source !== "direct" && isSourceAvailable(wallpaper.source) && (
+        {wallpaper.source !== "direct" && wallpaper.source !== "youtube" && isSourceAvailable(wallpaper.source) && (
           <div className="discover-category-list">
-            {wallpaper.source === "wallhaven" ? (
-              [{ label: "All", value: "all", count: 0 }, ...wallhavenCollections].map((cat) => {
-                const isActive = (wallpaper.category || "all").toLowerCase() === cat.value.toLowerCase();
-                const heatmapColor = (!isActive && cat.count) ? getHeatmapColor(cat.count, maxCollectionCount) : undefined;
-                return (
-                  <button
-                    key={cat.label}
-                    type="button"
-                    className={`discover-category-pill ${isActive ? "active" : ""}`}
-                    style={{
-                      background: heatmapColor,
-                      color: heatmapColor ? "#fff" : undefined
-                    }}
-                    onClick={() => wallpaper.setCategory(cat.value)}
-                  >
-                    {cat.label} {cat.count ? `(${cat.count.toLocaleString()})` : ''}
-                  </button>
-                );
-              })
-            ) : (wallpaper.source === "wallpaperwaves" ? WALLPAPERWAVES_CATEGORIES : CATEGORIES).map((cat) => {
-              const isActive = (wallpaper.category || "all").toLowerCase() === cat.toLowerCase();
+            {(() => {
+              let catsToRender: any[] = [];
+              let isObject = false;
+
+              if (wallpaper.source === "wallhaven") {
+                catsToRender = [{ label: "All", value: "all", count: 0 }, ...wallhavenCollections];
+                isObject = true;
+              } else if (wallpaper.source === "alphacoders") {
+                catsToRender = ALPHACODERS_CATEGORIES;
+              } else {
+                catsToRender = wallpaper.source === "wallpaperwaves" ? WALLPAPERWAVES_CATEGORIES : CATEGORIES;
+              }
+
+              const displayLimit = 12;
+              const hasMore = catsToRender.length > displayLimit;
+              const visibleCats = showAllCategories ? catsToRender : catsToRender.slice(0, displayLimit);
+
               return (
-                <button
-                  key={cat}
-                  type="button"
-                  className={`discover-category-pill ${isActive ? "active" : ""}`}
-                  onClick={() => wallpaper.setCategory(cat.toLowerCase())}
-                >
-                  {cat}
-                </button>
+                <>
+                  {visibleCats.map((cat: any) => {
+                    const isActive = isObject 
+                      ? (wallpaper.category || "all").toLowerCase() === cat.value.toLowerCase()
+                      : (wallpaper.category || "all").toLowerCase() === cat.toLowerCase();
+
+                    return (
+                      <button
+                        key={isObject ? cat.label : cat}
+                        type="button"
+                        className={`discover-category-pill ${isActive ? "active" : ""}`}
+                        style={isObject && !isActive && cat.count ? {
+                          background: getHeatmapColor(cat.count, maxCollectionCount),
+                          color: "#fff"
+                        } : undefined}
+                        onClick={() => wallpaper.setCategory(isObject ? cat.value : cat.toLowerCase())}
+                      >
+                        {isObject ? `${cat.label} ${cat.count ? `(${cat.count.toLocaleString()})` : ''}` : cat}
+                      </button>
+                    );
+                  })}
+                  
+                  {hasMore && (
+                    <button
+                      type="button"
+                      className="discover-category-pill discover-category-pill--more"
+                      onClick={() => setShowAllCategories(!showAllCategories)}
+                      style={{ background: "transparent", border: "1px dashed rgba(255,255,255,0.2)" }}
+                    >
+                      {showAllCategories ? "Show Less ▲" : `Show More +${catsToRender.length - displayLimit}`}
+                    </button>
+                  )}
+                </>
               );
-            })}
+            })()}
           </div>
         )}
 

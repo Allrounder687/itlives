@@ -57,6 +57,19 @@ pub struct WallpaperState {
     pub addon_credentials: std::collections::HashMap<String, serde_json::Value>,
 }
 
+impl WallpaperState {
+    pub fn to_lightweight_value(&self) -> Result<serde_json::Value, String> {
+        let mut val = serde_json::to_value(self).map_err(|e| e.to_string())?;
+        if let Some(obj) = val.as_object_mut() {
+            obj.remove("queue");
+            obj.remove("recents");
+            obj.remove("favorites");
+            obj.remove("imports");
+        }
+        Ok(val)
+    }
+}
+
 impl Default for WallpaperState {
     fn default() -> Self {
         Self {
@@ -149,8 +162,13 @@ impl AppStateStore {
     }
 
     fn persist(&self, state: &WallpaperState) -> Result<(), String> {
-        save_to_path(&self.path, state)?;
-        crate::integrations::save_rainmeter_inc(state);
+        let _ = STATE_TX.try_send(StatePayload {
+            path: self.path.as_ref().clone(),
+            state: state.clone(),
+            app_handle: self.app_handle.clone(),
+            emit: false,
+            emit_light: false,
+        });
         Ok(())
     }
 
@@ -158,28 +176,116 @@ impl AppStateStore {
     where
         F: FnOnce(&mut WallpaperState) -> Result<(), String>,
     {
-        let mut state = match self.inner.write() {
-            Ok(guard) => guard,
-            Err(poisoned) => poisoned.into_inner(),
-        };
-        mutate(&mut state)?;
-        if !state.queue.is_empty() {
-            state.queue_cursor %= state.queue.len();
-        } else {
-            state.queue_cursor = 0;
-        }
-        self.persist(&state)?;
-
-        // Emit state update event
-        use tauri::Emitter;
-        if let Ok(lock) = self.app_handle.lock() {
-            if let Some(app) = lock.as_ref() {
-                let _ = app.emit("state-updated", state.clone());
+        let state_clone = {
+            let mut state = match self.inner.write() {
+                Ok(guard) => guard,
+                Err(poisoned) => poisoned.into_inner(),
+            };
+            mutate(&mut state)?;
+            if !state.queue.is_empty() {
+                state.queue_cursor %= state.queue.len();
+            } else {
+                state.queue_cursor = 0;
             }
-        }
+            state.clone()
+        };
 
-        Ok(state.clone())
+        let _ = STATE_TX.try_send(StatePayload {
+            path: self.path.as_ref().clone(),
+            state: state_clone.clone(),
+            app_handle: self.app_handle.clone(),
+            emit: true,
+            emit_light: false,
+        });
+
+        Ok(state_clone)
     }
+    pub fn update_light<F>(&self, mutate: F) -> Result<WallpaperState, String>
+    where
+        F: FnOnce(&mut WallpaperState) -> Result<(), String>,
+    {
+        let state_clone = {
+            let mut state = match self.inner.write() {
+                Ok(guard) => guard,
+                Err(poisoned) => poisoned.into_inner(),
+            };
+            mutate(&mut state)?;
+            if !state.queue.is_empty() {
+                state.queue_cursor %= state.queue.len();
+            } else {
+                state.queue_cursor = 0;
+            }
+            state.clone()
+        };
+
+        let _ = STATE_TX.try_send(StatePayload {
+            path: self.path.as_ref().clone(),
+            state: state_clone.clone(),
+            app_handle: self.app_handle.clone(),
+            emit: false,
+            emit_light: true,
+        });
+
+        Ok(state_clone)
+    }
+}
+
+struct StatePayload {
+    path: PathBuf,
+    state: WallpaperState,
+    app_handle: Arc<std::sync::Mutex<Option<tauri::AppHandle>>>,
+    emit: bool,
+    emit_light: bool,
+}
+
+lazy_static::lazy_static! {
+    static ref STATE_TX: std::sync::mpsc::SyncSender<StatePayload> = {
+        let (tx, rx) = std::sync::mpsc::sync_channel::<StatePayload>(100);
+        std::thread::spawn(move || {
+            loop {
+                match rx.recv() {
+                    Ok(mut pending) => {
+                        // drain queue to get the latest state
+                        while let Ok(msg) = rx.try_recv() {
+                            pending.state = msg.state;
+                            pending.emit = pending.emit || msg.emit;
+                            pending.emit_light = pending.emit_light || msg.emit_light;
+                        }
+                        
+                        let StatePayload { path, state, app_handle, emit, emit_light } = pending;
+                        
+                        let _ = save_to_path(&path, &state);
+                        crate::integrations::save_rainmeter_inc(&state);
+                        
+                        if emit || emit_light {
+                            use tauri::Emitter;
+                            if let Ok(lock) = app_handle.lock() {
+                                if let Some(app) = lock.as_ref() {
+                                    if emit {
+                                        let _ = app.emit("state-updated", state.clone());
+                                    } else {
+                                        if let Ok(mut val) = serde_json::to_value(&state) {
+                                            if let Some(obj) = val.as_object_mut() {
+                                                obj.remove("queue");
+                                                obj.remove("recents");
+                                                obj.remove("favorites");
+                                                obj.remove("imports");
+                                            }
+                                            let _ = app.emit("state-updated", val);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        
+                        std::thread::sleep(std::time::Duration::from_millis(500));
+                    }
+                    Err(_) => break,
+                }
+            }
+        });
+        tx
+    };
 }
 
 fn now_ts() -> u64 {
@@ -337,7 +443,7 @@ pub fn set_wallpaper_scale_percent(
     store: &AppStateStore,
     scale_percent: u64,
 ) -> Result<WallpaperState, String> {
-    store.update(|state| {
+    store.update_light(|state| {
         state.wallpaper_scale_percent = scale_percent.clamp(25, 200);
         Ok(())
     })
@@ -371,7 +477,7 @@ pub fn set_volume_percent(
     store: &AppStateStore,
     volume_percent: u64,
 ) -> Result<WallpaperState, String> {
-    store.update(|state| {
+    store.update_light(|state| {
         state.volume_percent = volume_percent.min(100);
         Ok(())
     })
@@ -381,7 +487,7 @@ pub fn set_video_filter(
     store: &AppStateStore,
     video_filter: String,
 ) -> Result<WallpaperState, String> {
-    store.update(|state| {
+    store.update_light(|state| {
         state.video_filter = match video_filter.as_str() {
             "none" | "grayscale" | "vivid" | "soft" | "noir" | "retro" => video_filter,
             _ => "none".to_string(),
@@ -391,14 +497,14 @@ pub fn set_video_filter(
 }
 
 pub fn set_playback_speed(store: &AppStateStore, speed: f64) -> Result<WallpaperState, String> {
-    store.update(|state| {
+    store.update_light(|state| {
         state.playback_speed = speed.clamp(0.1, 4.0);
         Ok(())
     })
 }
 
 pub fn set_blur_strength(store: &AppStateStore, strength: u32) -> Result<WallpaperState, String> {
-    store.update(|state| {
+    store.update_light(|state| {
         state.blur_strength = strength.min(100);
         Ok(())
     })

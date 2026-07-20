@@ -231,7 +231,11 @@ pub fn init_media_polling(app_handle: AppHandle) {
                             .map(|s| s.to_string())
                             .unwrap_or_default();
 
-                        // Try to get thumbnail
+                    let mut thumb_changed = false;
+                    if new_info.title == last_info.title && new_info.artist == last_info.artist && new_info.album == last_info.album {
+                        // do not set thumbnail_base64 here to keep it None
+                    } else {
+                        thumb_changed = true;
                         if let Ok(thumb_ref) = properties.Thumbnail() {
                             if let Ok(stream) = thumb_ref.OpenReadAsync().and_then(|op| op.get()) {
                                 if let Ok(size) = stream.Size() {
@@ -255,12 +259,20 @@ pub fn init_media_polling(app_handle: AppHandle) {
                         }
                     }
 
-                    if new_info != last_info {
+                    if new_info.title != last_info.title || new_info.is_playing != last_info.is_playing {
+                        let emit_info = new_info.clone();
+                        
+                        // For the internal state, we need to persist the thumbnail if it hasn't changed
+                        if !thumb_changed {
+                            new_info.thumbnail_base64 = last_info.thumbnail_base64.clone();
+                        }
+                        
                         last_info = new_info.clone();
                         if let Ok(mut lock) = CURRENT_MEDIA.lock() {
                             *lock = new_info.clone();
                         }
-                        let _ = app_handle.emit("media-updated", new_info);
+                        let _ = app_handle.emit("media-updated", emit_info);
+                    }
                     }
                 } else {
                     let new_info = MediaInfo::default();

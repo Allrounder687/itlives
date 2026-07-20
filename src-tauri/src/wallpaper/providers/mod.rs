@@ -94,6 +94,17 @@ pub struct DownloadProgress {
     pub total: u64,
 }
 
+lazy_static::lazy_static! {
+    pub static ref APP_CLIENT: reqwest::Client = reqwest::Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(10))
+        .timeout(std::time::Duration::from_secs(300))
+        .no_brotli()
+        .no_gzip()
+        .no_deflate()
+        .build()
+        .expect("Failed to build global reqwest client");
+}
+
 pub async fn download_to_cache(
     video_url: &str,
     video_id: &str,
@@ -102,14 +113,6 @@ pub async fn download_to_cache(
     extra_headers: Option<Vec<(String, String)>>,
     app_handle: Option<tauri::AppHandle>,
 ) -> Result<String, String> {
-    let client = reqwest::Client::builder()
-        .connect_timeout(std::time::Duration::from_secs(10))
-        .timeout(std::time::Duration::from_secs(300))
-        .no_brotli()
-        .no_gzip()
-        .no_deflate()
-        .build()
-        .map_err(|e| format!("Failed to build reqwest client: {}", e))?;
     let ext = if video_url.contains(".png") {
         "png"
     } else if video_url.contains(".webp") {
@@ -139,10 +142,10 @@ pub async fn download_to_cache(
 
     let mut attempt = 0;
     let max_attempts = 3;
-    let bytes = loop {
+    let bytes_len = loop {
         attempt += 1;
 
-        let mut req = client.get(video_url)
+        let mut req = APP_CLIENT.get(video_url)
             .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
             .header("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8")
             .header("Accept-Language", "en-US,en;q=0.9");
@@ -171,20 +174,29 @@ pub async fn download_to_cache(
 
                 let total_size = resp.content_length().unwrap_or(0);
                 let mut downloaded: u64 = 0;
-                let mut bytes_data = Vec::new();
                 let mut failed = false;
+
+                let temp_dest = dest.with_extension("tmp");
+                let mut file = match tokio::fs::File::create(&temp_dest).await {
+                    Ok(f) => f,
+                    Err(e) => return Err(format!("Failed to create file: {}", e)),
+                };
 
                 let mut last_emit = std::time::Instant::now();
 
-                // Instead of StreamExt, we use the built-in chunk() method
+                use tokio::io::AsyncWriteExt;
                 while let Some(chunk_res) = resp.chunk().await.transpose() {
                     match chunk_res {
                         Ok(chunk) => {
                             downloaded += chunk.len() as u64;
-                            bytes_data.extend_from_slice(&chunk);
+                            if let Err(e) = file.write_all(&chunk).await {
+                                log::error!("Failed to write chunk: {}", e);
+                                failed = true;
+                                break;
+                            }
+                            
                             if let Some(app) = &app_handle {
                                 let now = std::time::Instant::now();
-                                // Emit at most once per 100ms, or if we hit exactly total_size to ensure 100% is emitted
                                 if now.duration_since(last_emit).as_millis() > 100 || (total_size > 0 && downloaded >= total_size) {
                                     use tauri::Emitter;
                                     let _ = app.emit(
@@ -199,7 +211,6 @@ pub async fn download_to_cache(
                                 }
                             }
                             
-                            // Break early if we've downloaded all bytes (prevents hanging on keep-alive connections)
                             if total_size > 0 && downloaded >= total_size {
                                 break;
                             }
@@ -224,7 +235,13 @@ pub async fn download_to_cache(
                 }
 
                 if !failed {
-                    break bytes_data;
+                    let _ = file.flush().await;
+                    drop(file);
+                    let _ = std::fs::rename(&temp_dest, &dest);
+                    break downloaded;
+                } else {
+                    drop(file);
+                    let _ = std::fs::remove_file(&temp_dest);
                 }
             }
             Err(e) => {
@@ -244,13 +261,11 @@ pub async fn download_to_cache(
         }
     };
 
-    std::fs::write(&dest, &bytes).map_err(|e| format!("File write failed: {}", e))?;
-
     log::info!(
         "[{}] Downloaded: {} ({} bytes)",
         source,
         video_id,
-        bytes.len()
+        bytes_len
     );
     Ok(dest.to_string_lossy().to_string())
 }

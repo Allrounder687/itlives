@@ -93,7 +93,7 @@ export const AddonsMarketplace = React.memo(function AddonsMarketplace() {
       await loadAddons();
       window.dispatchEvent(new CustomEvent('reload-addons'));
     } catch (e) {
-      console.error("Failed to install addon", e);
+      console.warn("Failed to install addon", e);
     } finally {
       setProcessingId(null);
     }
@@ -107,7 +107,7 @@ export const AddonsMarketplace = React.memo(function AddonsMarketplace() {
       await loadAddons();
       window.dispatchEvent(new CustomEvent('reload-addons'));
     } catch (e) {
-      console.error("Failed to uninstall addon", e);
+      console.warn("Failed to uninstall addon", e);
     } finally {
       setProcessingId(null);
     }

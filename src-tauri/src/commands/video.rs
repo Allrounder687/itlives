@@ -720,7 +720,7 @@ pub async fn install_ffmpeg() -> Result<(), String> {
 #[tauri::command]
 pub async fn fetch_wallhaven_collections(username: String) -> Result<String, String> {
     let url = format!("https://wallhaven.cc/api/v1/collections/{}", username);
-    let client = reqwest::Client::new();
+    let client = crate::wallpaper::providers::APP_CLIENT.clone();
     let resp = client
         .get(&url)
         .send()

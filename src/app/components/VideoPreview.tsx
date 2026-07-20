@@ -57,6 +57,7 @@ export const VideoPreview = memo(function VideoPreview({
 
   const [localSpeed, setLocalSpeed] = useState(playbackSpeed);
   const [localBlur, setLocalBlur] = useState(blurStrength);
+  const [isBuffering, setIsBuffering] = useState(true);
 
   useEffect(() => {
     setLocalSpeed(playbackSpeed);
@@ -208,27 +209,51 @@ export const VideoPreview = memo(function VideoPreview({
               style={{ filter: previewFilter, border: "none", width: "100%", aspectRatio: "16/9" }}
             />
           ) : (
-            <video
-              ref={videoRef}
-              className="preview-video"
-              src={videoSrc}
-              preload="metadata"
-              autoPlay
-              loop
-              muted
-              playsInline
-              controls
-              onPause={() => setLocalPaused(true)}
-              onPlay={() => setLocalPaused(false)}
-              onLoadedMetadata={(e) => {
-                 const vid = e.target as HTMLVideoElement;
-                 if (vid.duration > 0) {
-                     setTotalDuration(vid.duration);
-                     if (endTime === 0) setEndTime(vid.duration);
-                 }
-              }}
-              style={{ filter: previewFilter }}
-            />
+              <video
+                ref={videoRef}
+                className="preview-video"
+                src={videoSrc}
+                preload="metadata"
+                autoPlay
+                loop
+                muted
+                playsInline
+                onPause={() => setLocalPaused(true)}
+                onPlay={() => setLocalPaused(false)}
+                onWaiting={() => setIsBuffering(true)}
+                onPlaying={() => setIsBuffering(false)}
+                onCanPlay={() => setIsBuffering(false)}
+                onLoadedMetadata={(e) => {
+                   const vid = e.target as HTMLVideoElement;
+                   if (vid.duration > 0) {
+                       setTotalDuration(vid.duration);
+                       if (endTime === 0) setEndTime(vid.duration);
+                   }
+                }}
+                style={{ filter: previewFilter, opacity: isBuffering ? 0 : 1, transition: "opacity 0.3s ease" }}
+              />
+          )}
+
+          {/* Buffering Overlay */}
+          {isBuffering && !isStaticImage && !isHtml && !isLoading && (
+            <div style={{
+              position: "absolute",
+              inset: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 5,
+              pointerEvents: "none"
+            }}>
+              <div className="spinner" style={{
+                width: "42px",
+                height: "42px",
+                border: "3px solid rgba(255,255,255,0.1)",
+                borderTopColor: "var(--accent, #9ae600)",
+                borderRadius: "50%",
+                animation: "spin 1s linear infinite"
+              }} />
+            </div>
           )}
 
           {/* Render interactive ITL effects as a transparent overlay over the native video file */}
@@ -354,7 +379,27 @@ export const VideoPreview = memo(function VideoPreview({
           <div className="preview-params-grid">
              {!isStaticImage && onSetSpeed && (
                <div className="property-group">
-                 <label className="eyebrow">{t("engineSpeed")}: {localSpeed.toFixed(1)}x</label>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <label className="eyebrow">{t("engineSpeed")}: {localSpeed.toFixed(1)}x</label>
+                    {localSpeed !== 1 && (
+                      <button 
+                        type="button" 
+                        onClick={() => {
+                          setLocalSpeed(1);
+                          if (videoRef.current) videoRef.current.playbackRate = 1;
+                          onSetSpeed(1);
+                        }}
+                        style={{ background: "none", border: "none", color: "#a1a1aa", cursor: "pointer", padding: "4px", borderRadius: "4px", display: "flex" }}
+                        title="Reset to 1.0x"
+                        className="hover-bg-dark"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+                          <path d="M3 3v5h5"></path>
+                        </svg>
+                      </button>
+                    )}
+                  </div>
                  <input 
                    type="range" min="0.1" max="4" step="0.1" 
                    value={localSpeed} 

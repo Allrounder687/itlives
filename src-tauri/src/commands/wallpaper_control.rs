@@ -227,28 +227,28 @@ pub fn set_wallpaper_paused(
     state: State<'_, AppStateStore>,
     app_handle: tauri::AppHandle,
     paused: bool,
-) -> Result<WallpaperState, String> {
+) -> Result<serde_json::Value, String> {
     let persisted = wallpaper::state::set_paused(&state, paused)?;
     if persisted.is_playing {
         if let Err(e) = wallpaper::desktop::set_paused(&app_handle, paused) {
             log::warn!("Failed to apply paused state: {}", e);
         }
     }
-    Ok(persisted)
+    persisted.to_lightweight_value()
 }
 
 #[tauri::command]
 pub fn set_wallpaper_volume(
     state: State<'_, AppStateStore>,
     volume_percent: u64,
-) -> Result<WallpaperState, String> {
+) -> Result<serde_json::Value, String> {
     let persisted = wallpaper::state::set_volume_percent(&state, volume_percent)?;
     if persisted.is_playing {
         if let Err(e) = wallpaper::desktop::set_volume(persisted.volume_percent) {
             log::warn!("Failed to apply volume: {}", e);
         }
     }
-    Ok(persisted)
+    persisted.to_lightweight_value()
 }
 
 #[tauri::command]
@@ -256,7 +256,7 @@ pub fn set_wallpaper_filter(
     app: tauri::AppHandle,
     state: State<'_, AppStateStore>,
     video_filter: String,
-) -> Result<WallpaperState, String> {
+) -> Result<serde_json::Value, String> {
     let persisted = wallpaper::state::set_video_filter(&state, video_filter)?;
     if persisted.is_playing {
         if let Some(video) = persisted.current_video.as_ref() {
@@ -294,7 +294,7 @@ pub fn set_wallpaper_filter(
             }
         }
     }
-    Ok(persisted)
+    persisted.to_lightweight_value()
 }
 
 #[tauri::command]
@@ -302,7 +302,7 @@ pub fn set_wallpaper_scale(
     app: tauri::AppHandle,
     state: State<'_, AppStateStore>,
     scale_percent: u64,
-) -> Result<WallpaperState, String> {
+) -> Result<serde_json::Value, String> {
     let persisted = wallpaper::state::set_wallpaper_scale_percent(&state, scale_percent)?;
     if persisted.is_playing {
         if let Some(video) = persisted.current_video.as_ref() {
@@ -340,14 +340,14 @@ pub fn set_wallpaper_scale(
             }
         }
     }
-    Ok(persisted)
+    persisted.to_lightweight_value()
 }
 
 #[tauri::command]
 pub fn set_wallpaper_speed(
     state: State<'_, AppStateStore>,
     speed: f64,
-) -> Result<WallpaperState, String> {
+) -> Result<serde_json::Value, String> {
     let persisted = wallpaper::state::set_playback_speed(&state, speed)?;
     if persisted.is_playing {
         let is_interactive = persisted.current_video.as_ref().map_or(false, |v| {
@@ -360,7 +360,7 @@ pub fn set_wallpaper_speed(
             }
         }
     }
-    Ok(persisted)
+    persisted.to_lightweight_value()
 }
 
 #[tauri::command]
@@ -368,7 +368,7 @@ pub fn set_wallpaper_blur(
     app: tauri::AppHandle,
     state: State<'_, AppStateStore>,
     blur: u32,
-) -> Result<WallpaperState, String> {
+) -> Result<serde_json::Value, String> {
     let persisted = wallpaper::state::set_blur_strength(&state, blur)?;
     if persisted.is_playing {
         if let Some(video) = persisted.current_video.as_ref() {
@@ -406,7 +406,7 @@ pub fn set_wallpaper_blur(
             }
         }
     }
-    Ok(persisted)
+    persisted.to_lightweight_value()
 }
 
 #[tauri::command]
@@ -592,44 +592,66 @@ pub fn start_mouse_tracking(app_handle: tauri::AppHandle) {
         let mut was_l_down = false;
         let mut was_r_down = false;
         let mut was_m_down = false;
+        let mut last_pt = POINT { x: -1, y: -1 };
 
         loop {
+            use tauri::Manager;
+            let mut has_interactive = false;
+            for (label, _) in app_handle.webview_windows() {
+                if label.starts_with("web_wallpaper_") || label.starts_with("interactive_overlay_") || label == "effects_overlay" {
+                    has_interactive = true;
+                    break;
+                }
+            }
+
+            if !has_interactive {
+                std::thread::sleep(std::time::Duration::from_millis(1000));
+                continue;
+            }
+
             let mut pt = POINT::default();
             unsafe {
                 if GetCursorPos(&mut pt).is_ok() {
-                    #[derive(serde::Serialize, Clone)]
-                    struct CursorPayload {
-                        x: i32,
-                        y: i32,
-                        button: Option<String>,
-                    }
+                    let mouse_moved = pt.x != last_pt.x || pt.y != last_pt.y;
+                    
+                    if mouse_moved {
+                        last_pt = pt;
+                        
+                        #[derive(serde::Serialize, Clone)]
+                        struct CursorPayload {
+                            x: i32,
+                            y: i32,
+                            button: Option<String>,
+                        }
 
-                    let vx = GetSystemMetrics(SM_XVIRTUALSCREEN);
-                    let vy = GetSystemMetrics(SM_YVIRTUALSCREEN);
-                    let _payload = CursorPayload {
-                        x: pt.x - vx,
-                        y: pt.y - vy,
-                        button: None,
-                    };
+                        let vx = GetSystemMetrics(SM_XVIRTUALSCREEN);
+                        let vy = GetSystemMetrics(SM_YVIRTUALSCREEN);
+                        let payload = CursorPayload {
+                            x: pt.x - vx,
+                            y: pt.y - vy,
+                            button: None,
+                        };
 
-                    // Dispatch mousemove to all active interactive webviews safely without __TAURI__
-                    use tauri::Manager;
-                    for (label, window) in app_handle.webview_windows() {
-                        if label.starts_with("web_wallpaper_") || label.starts_with("interactive_overlay_") || label == "effects_overlay" {
-                            let mut _client_pt = pt;
-                            if let Ok(hwnd) = window.hwnd() {
-                                let mut rect = windows::Win32::Foundation::RECT::default();
-                                unsafe {
+                        // Dispatch mousemove to all active interactive webviews safely
+                        use tauri::Manager;
+                        
+                        // Emit IPC event for React overlays (effects_overlay)
+                        let _ = app_handle.emit("cursor-moved", payload);
+
+                        for (label, window) in app_handle.webview_windows() {
+                            if label.starts_with("web_wallpaper_") || label.starts_with("interactive_overlay_") {
+                                if let Ok(hwnd) = window.hwnd() {
+                                    let mut rect = windows::Win32::Foundation::RECT::default();
                                     let _ = windows::Win32::UI::WindowsAndMessaging::GetWindowRect(
                                         windows::Win32::Foundation::HWND(hwnd.0 as _),
                                         &mut rect,
                                     );
+                                    let width = (rect.right - rect.left) as f64;
+                                    let height = (rect.bottom - rect.top) as f64;
+                                    let rx = if width > 0.0 { (pt.x - rect.left) as f64 / width } else { 0.0 };
+                                    let ry = if height > 0.0 { (pt.y - rect.top) as f64 / height } else { 0.0 };
+                                    let _ = window.eval(&format!("if (window.__dispatch_mouse_event) window.__dispatch_mouse_event('mousemove', {}, {}, null);", rx, ry));
                                 }
-                                let width = (rect.right - rect.left) as f64;
-                                let height = (rect.bottom - rect.top) as f64;
-                                let rx = if width > 0.0 { (pt.x - rect.left) as f64 / width } else { 0.0 };
-                                let ry = if height > 0.0 { (pt.y - rect.top) as f64 / height } else { 0.0 };
-                                let _ = window.eval(&format!("if (window.__dispatch_mouse_event) window.__dispatch_mouse_event('mousemove', {}, {}, null);", rx, ry));
                             }
                         }
                     }
@@ -639,17 +661,15 @@ pub fn start_mouse_tracking(app_handle: tauri::AppHandle) {
                     let is_l_down = (lbtn_state as u16 & 0x8000) != 0;
 
                     if is_l_down && !was_l_down {
+                        use tauri::Manager;
                         for (label, window) in app_handle.webview_windows() {
-                            if label.starts_with("web_wallpaper_") || label.starts_with("interactive_overlay_") || label == "effects_overlay" {
-                                let mut _client_pt = pt;
+                            if label.starts_with("web_wallpaper_") || label.starts_with("interactive_overlay_") {
                                 if let Ok(hwnd) = window.hwnd() {
                                     let mut rect = windows::Win32::Foundation::RECT::default();
-                                    unsafe {
-                                        let _ = windows::Win32::UI::WindowsAndMessaging::GetWindowRect(
-                                            windows::Win32::Foundation::HWND(hwnd.0 as _),
-                                            &mut rect,
-                                        );
-                                    }
+                                    let _ = windows::Win32::UI::WindowsAndMessaging::GetWindowRect(
+                                        windows::Win32::Foundation::HWND(hwnd.0 as _),
+                                        &mut rect,
+                                    );
                                     let width = (rect.right - rect.left) as f64;
                                     let height = (rect.bottom - rect.top) as f64;
                                     let rx = if width > 0.0 { (pt.x - rect.left) as f64 / width } else { 0.0 };
@@ -666,17 +686,15 @@ pub fn start_mouse_tracking(app_handle: tauri::AppHandle) {
                     let is_r_down = (rbtn_state as u16 & 0x8000) != 0;
 
                     if is_r_down && !was_r_down {
+                        use tauri::Manager;
                         for (label, window) in app_handle.webview_windows() {
-                            if label.starts_with("web_wallpaper_") || label.starts_with("interactive_overlay_") || label == "effects_overlay" {
-                                let mut _client_pt = pt;
+                            if label.starts_with("web_wallpaper_") || label.starts_with("interactive_overlay_") {
                                 if let Ok(hwnd) = window.hwnd() {
                                     let mut rect = windows::Win32::Foundation::RECT::default();
-                                    unsafe {
-                                        let _ = windows::Win32::UI::WindowsAndMessaging::GetWindowRect(
-                                            windows::Win32::Foundation::HWND(hwnd.0 as _),
-                                            &mut rect,
-                                        );
-                                    }
+                                    let _ = windows::Win32::UI::WindowsAndMessaging::GetWindowRect(
+                                        windows::Win32::Foundation::HWND(hwnd.0 as _),
+                                        &mut rect,
+                                    );
                                     let width = (rect.right - rect.left) as f64;
                                     let height = (rect.bottom - rect.top) as f64;
                                     let rx = if width > 0.0 { (pt.x - rect.left) as f64 / width } else { 0.0 };
@@ -693,17 +711,15 @@ pub fn start_mouse_tracking(app_handle: tauri::AppHandle) {
                     let is_m_down = (mbtn_state as u16 & 0x8000) != 0;
 
                     if is_m_down && !was_m_down {
+                        use tauri::Manager;
                         for (label, window) in app_handle.webview_windows() {
-                            if label.starts_with("web_wallpaper_") || label.starts_with("interactive_overlay_") || label == "effects_overlay" {
-                                let mut _client_pt = pt;
+                            if label.starts_with("web_wallpaper_") || label.starts_with("interactive_overlay_") {
                                 if let Ok(hwnd) = window.hwnd() {
                                     let mut rect = windows::Win32::Foundation::RECT::default();
-                                    unsafe {
-                                        let _ = windows::Win32::UI::WindowsAndMessaging::GetWindowRect(
-                                            windows::Win32::Foundation::HWND(hwnd.0 as _),
-                                            &mut rect,
-                                        );
-                                    }
+                                    let _ = windows::Win32::UI::WindowsAndMessaging::GetWindowRect(
+                                        windows::Win32::Foundation::HWND(hwnd.0 as _),
+                                        &mut rect,
+                                    );
                                     let width = (rect.right - rect.left) as f64;
                                     let height = (rect.bottom - rect.top) as f64;
                                     let rx = if width > 0.0 { (pt.x - rect.left) as f64 / width } else { 0.0 };

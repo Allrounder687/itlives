@@ -43,6 +43,11 @@ pub mod win32 {
 
     pub fn get_desktop_workerw() -> Option<isize> {
         unsafe {
+            let handle = FOUND_WORKERW.lock().ok().map(|g| *g).unwrap_or(0);
+            if handle != 0 && windows::Win32::UI::WindowsAndMessaging::IsWindow(HWND(handle as _)).as_bool() {
+                return Some(handle);
+            }
+
             // 1. Find Progman window
             let progman_class: Vec<u16> = "Progman\0".encode_utf16().collect();
             let progman = FindWindowW(PCWSTR(progman_class.as_ptr()), PCWSTR::null()).ok()?;

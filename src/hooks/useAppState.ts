@@ -65,6 +65,7 @@ export function useAppState() {
     perfRestartLockScreen: false,
     perfDisplayPauseRule: "Per screen",
     perfPauseAlgorithm: "Grid",
+    addonCredentials: {},
   });
 
   useEffect(() => {

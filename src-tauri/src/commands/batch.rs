@@ -71,7 +71,7 @@ pub async fn start_wallhaven_batch_download(
     CANCEL_FLAG.store(false, Ordering::SeqCst);
 
     tauri::async_runtime::spawn(async move {
-        let client = reqwest::Client::new();
+        let client = crate::wallpaper::providers::APP_CLIENT.clone();
         let mut current_page = 1;
         let mut downloaded_count = 0;
         let mut total_expected = max_count.unwrap_or(u32::MAX);
@@ -214,7 +214,7 @@ pub async fn start_wallhaven_batch_download(
 
 #[tauri::command]
 pub async fn download_single_file(url: String, target_path: String) -> Result<(), String> {
-    let client = reqwest::Client::new();
+    let client = crate::wallpaper::providers::APP_CLIENT.clone();
     let img_resp = client.get(&url).send().await.map_err(|e| e.to_string())?;
     let bytes = img_resp.bytes().await.map_err(|e| e.to_string())?;
 
@@ -242,7 +242,7 @@ pub async fn start_wallhaven_selection_download(
     CANCEL_FLAG.store(false, Ordering::SeqCst);
 
     tauri::async_runtime::spawn(async move {
-        let client = reqwest::Client::new();
+        let client = crate::wallpaper::providers::APP_CLIENT.clone();
         let total_expected = urls.len() as u32;
         let mut downloaded_count = 0;
 

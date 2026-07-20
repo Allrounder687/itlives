@@ -146,9 +146,9 @@ export const SearchResults = memo(function SearchResults({
         </div>
       )}
 
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem", flexWrap: "wrap", gap: "10px" }}>
-        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
-          <div className="library-filter-bar" style={{ marginBottom: 0 }}>
+      <div className="discover-toolbar">
+        <div className="discover-toolbar-group">
+          <div className="library-filter-bar">
             {(["all", "live", "static"] as const).map((t) => (
               <button
                 key={t}
@@ -160,12 +160,12 @@ export const SearchResults = memo(function SearchResults({
               </button>
             ))}
           </div>
-          <span className="eyebrow" style={{ color: "var(--text-soft)", fontSize: "10px" }}>
+          <span className="discover-toolbar-text">
             Showing {filteredResults.length} of {results.length} search results
           </span>
         </div>
 
-        <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+        <div className="discover-toolbar-group">
           <button
             type="button"
             className={`action-btn ${isSelectionMode ? 'action-btn--primary' : 'action-btn--ghost'}`}
@@ -174,7 +174,7 @@ export const SearchResults = memo(function SearchResults({
           >
             {isSelectionMode ? "Cancel Selection" : "Selection Mode"}
           </button>
-          <div className="library-filter-bar" style={{ marginBottom: 0 }}>
+          <div className="library-filter-bar">
             {(["S", "M", "L", "XL", "XXL"] as const).map((size) => (
               <button
                 key={size}
@@ -318,16 +318,7 @@ const SearchCard = memo(function SearchCard({
   };
 
   return (
-    <article 
-      className={`search-card ${isSelected ? 'search-card--selected' : ''}`}
-      style={{
-        transition: "all 0.2s ease",
-        transform: isSelected ? "scale(0.96)" : "scale(1)",
-        boxShadow: isSelected ? "0 0 0 2px var(--accent)" : "none",
-        borderRadius: "8px",
-        overflow: "hidden"
-      }}
-    >
+    <article className={`search-card ${isSelected ? 'search-card--selected' : ''}`}>
       <div className="search-card__media" style={{ position: "relative" }}>
         <HoverVideo video={item} gridSize={gridSize} onClick={handleCardClick} priority={priority} />
         
@@ -355,42 +346,20 @@ const SearchCard = memo(function SearchCard({
           </div>
         )}
 
-        <div style={{
-          position: "absolute",
-          bottom: "8px",
-          left: "8px",
-          background: "rgba(10, 10, 10, 0.9)",
-          border: "1px solid rgba(255,255,255,0.1)",
-          borderRadius: "4px",
-          color: "rgba(255, 255, 255, 0.8)",
-          padding: "2px 6px",
-          fontSize: "10px",
-          fontWeight: 600,
-          letterSpacing: "0.05em",
-          zIndex: 5,
-          pointerEvents: "none"
-        }}>
-          {item.width} × {item.height}
-        </div>
-
         {/* Edit Effects Action Button */}
         {onEditEffects && (
-          <div style={{
-            position: "absolute",
-            top: "8px",
-            right: "8px",
-            zIndex: 20
-          }}>
+          <div className="search-card__edit-btn-wrapper">
             <button 
               type="button" 
-              className="action-btn action-btn--secondary"
-              style={{ padding: "4px 8px", fontSize: "11px", background: "rgba(0,0,0,0.85)" }}
+              className="action-btn action-btn--secondary search-card__edit-btn"
+              title="Edit Effects"
+              style={{ padding: "8px", width: "32px", height: "32px", display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "50%" }}
               onClick={(e) => {
                 e.stopPropagation();
                 onEditEffects(item);
               }}
             >
-              ✨ Edit Effects
+              ✨
             </button>
           </div>
         )}
@@ -398,31 +367,8 @@ const SearchCard = memo(function SearchCard({
         {!isSelectionMode && (
           <button
             type="button"
+            className="search-card__download-btn"
             title="Download Image"
-            style={{
-              position: "absolute",
-              bottom: "8px",
-              right: "8px",
-              background: "rgba(10, 10, 10, 0.9)",
-              border: "1px solid rgba(255,255,255,0.15)",
-              borderRadius: "6px",
-              color: "white",
-              padding: "6px",
-              cursor: "pointer",
-              zIndex: 10,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              transition: "all 0.2s ease"
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = "var(--accent)";
-              e.currentTarget.style.color = "#000";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = "rgba(10, 10, 10, 0.7)";
-              e.currentTarget.style.color = "white";
-            }}
             onClick={async (e) => {
               e.stopPropagation();
               const btn = e.currentTarget;
@@ -455,16 +401,16 @@ const SearchCard = memo(function SearchCard({
           </button>
         )}
       </div>
-      <div className="search-card__copy" style={{ padding: "10px 12px", background: "rgba(0,0,0,0.3)" }}>
-        <strong style={{ fontSize: "13px", fontWeight: 600, color: "#fff", display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginBottom: "6px" }} title={formatVideoTitle(item.id)}>
-          {formatVideoTitle(item.id)}
+      <div className="search-card__copy">
+        <strong className="search-card__title" title={formatVideoTitle(item.id, item.local_path || item.video_url)}>
+          {formatVideoTitle(item.id, item.local_path || item.video_url)}
         </strong>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", alignItems: "center" }}>
-          <span style={{ padding: "2px 6px", fontSize: "9px", backgroundColor: isStaticWallpaper(item) ? "rgba(100,200,255,0.15)" : "rgba(255,100,150,0.15)", color: isStaticWallpaper(item) ? "#8ae" : "#f8a", borderRadius: "4px", fontWeight: 500, letterSpacing: "0.5px" }}>
+        <div className="search-card__tags">
+          <span className={`search-card__tag search-card__tag--${isStaticWallpaper(item) ? "static" : "live"}`}>
             {isStaticWallpaper(item) ? "STATIC" : "LIVE"}
           </span>
           {item.width > 0 && (
-            <span style={{ padding: "2px 6px", fontSize: "9px", backgroundColor: "rgba(255,255,255,0.1)", color: "#eee", borderRadius: "4px", fontWeight: 500, letterSpacing: "0.5px" }}>
+            <span className="search-card__tag search-card__tag--res">
               {item.width >= 3840 ? "4K" : item.width >= 1920 ? "1080p" : item.width >= 1280 ? "720p" : `${item.width}p`}
             </span>
           )}

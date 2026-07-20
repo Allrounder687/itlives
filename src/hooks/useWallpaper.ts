@@ -26,7 +26,9 @@ export function useWallpaper() {
     setWallpaperFilter,
     fetchVideoTags,
     playNext,
-    playPrevious
+    playPrevious,
+    clearError,
+    setError
   } = useWallpaperActions(state, setState);
   const { addToQueue, removeFromQueue, clearQueue, importFolderToQueue, reorderQueue } = useQueueManager(state, setState);
   const { toggleFavorite, removeRecentVideo, removeImportedVideo } = useLibraryActions(state, setState);
@@ -213,6 +215,8 @@ export function useWallpaper() {
     setWallpaperFilter,
     playNext,
     playPrevious,
+    clearError,
+    setError,
     addToQueue,
     removeFromQueue,
     clearQueue,
@@ -312,7 +316,14 @@ function useWallpaperCallbacks(setState: React.Dispatch<React.SetStateAction<Wal
 
   const selectVideo = useCallback((video: VideoResult) => setState(s => ({ ...s, currentVideo: video, previewDismissed: false })), [setState]);
 
-  const dismissPreview = useCallback(() => setState(s => ({ ...s, previewDismissed: true })), [setState]);
+  const dismissPreview = useCallback(() => {
+    setState(s => ({ ...s, previewDismissed: true }));
+    import("@tauri-apps/api/core").then(({ invoke }) => {
+      invoke("get_app_state").then((persisted: any) => {
+        setState(s => applyPersistedState(persisted, s));
+      }).catch(console.error);
+    });
+  }, [setState]);
 
   return {
     setSource,

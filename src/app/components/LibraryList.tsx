@@ -110,7 +110,7 @@ export const UnifiedLibrary = memo(function UnifiedLibrary({
   const combinedItems = getCombinedItems();
 
   const filteredItems = combinedItems.filter(item => {
-    if (searchQuery && !formatVideoTitle(item.video.id).toLowerCase().includes(searchQuery.toLowerCase())) return false;
+    if (searchQuery && !formatVideoTitle(item.video.id, item.video.local_path || item.video.video_url).toLowerCase().includes(searchQuery.toLowerCase())) return false;
     if (filter === "favorites" && !item.isFavorite) return false;
     if (filter === "recents" && !item.isRecent) return false;
     if (filter === "local" && !item.isLocal && item.video.source !== "interactive") return false;
@@ -287,8 +287,8 @@ export const UnifiedLibrary = memo(function UnifiedLibrary({
 
                 <div className="library-card-item__copy" style={{ padding: "10px 12px", background: "rgba(0,0,0,0.3)" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
-                    <strong style={{ flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontSize: "13px", fontWeight: 600, color: "#fff" }} title={formatVideoTitle(item.video.id)}>
-                      {formatVideoTitle(item.video.id)}
+                    <strong style={{ flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontSize: "13px", fontWeight: 600, color: "#fff" }} title={formatVideoTitle(item.video.id, item.video.local_path || item.video.video_url)}>
+                      {formatVideoTitle(item.video.id, item.video.local_path || item.video.video_url)}
                     </strong>
                   </div>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", alignItems: "center" }}>

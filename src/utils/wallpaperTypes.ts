@@ -131,9 +131,13 @@ export interface WallpaperState {
 }
 
 export function applyPersistedState(persisted: PersistedState, current: WallpaperState): WallpaperState {
+  const isPreviewing = current.currentVideo && !current.previewDismissed;
+  const isAppliedVideoSameAsPreview = persisted.current_video && current.currentVideo && persisted.current_video.id === current.currentVideo.id;
+  const shouldOverwriteCurrentVideo = !isPreviewing || isAppliedVideoSameAsPreview;
+
   return {
     ...current,
-    currentVideo: persisted.current_video,
+    currentVideo: shouldOverwriteCurrentVideo ? persisted.current_video : current.currentVideo,
     isPlaying: persisted.is_playing,
     wallpaperScalePercent: persisted.wallpaper_scale_percent,
     restoreOnLaunch: persisted.restore_on_launch,
@@ -198,8 +202,22 @@ export function isStaticWallpaper(video?: { video_url?: string; local_path?: str
          cleanPath.endsWith(".jpg") || cleanPath.endsWith(".jpeg") || cleanPath.endsWith(".png") || cleanPath.endsWith(".webp") ||
          src === "wallhaven" || src === "pinterest" || src === "deviantart" || src.startsWith("scraper-");
 }
-export function formatVideoTitle(id: string) {
+export function formatVideoTitle(id: string, fallbackPath?: string) {
   if (!id) return "Untitled";
+
+  if (/^\d+$/.test(id) && fallbackPath) {
+    const parts = fallbackPath.replace(/\\/g, "/").split("/");
+    const filename = parts[parts.length - 1];
+    if (filename) {
+      const name = filename.replace(/\.[^/.]+$/, ""); // strip extension
+      const cleanName = name.replace(/\.\d+x\d+$/, ""); // strip resolution like .3840x2160
+      return cleanName.replace(/[-_]/g, " ")
+        .split(" ")
+        .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(" ");
+    }
+  }
+
   let title = id.replace(/[-_]/g, " ");
   title = title.replace(/^(interactive|local|we)\s+/i, "");
   title = title.split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");

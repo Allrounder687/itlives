@@ -54,6 +54,7 @@ export const translations = {
     themeDesc: "Choose UI look and feel.",
     systemTray: "System Tray",
     systemTrayDesc: "Configure system tray interactions.",
+    accounts: "Accounts",
   },
   Español: {
     discover: "Descubrir",

@@ -21,7 +21,7 @@ export function useTranslation() {
   }, []);
 
   const t = (key: keyof typeof translations["English"]) => {
-    const dict = translations[lang as keyof typeof translations] || translations["English"];
+    const dict = (translations[lang as keyof typeof translations] || translations["English"]) as any;
     return dict[key] || translations["English"][key] || key;
   };
 

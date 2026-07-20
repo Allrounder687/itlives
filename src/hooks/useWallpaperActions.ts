@@ -51,7 +51,7 @@ export function useWallpaperActions(state: WallpaperState, setState: React.Dispa
 
 
       const { invoke } = await getCoreApi();
-      const builtinSources = ["wallhaven", "motionbgs", "pinterest", "youtube", "alphacoders", "wpwaves"];
+      const builtinSources = ["wallhaven", "motionbgs", "pinterest", "youtube", "alphacoders", "wallpaperwaves", "unified"];
       let results: VideoResult[] = [];
 
       if (!builtinSources.includes(state.source)) {
@@ -150,29 +150,38 @@ export function useWallpaperActions(state: WallpaperState, setState: React.Dispa
     }
   }, [state.source, state.query, state.page, state.resolutions, state.ratios, state.colors, state.categoriesFilter, state.purityFilter, setState]);
 
-  const fetchVideo = useCallback(async () => {
+  const fetchVideo = useCallback(async (id?: string) => {
     setState((s) => ({ ...s, isLoading: true, error: null }));
     try {
       const { invoke } = await getCoreApi();
-      const builtinSources = ["wallhaven", "motionbgs", "pinterest", "youtube", "alphacoders", "wpwaves"];
+      const builtinSources = ["wallhaven", "motionbgs", "pinterest", "youtube", "alphacoders", "wallpaperwaves", "unified"];
       let video: VideoResult | null = null;
 
       if (!builtinSources.includes(state.source)) {
-        try {
-          const script = await invoke<string>("get_addon_script", { id: `scraper-${state.source}` });
-          if (script) {
-            let fn;
-            try {
-              const module = { exports: {} as any };
-              fn = new Function("module", "exports", "fetch", script + "\nreturn module.exports;");
-            } catch (err: any) {
-              throw new Error(`SyntaxError during parsing: ${err.message}. Script start: ${script.substring(0, 100)}`);
-            }
+        const script = await invoke<string>("get_addon_script", { id: `scraper-${state.source}` });
+        if (script) {
+          const trimmedScript = script.trim();
+          if (
+            trimmedScript === "404: Not Found" ||
+            trimmedScript.startsWith("404:") ||
+            trimmedScript.includes("404 Not Found") ||
+            trimmedScript.includes("<!DOCTYPE html>")
+          ) {
+            throw new Error("Addon script is corrupt or invalid (404 Not Found). Please uninstall and reinstall the addon.");
+          }
+          let fn;
+          try {
             const module = { exports: {} as any };
-            const { fetch: tauriFetch } = await import('@tauri-apps/plugin-http');
-            const addon = fn(module, module.exports, tauriFetch);
-            
-            if (addon && typeof addon.fetchWallpapers === "function") {
+            fn = new Function("module", "exports", "fetch", script + "\nreturn module.exports;");
+          } catch (err: any) {
+            throw new Error(`SyntaxError during parsing: ${err.message}. Script start: ${script.substring(0, 100)}`);
+          }
+          const module = { exports: {} as any };
+          const { fetch: tauriFetch } = await import('@tauri-apps/plugin-http');
+          const addon = fn(module, module.exports, tauriFetch);
+          
+          if (addon && typeof addon.fetchWallpapers === "function") {
+            if (id) {
               const found = state.searchResults.find(v => v.id === id);
               if (found) {
                 video = found;
@@ -182,7 +191,6 @@ export function useWallpaperActions(state: WallpaperState, setState: React.Dispa
                 video = {
                   id,
                   source: state.source,
-                  title: "Addon Media",
                   thumbnail_url: "",
                   video_url: `https://backend.deviantart.com/rss.xml?q=${id}`, // Dummy
                   local_path: "",
@@ -192,14 +200,26 @@ export function useWallpaperActions(state: WallpaperState, setState: React.Dispa
                 };
               }
             } else {
-              throw new Error("Addon does not export fetchWallpapers function");
+              // Fetch first page and take first item as random/trending fallback
+              const filters = {
+                search: state.query,
+                resolutions: state.resolutions,
+                ratios: state.ratios,
+                colors: state.colors,
+                categories: state.categoriesFilter,
+                purity: state.purityFilter,
+                credentials: state.addonCredentials,
+              };
+              const results = await addon.fetchWallpapers(filters, 1);
+              if (results && results.length > 0) {
+                video = results[0];
+              }
             }
           } else {
-            throw new Error("Addon script not found");
+            throw new Error("Addon does not export fetchWallpapers function");
           }
-        } catch (e) {
-          console.error(`Failed to fetch from custom addon ${state.source}:`, e);
-          throw e;
+        } else {
+          throw new Error("Addon script not found");
         }
       } else {
         video = await invoke<VideoResult>("fetch_video", {
@@ -220,7 +240,7 @@ export function useWallpaperActions(state: WallpaperState, setState: React.Dispa
       setState((s) => ({ ...s, isLoading: false, error: error.toString() }));
       return null;
     }
-  }, [state.source, state.query, state.resolutions, state.ratios, state.colors, state.categoriesFilter, state.purityFilter, setState]);
+  }, [state.source, state.query, state.resolutions, state.ratios, state.colors, state.categoriesFilter, state.purityFilter, state.addonCredentials, state.searchResults, setState]);
 
   const stopWallpaper = useCallback(async () => {
     try {
@@ -314,6 +334,14 @@ export function useWallpaperActions(state: WallpaperState, setState: React.Dispa
     }
   }, [setState]);
 
+  const clearError = useCallback(() => {
+    setState((s) => ({ ...s, error: null }));
+  }, [setState]);
+
+  const setError = useCallback((error: string | null) => {
+    setState((s) => ({ ...s, error }));
+  }, [setState]);
+
   return { 
     applyWallpaper, 
     fetchVideosList, 
@@ -327,6 +355,8 @@ export function useWallpaperActions(state: WallpaperState, setState: React.Dispa
     setWallpaperFilter,
     fetchVideoTags,
     playNext,
-    playPrevious
+    playPrevious,
+    clearError,
+    setError
   };
 }

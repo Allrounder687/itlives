@@ -15,7 +15,7 @@ import { getCoreApi } from "@/utils/tauriApis";
 // ─────────────────────────────────────────────────────────────
 // 1. Enhanced Falling Particles (Snow & Rain)
 // ─────────────────────────────────────────────────────────────
-function FallingParticles({ type, params }: { type: "snow" | "rain", params: any }) {
+const FallingParticles = React.memo(function FallingParticles({ type, params }: { type: "snow" | "rain", params: any }) {
   const pointsRef = useRef<THREE.Points>(null);
   const count = params.count || (type === "rain" ? 150 : 120);
   const speed = params.speed || 1.0;
@@ -29,6 +29,7 @@ function FallingParticles({ type, params }: { type: "snow" | "rain", params: any
       return new THREE.TextureLoader().load(texPath);
     } catch(e) { return null; }
   }, [type]);
+  useEffect(() => () => particleTex?.dispose(), [particleTex]);
 
   const [positions, velocities, depths] = useMemo(() => {
     const pos = new Float32Array(count * 3);
@@ -151,13 +152,13 @@ function FallingParticles({ type, params }: { type: "snow" | "rain", params: any
       />
     </points>
   );
-}
+});
 
 // ─────────────────────────────────────────────────────────────
 // 2. Enhanced Mouse Trail System (with Lerp Smoothing)
 // ─────────────────────────────────────────────────────────────
 type ParticleState = { x: number, y: number, vx: number, vy: number, life: number, maxLife: number, color: THREE.Color, baseSize: number, shapeMode: number };
-function InteractiveParticles({ trailEnabled, rippleEnabled, isOverlay, trailParams, rippleParams }: {
+const InteractiveParticles = React.memo(function InteractiveParticles({ trailEnabled, rippleEnabled, isOverlay, trailParams, rippleParams }: {
   trailEnabled: boolean, rippleEnabled: boolean, isOverlay: boolean,
   trailParams?: any, rippleParams?: any
 }) {
@@ -167,6 +168,7 @@ function InteractiveParticles({ trailEnabled, rippleEnabled, isOverlay, trailPar
   const geometryRef = useRef<THREE.BufferGeometry>(null);
   const lastCursorPos = useRef<{x: number, y: number} | null>(null);
 
+  const posArr = useMemo(() => new Float32Array(maxParticles * 3), []);
   const colors = useMemo(() => new Float32Array(maxParticles * 3), []);
   const sizesArr = useMemo(() => new Float32Array(maxParticles), []);
   const shapesArr = useMemo(() => new Float32Array(maxParticles), []);
@@ -176,6 +178,7 @@ function InteractiveParticles({ trailEnabled, rippleEnabled, isOverlay, trailPar
       return new THREE.TextureLoader().load("/assets/brackeys_vfx_bundle/particles/alpha/magic_01_a.png");
     } catch(e) { return null; }
   }, []);
+  useEffect(() => () => trailTex?.dispose(), [trailTex]);
 
   const trailCol = useMemo(() => new THREE.Color(trailParams?.color || "#9ae600"), [trailParams?.color]);
   const rippleCol = useMemo(() => new THREE.Color(rippleParams?.color || "#ffffff"), [rippleParams?.color]);
@@ -281,17 +284,15 @@ function InteractiveParticles({ trailEnabled, rippleEnabled, isOverlay, trailPar
     const active = particles.current.filter(p => p.life > 0);
     particles.current = active;
 
-    const pos = new Float32Array(maxParticles * 3);
-
     for (let i = 0; i < active.length && i < maxParticles; i++) {
       const p = active[i];
       p.x += p.vx * delta;
       p.y += p.vy * delta;
       p.life -= 60 * delta;
 
-      pos[i*3] = p.x;
-      pos[i*3+1] = p.y;
-      pos[i*3+2] = 0;
+      posArr[i*3] = p.x;
+      posArr[i*3+1] = p.y;
+      posArr[i*3+2] = 0;
 
       const progress = p.life / p.maxLife;
       colors[i*3] = p.color.r;
@@ -301,10 +302,18 @@ function InteractiveParticles({ trailEnabled, rippleEnabled, isOverlay, trailPar
       shapesArr[i] = p.shapeMode;
     }
 
-    geometryRef.current.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-    geometryRef.current.setAttribute("color", new THREE.BufferAttribute(colors, 3));
-    geometryRef.current.setAttribute("size", new THREE.BufferAttribute(sizesArr, 1));
-    geometryRef.current.setAttribute("shapeMode", new THREE.BufferAttribute(shapesArr, 1));
+    let posAttr = geometryRef.current.getAttribute("position");
+    if (!posAttr) {
+      geometryRef.current.setAttribute("position", new THREE.BufferAttribute(posArr, 3));
+      geometryRef.current.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+      geometryRef.current.setAttribute("size", new THREE.BufferAttribute(sizesArr, 1));
+      geometryRef.current.setAttribute("shapeMode", new THREE.BufferAttribute(shapesArr, 1));
+    } else {
+      (posAttr as THREE.BufferAttribute).needsUpdate = true;
+      (geometryRef.current.getAttribute("color") as THREE.BufferAttribute).needsUpdate = true;
+      (geometryRef.current.getAttribute("size") as THREE.BufferAttribute).needsUpdate = true;
+      (geometryRef.current.getAttribute("shapeMode") as THREE.BufferAttribute).needsUpdate = true;
+    }
     geometryRef.current.setDrawRange(0, Math.min(active.length, maxParticles));
   });
 
@@ -357,12 +366,12 @@ function InteractiveParticles({ trailEnabled, rippleEnabled, isOverlay, trailPar
       />
     </points>
   );
-}
+});
 
 // ─────────────────────────────────────────────────────────────
 // 3. Audio Visualizer System
 // ─────────────────────────────────────────────────────────────
-function AudioVisualizer({ params, layerId }: { params: any, layerId?: string }) {
+const AudioVisualizer = React.memo(function AudioVisualizer({ params, layerId }: { params: any, layerId?: string }) {
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const fftData = useRef<number[]>(new Array(64).fill(0));
   const smoothedData = useRef<number[]>(new Array(64).fill(0));
@@ -374,6 +383,7 @@ function AudioVisualizer({ params, layerId }: { params: any, layerId?: string })
   const color = params?.color || "#ffffff";
   const style = params?.style || "circle";
   const colObj = useMemo(() => new THREE.Color(color), [color]);
+  const particleCol = useMemo(() => new THREE.Color(), []);
 
   useEffect(() => {
     let isMounted = true;
@@ -447,7 +457,6 @@ function AudioVisualizer({ params, layerId }: { params: any, layerId?: string })
       dummy.updateMatrix();
       meshRef.current.setMatrixAt(i, dummy.matrix);
 
-      const particleCol = new THREE.Color();
       particleCol.copy(colObj).multiplyScalar(0.5 + (i / 64) * 0.5 + (mag * 2.0));
       meshRef.current.setColorAt(i, particleCol);
     }
@@ -461,12 +470,12 @@ function AudioVisualizer({ params, layerId }: { params: any, layerId?: string })
       <meshBasicMaterial color="#ffffff" transparent opacity={params?.opacity || 0.8} />
     </instancedMesh>
   );
-}
+});
 
 // ─────────────────────────────────────────────────────────────
 // 4. Parallax Depth Effect (cursor-driven pseudo-3D)
 // ─────────────────────────────────────────────────────────────
-function ParallaxShift({ intensity }: { intensity: number }) {
+const ParallaxShift = React.memo(function ParallaxShift({ intensity }: { intensity: number }) {
   const groupRef = useRef<THREE.Group>(null);
   const mousePos = useRef({ x: 0, y: 0 });
   const smoothPos = useRef({ x: 0, y: 0 });
@@ -516,12 +525,12 @@ function ParallaxShift({ intensity }: { intensity: number }) {
   });
 
   return <group ref={groupRef} />;
-}
+});
 
 // ─────────────────────────────────────────────────────────────
 // 5. Fireflies (wandering glowing particles)
 // ─────────────────────────────────────────────────────────────
-function Fireflies({ params }: { params: any }) {
+const Fireflies = React.memo(function Fireflies({ params }: { params: any }) {
   const pointsRef = useRef<THREE.Points>(null);
   const count = params.count || 80;
   const speed = params.speed || 0.5;
@@ -551,6 +560,7 @@ function Fireflies({ params }: { params: any }) {
       return new THREE.TextureLoader().load(params.texture);
     } catch(e) { return null; }
   }, [params.texture]);
+  useEffect(() => () => particleTex?.dispose(), [particleTex]);
 
   useFrame((state, delta) => {
     if (!pointsRef.current) return;
@@ -618,12 +628,12 @@ function Fireflies({ params }: { params: any }) {
       />
     </points>
   );
-}
+});
 
 // ─────────────────────────────────────────────────────────────
 // 5.5 Particle Engine (Unity Shuriken Style GPU Emitter)
 // ─────────────────────────────────────────────────────────────
-function ParticleEmitter({ params, isOverlay }: { params: any, isOverlay: boolean }) {
+const ParticleEmitter = React.memo(function ParticleEmitter({ params, isOverlay }: { params: any, isOverlay: boolean }) {
   const pointsRef = useRef<THREE.Points>(null);
   const count = params.count || 500;
   const speed = params.speed || 2.0;
@@ -667,6 +677,7 @@ function ParticleEmitter({ params, isOverlay }: { params: any, isOverlay: boolea
       return new THREE.TextureLoader().load(params.texture);
     } catch(e) { return null; }
   }, [params.texture]);
+  useEffect(() => () => particleTex?.dispose(), [particleTex]);
 
   const colStart = useMemo(() => new THREE.Color(params.colorStart || "#ff5a00"), [params.colorStart]);
   const colEnd = useMemo(() => new THREE.Color(params.colorEnd || "#000000"), [params.colorEnd]);
@@ -865,7 +876,7 @@ function ParticleEmitter({ params, isOverlay }: { params: any, isOverlay: boolea
       />
     </points>
   );
-}
+});
 
 // ─────────────────────────────────────────────────────────────
 // 6. Stars (static twinkling field)
@@ -993,6 +1004,7 @@ function FogEffect({ params }: { params: any }) {
       return new THREE.TextureLoader().load("/assets/brackeys_vfx_bundle/particles/alpha/smoke_04_a.png");
     } catch(e) { return null; }
   }, []);
+  useEffect(() => () => fogTex?.dispose(), [fogTex]);
 
   return (
     <points ref={pointsRef}>
@@ -1072,6 +1084,7 @@ function SpriteLayer({ params }: { params: any }) {
       return null;
     }
   }, [params.image]);
+  useEffect(() => () => texture?.dispose(), [texture]);
 
   const swayMapTex = useMemo(() => {
     if (!params.swayMap) return null;
@@ -1079,6 +1092,7 @@ function SpriteLayer({ params }: { params: any }) {
       return new THREE.TextureLoader().load(params.swayMap);
     } catch (e) { return null; }
   }, [params.swayMap]);
+  useEffect(() => () => swayMapTex?.dispose(), [swayMapTex]);
 
   const uniforms = useMemo(() => ({
     uTime: { value: 0 },
@@ -1843,7 +1857,7 @@ export function WebGLEffectRenderer({ videoSrc, effects, selectedLayerId, onUpda
               if (passes.length === 0) return null;
 
               return (
-                <EffectComposer key={passes.map(p => p.key).join("-")}>
+                <EffectComposer>
                   {passes}
                 </EffectComposer>
               );
@@ -2089,7 +2103,12 @@ function MusicPlayerWidget({ params, layerId, isOverlay }: { params: any; layerI
 
         const { listen } = await import("@tauri-apps/api/event");
         if (!isMounted) return;
-        const u1 = await listen<any>("media-updated", (e) => setMedia(e.payload));
+        const u1 = await listen<any>("media-updated", (e) => {
+          setMedia(prev => ({
+            ...e.payload,
+            thumbnail_base64: e.payload.thumbnail_base64 ?? prev.thumbnail_base64
+          }));
+        });
         const u2 = await listen<any>("media-timeline", (e) => setTimeline(e.payload));
         unlistenFunctions.push(u1, u2);
       } catch (e) {

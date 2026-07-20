@@ -278,24 +278,7 @@ export function CanvasEffectRenderer({ videoSrc, effects, isOverlay = false }: C
     let isMounted = true;
     let unlistenFunctions: Array<() => void> = [];
 
-    // FAKE CURSOR SIMULATOR FOR TESTING
-    const testInterval = setInterval(() => {
-      const trailEffect = cachedEffectsRef.current?.trailEffect;
-      if (trailEffect && canvasRef.current) {
-        const x = Math.random() * canvasRef.current.width;
-        const y = Math.random() * canvasRef.current.height;
-        for (let i = 0; i < 2; i++) {
-          MouseTrailRef.current.push({
-            x, y,
-            vx: (Math.random() - 0.5) * 2,
-            vy: (Math.random() - 0.5) * 2 - 0.5,
-            life: 30,
-            size: Math.random() * 4 + 2,
-            color: `rgba(255, 0, 0, 0.8)` // Red for debug
-          });
-        }
-      }
-    }, 100);
+
 
     const setupListeners = async () => {
       try {
@@ -387,7 +370,7 @@ export function CanvasEffectRenderer({ videoSrc, effects, isOverlay = false }: C
     setupListeners();
 
     return () => {
-      clearInterval(testInterval);
+
       isMounted = false;
       unlistenFunctions.forEach(fn => fn());
     };

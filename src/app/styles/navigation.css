@@ -170,13 +170,12 @@
 
 
 .sidebar-list__item--active {
-  background: var(--nav-accent-bg) !important;
-  color: var(--nav-accent) !important;
-  border-color: var(--nav-accent-border) !important;
+  background: linear-gradient(90deg, rgba(154, 230, 0, 0.08) 0%, transparent 100%) !important;
+  color: var(--accent) !important;
+  border-color: transparent !important;
+  border-left: 3px solid var(--accent) !important;
   font-weight: 700;
-  box-shadow: 0 4px 16px var(--nav-accent-glow);
-  transform: translateY(-1px);
-  backdrop-filter: blur(6px);
+  border-radius: 4px 8px 8px 4px;
 }
 
 

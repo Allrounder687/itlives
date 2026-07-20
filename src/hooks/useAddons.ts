@@ -53,6 +53,16 @@ export function useAddons() {
     const evaluateAddon = useCallback(async (id: string) => {
         const script = await getAddonScript(id);
         if (!script) return null;
+        const trimmedScript = script.trim();
+        if (
+            trimmedScript === "404: Not Found" ||
+            trimmedScript.startsWith("404:") ||
+            trimmedScript.includes("404 Not Found") ||
+            trimmedScript.includes("<!DOCTYPE html>")
+        ) {
+            console.warn("Addon script is invalid or corrupt (404 Not Found):", id);
+            return null;
+        }
         try {
             const module = { exports: {} as any };
             const fn = new Function('module', 'exports', script + '\nreturn module.exports;');
