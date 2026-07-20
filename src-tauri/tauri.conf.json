@@ -99,7 +99,7 @@
   "plugins": {
     "updater": {
       "endpoints": [
-        "https://raw.githubusercontent.com/Allrounder687/itlives/untested/update.json"
+        "https://raw.githubusercontent.com/Allrounder687/itlives/newui/update.json"
       ],
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDg1QzkzMDY4QTc1RjgyODAKUldTQWdsK25hRERKaGZlSmFadDAzL08vUEFMbUtDQ2JXSFRreTdWenVicGtIZ0l5R25nUXhxU2cK"
     }
