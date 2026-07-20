@@ -21,6 +21,7 @@
     "shell:default",
     "dialog:default",
     "autostart:default",
+    "updater:default",
     {
       "identifier": "http:default",
       "allow": [{ "url": "https://**" }, { "url": "http://**" }]
