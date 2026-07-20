@@ -14,12 +14,98 @@ pub struct Addon {
     pub author: String,
 }
 
+fn get_addons_repo_dir(app: &AppHandle) -> PathBuf {
+    let app_dir = app.path().app_local_data_dir().unwrap_or_else(|_| PathBuf::from("."));
+    let repo_dir = app_dir.join("addons_repo");
+    repo_dir
+}
+
 #[tauri::command]
-pub async fn fetch_addon_registry(registry_url: String) -> Result<Vec<Addon>, String> {
+pub async fn sync_addons_registry(app: AppHandle) -> Result<(), String> {
+    let repo_dir = get_addons_repo_dir(&app);
+    let repo_url = "https://github.com/allrounder687/openclaw-addons.git";
+
+    if repo_dir.exists() && repo_dir.join(".git").exists() {
+        let status = std::process::Command::new("git")
+            .current_dir(&repo_dir)
+            .args(&["pull"])
+            .status()
+            .map_err(|e| format!("Failed to execute git pull: {}", e))?;
+            
+        if !status.success() {
+            return Err("git pull failed".to_string());
+        }
+    } else {
+        if !repo_dir.exists() {
+            let _ = fs::create_dir_all(&repo_dir);
+        }
+        
+        let status = std::process::Command::new("git")
+            .args(&["clone", repo_url, repo_dir.to_str().unwrap()])
+            .status()
+            .map_err(|e| format!("Failed to execute git clone: {}", e))?;
+            
+        if !status.success() {
+            return Err("git clone failed".to_string());
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn push_addons_updates(app: AppHandle, commit_message: String) -> Result<(), String> {
+    let repo_dir = get_addons_repo_dir(&app);
+
+    if !repo_dir.exists() || !repo_dir.join(".git").exists() {
+        return Err("Addons repository not found locally.".to_string());
+    }
+
+    let status_add = std::process::Command::new("git")
+        .current_dir(&repo_dir)
+        .args(&["add", "."])
+        .status()
+        .map_err(|e| format!("Failed to execute git add: {}", e))?;
+        
+    if !status_add.success() {
+        return Err("git add failed".to_string());
+    }
+
+    let status_commit = std::process::Command::new("git")
+        .current_dir(&repo_dir)
+        .args(&["commit", "-m", &commit_message])
+        .status()
+        .map_err(|e| format!("Failed to execute git commit: {}", e))?;
+
+    let status_push = std::process::Command::new("git")
+        .current_dir(&repo_dir)
+        .args(&["push"])
+        .status()
+        .map_err(|e| format!("Failed to execute git push: {}", e))?;
+        
+    if !status_push.success() {
+        return Err("git push failed".to_string());
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn fetch_addon_registry(app: AppHandle, registry_url: String) -> Result<Vec<Addon>, String> {
+    let repo_dir = get_addons_repo_dir(&app);
+    let local_addons_json = repo_dir.join("addons.json");
+
+    if local_addons_json.exists() {
+        let content = std::fs::read_to_string(&local_addons_json)
+            .map_err(|e| format!("Failed to read addons.json from local repo: {}", e))?;
+        return serde_json::from_str(&content).map_err(|e| format!("Failed to parse local addons.json: {}", e));
+    }
+
     if registry_url.contains("openclaw-addons/main/addons.json") {
         let local_repo_path = std::path::PathBuf::from(r"d:\use after format\allrounder687\openclaw-addons\addons.json");
-        let content = std::fs::read_to_string(&local_repo_path).map_err(|e| format!("Failed to read from local repo at {:?}: {}", local_repo_path, e))?;
-        return serde_json::from_str(&content).map_err(|e| e.to_string());
+        if local_repo_path.exists() {
+            let content = std::fs::read_to_string(&local_repo_path).map_err(|e| format!("Failed to read from local repo at {:?}: {}", local_repo_path, e))?;
+            return serde_json::from_str(&content).map_err(|e| e.to_string());
+        }
     }
 
     let response = reqwest::get(&registry_url)
@@ -46,13 +132,22 @@ fn get_addons_dir(app: &AppHandle) -> PathBuf {
 #[tauri::command]
 pub async fn install_addon(app: AppHandle, addon: Addon) -> Result<(), String> {
     let addons_dir = get_addons_dir(&app);
+    let repo_dir = get_addons_repo_dir(&app);
     
     if addon.addon_type == "script" {
-        if addon.install_url.contains("openclaw-addons/main/scripts") {
-            // Directly fetch from the local sibling repository
-            let suffix = addon.install_url.split("main/scripts/").last().map(|s| s.to_string()).unwrap_or_else(|| format!("{}.js", addon.id));
-            let local_repo_path = std::path::PathBuf::from(r"d:\use after format\allrounder687\openclaw-addons\scripts").join(&suffix);
-            let content = std::fs::read_to_string(&local_repo_path).map_err(|e| format!("Failed to read from local repo at {:?}: {}", local_repo_path, e))?;
+        let suffix = addon.install_url.split("main/scripts/").last().map(|s| s.to_string()).unwrap_or_else(|| format!("{}.js", addon.id));
+        let repo_script_path = repo_dir.join("scripts").join(&suffix);
+        let local_repo_path = std::path::PathBuf::from(r"d:\use after format\allrounder687\openclaw-addons\scripts").join(&suffix);
+        
+        let content_result = if repo_script_path.exists() {
+            std::fs::read_to_string(&repo_script_path)
+        } else if addon.install_url.contains("openclaw-addons/main/scripts") && local_repo_path.exists() {
+            std::fs::read_to_string(&local_repo_path)
+        } else {
+            Err(std::io::Error::new(std::io::ErrorKind::NotFound, "Not found locally"))
+        };
+
+        if let Ok(content) = content_result {
             let script_path = addons_dir.join(format!("{}.js", addon.id));
             fs::write(&script_path, content)
                 .map_err(|e| format!("Failed to write script file: {}", e))?;
@@ -68,7 +163,6 @@ pub async fn install_addon(app: AppHandle, addon: Addon) -> Result<(), String> {
                 .await
                 .map_err(|e| format!("Failed to read script bytes: {}", e))?;
                 
-            // Check if the download returned some text that looks like a 404/error page
             if let Ok(text) = std::str::from_utf8(&bytes) {
                 let trimmed = text.trim();
                 if trimmed == "404: Not Found" || trimmed.starts_with("404:") || trimmed.is_empty() {

@@ -9,6 +9,9 @@ export const AddonsMarketplace = React.memo(function AddonsMarketplace() {
   const [isFetching, setIsFetching] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [addonToConfirm, setAddonToConfirm] = useState<Addon | null>(null);
+  const [showPushModal, setShowPushModal] = useState(false);
+  const [commitMessage, setCommitMessage] = useState("");
+  const [isPushing, setIsPushing] = useState(false);
 
   useEffect(() => {
     fetchRemoteAddons();
@@ -18,6 +21,13 @@ export const AddonsMarketplace = React.memo(function AddonsMarketplace() {
     setIsFetching(true);
     try {
       const { invoke } = await import("@tauri-apps/api/core");
+      
+      try {
+        await invoke("sync_addons_registry");
+      } catch (syncError) {
+        console.warn("Failed to sync addons registry:", syncError);
+      }
+
       const url = "https://raw.githubusercontent.com/allrounder687/openclaw-addons/main/addons.json";
       const addons = await invoke<Addon[]>("fetch_addon_registry", { registryUrl: url });
       setRemoteAddons(addons);
@@ -133,13 +143,22 @@ export const AddonsMarketplace = React.memo(function AddonsMarketplace() {
             You can also add your own local `.js` scripts.
           </p>
         </div>
-        <button 
-          className="action-btn action-btn--primary" 
-          onClick={handleOpenAddonsFolder}
-          style={{ display: "flex", alignItems: "center", gap: "8px" }}
-        >
-          📂 Open Addons Folder
-        </button>
+        <div style={{ display: "flex", gap: "8px" }}>
+          <button 
+            className="action-btn action-btn--ghost" 
+            onClick={() => setShowPushModal(true)}
+            style={{ display: "flex", alignItems: "center", gap: "8px", color: "var(--accent)" }}
+          >
+            🚀 Push Updates
+          </button>
+          <button 
+            className="action-btn action-btn--primary" 
+            onClick={handleOpenAddonsFolder}
+            style={{ display: "flex", alignItems: "center", gap: "8px" }}
+          >
+            📂 Open Addons Folder
+          </button>
+        </div>
       </div>
       {isFetching ? (
         <div className="skeleton skeleton-preview" />
@@ -236,6 +255,63 @@ export const AddonsMarketplace = React.memo(function AddonsMarketplace() {
                 setAddonToConfirm(null);
               }}>
                 Accept Risk and Install
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showPushModal && (
+        <div style={{
+          position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+          background: "rgba(0,0,0,0.8)", backdropFilter: "blur(10px)",
+          display: "flex", justifyContent: "center", alignItems: "center", zIndex: 9999
+        }}>
+          <div style={{
+            background: "var(--panel-bg)", padding: "32px", borderRadius: "16px",
+            border: "1px solid rgba(255, 255, 255, 0.1)", maxWidth: "400px", width: "100%",
+            boxShadow: "0 20px 40px rgba(0,0,0,0.5)"
+          }}>
+            <h3 style={{ margin: "0 0 16px 0", color: "var(--text)" }}>Push Updates</h3>
+            <p style={{ fontSize: "14px", color: "var(--text-soft)", marginBottom: "24px" }}>
+              Push your local addon changes to the remote registry so others can install them.
+            </p>
+            <input 
+              type="text" 
+              placeholder="Commit message (optional)" 
+              value={commitMessage}
+              onChange={(e) => setCommitMessage(e.target.value)}
+              style={{
+                width: "100%", padding: "12px", borderRadius: "8px",
+                background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)",
+                color: "var(--text)", marginBottom: "24px"
+              }}
+            />
+            <div style={{ display: "flex", gap: "12px" }}>
+              <button className="action-btn action-btn--ghost" style={{ flex: 1 }} onClick={() => setShowPushModal(false)} disabled={isPushing}>
+                Cancel
+              </button>
+              <button 
+                className="action-btn action-btn--primary" 
+                style={{ flex: 1 }} 
+                disabled={isPushing}
+                onClick={async () => {
+                  setIsPushing(true);
+                  try {
+                    const { invoke } = await import("@tauri-apps/api/core");
+                    await invoke("push_addons_updates", { commitMessage: commitMessage || "Auto-update addons from app" });
+                    setShowPushModal(false);
+                    setCommitMessage("");
+                    alert("Updates pushed successfully!");
+                  } catch (e) {
+                    console.error("Failed to push updates", e);
+                    alert(`Failed to push updates: ${e}`);
+                  } finally {
+                    setIsPushing(false);
+                  }
+                }}
+              >
+                {isPushing ? "Pushing..." : "Push to Git"}
               </button>
             </div>
           </div>

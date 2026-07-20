@@ -323,6 +323,8 @@ pub fn run() {
             commands::shell_control::toggle_desktop_icons,
             commands::shell_control::set_taskbar_state,
             commands::addon_manager::fetch_addon_registry,
+            commands::addon_manager::sync_addons_registry,
+            commands::addon_manager::push_addons_updates,
             commands::addon_manager::install_addon,
             commands::addon_manager::uninstall_addon,
             commands::addon_manager::list_installed_addons,
