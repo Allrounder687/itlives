@@ -1,15 +1,4 @@
 {
-  "name": "itlives",
-  "version": "0.1.2",
-  "private": true,
-  "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint",
-    "tauri": "tauri",
-    "scrape": "node scripts/scrape.js"
-  },
   "dependencies": {
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.6.1",
@@ -40,5 +29,16 @@
     "eslint-config-next": "16.1.7",
     "tailwindcss": "^4",
     "typescript": "^5"
-  }
+  },
+  "name": "itlives",
+  "private": true,
+  "scripts": {
+    "build": "next build",
+    "dev": "next dev",
+    "lint": "eslint",
+    "scrape": "node scripts/scrape.js",
+    "start": "next start",
+    "tauri": "tauri"
+  },
+  "version": "0.1.2"
 }
