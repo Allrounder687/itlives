@@ -30,7 +30,8 @@ import {
   Compass,
   CheckCircle,
   AlertCircle,
-  Search
+  Search,
+  Power
 } from "lucide-react";
 import { ThemeSelector } from "./ThemeSelector";
 import { WallpaperSourcePanel } from "./WallpaperSourcePanel";
@@ -144,8 +145,16 @@ export function SettingsPanel({ wallpaper }: SettingsPanelProps) {
   const [systemTaskbarTheme, setSystemTaskbarTheme] = useState("Off");
   const [devDebugEnabled, setDevDebugEnabled] = useState(false);
   const [logStatus, setLogStatus] = useState<string | null>(null);
+  const [autostartEnabled, setAutostartEnabled] = useState(false);
+  const [currentAppVersion, setCurrentAppVersion] = useState<string>("");
 
-  // Hydrate local states on mount
+  // Updater states
+  const [updateStatus, setUpdateStatus] = useState<string>("");
+  const [updateVersion, setUpdateVersion] = useState("0.1.1");
+  const [updateNotes, setUpdateNotes] = useState("Initial update");
+  const [updateKeyPassword, setUpdateKeyPassword] = useState("openclaw");
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);  // Hydrate local states on mount
   useEffect(() => {
     setUiAnimations(localStorage.getItem("settings_ui_animations") !== "false");
     setLanguage(localStorage.getItem("settings_language") || "Same as System");
@@ -186,6 +195,16 @@ export function SettingsPanel({ wallpaper }: SettingsPanelProps) {
     // System
     setSystemTaskbarTheme(localStorage.getItem("settings_system_taskbar_theme") || "Off");
     setDevDebugEnabled(localStorage.getItem("settings_dev_debug_enabled") === "true");
+
+    // Initialize Autostart
+    import('@tauri-apps/plugin-autostart').then(({ isEnabled }) => {
+      isEnabled().then(setAutostartEnabled).catch(console.error);
+    }).catch(console.error);
+
+    // Get App Version
+    import('@tauri-apps/api/app').then(({ getVersion }) => {
+      getVersion().then(setCurrentAppVersion).catch(console.error);
+    }).catch(console.error);
   }, []);
 
   // --- SETTER FOR RUST BACKEND PERFORMANCE CONFIGURATION ---
@@ -284,14 +303,77 @@ export function SettingsPanel({ wallpaper }: SettingsPanelProps) {
 
   // --- CREATE LOG FILE ---
   const handleCreateLogFile = async () => {
-    setLogStatus("Creating log report...");
     try {
-      setTimeout(() => {
-        setLogStatus("Log report generated at: AppData/Local/lwp_log.txt ✓");
-        setTimeout(() => setLogStatus(null), 5000);
-      }, 1000);
-    } catch (e: any) {
-      setLogStatus(`Error: ${e.message}`);
+      setLogStatus("Creating log file...");
+      await invoke("export_logs");
+      setLogStatus("Logs exported to Desktop.");
+      setTimeout(() => setLogStatus(null), 3000);
+    } catch (e) {
+      setLogStatus(`Error: ${e}`);
+    }
+  };
+
+  const handleCheckUpdates = async () => {
+    try {
+      setIsCheckingUpdate(true);
+      setUpdateStatus("Checking for updates...");
+      const { check } = await import('@tauri-apps/plugin-updater');
+      const update = await check();
+      if (update) {
+        setUpdateStatus(`Update ${update.version} found! Downloading...`);
+        let downloaded = 0;
+        let contentLength = 0;
+        await update.downloadAndInstall((event) => {
+          switch (event.event) {
+            case 'Started':
+              contentLength = event.data.contentLength || 0;
+              break;
+            case 'Progress':
+              downloaded += event.data.chunkLength;
+              setUpdateStatus(`Downloading: ${Math.round((downloaded / contentLength) * 100)}%`);
+              break;
+            case 'Finished':
+              setUpdateStatus("Update installed. Restarting...");
+              break;
+          }
+        });
+        const { relaunch } = await import('@tauri-apps/plugin-process');
+        await relaunch();
+      } else {
+        setUpdateStatus("App is up to date.");
+        setTimeout(() => setUpdateStatus(""), 3000);
+      }
+    } catch (e) {
+      console.error(e);
+      setUpdateStatus(`Update check failed: ${e}`);
+    } finally {
+      setIsCheckingUpdate(false);
+    }
+  };
+
+  const handlePublishUpdate = async () => {
+    try {
+      const { ask } = await import('@tauri-apps/plugin-dialog');
+      const confirmed = await ask("Are you sure you want to build and publish a new application update? This will take several minutes and freeze the backend.", {
+        title: "Confirm Update Publish",
+        kind: "warning"
+      });
+      if (!confirmed) return;
+      
+      setIsPublishing(true);
+      setUpdateStatus("Bumping version and building...");
+      await invoke("publish_app_update", {
+        version: updateVersion,
+        releaseNotes: updateNotes,
+        privateKeyPassword: updateKeyPassword
+      });
+      setUpdateStatus("Update successfully published to GitHub!");
+      setTimeout(() => setUpdateStatus(""), 5000);
+    } catch (e) {
+      console.error(e);
+      setUpdateStatus(`Failed to publish: ${e}`);
+    } finally {
+      setIsPublishing(false);
     }
   };
 
@@ -1496,6 +1578,120 @@ export function SettingsPanel({ wallpaper }: SettingsPanelProps) {
                       Windows taskbar theme integration is active. Shell transparency modifiers apply instantly.
                     </span>
                   </div>
+                </div>
+
+                {/* Autostart Toggle */}
+                <div className="settings-card">
+                  <div className="settings-card-top">
+                    <div className="settings-card-icon-container"><Power size={18} /></div>
+                    <div className="settings-card-info">
+                      <span className="settings-card-title">Start with Windows</span>
+                      <span className="settings-card-desc">Automatically launch the app silently on system boot.</span>
+                    </div>
+                  </div>
+                  <div className="settings-card-control">
+                    <label className="switch-label">
+                      <input 
+                        type="checkbox" 
+                        checked={autostartEnabled} 
+                        onChange={async (e) => {
+                          const checked = e.target.checked;
+                          setAutostartEnabled(checked);
+                          try {
+                            const { enable, disable } = await import('@tauri-apps/plugin-autostart');
+                            if (checked) await enable();
+                            else await disable();
+                          } catch (err) {
+                            console.error(err);
+                          }
+                        }}
+                      />
+                      <span className="switch-slider"></span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* App Updates */}
+            <div style={{ marginTop: "24px" }}>
+              <span className="settings-section-title">Application Updates</span>
+              <div className="settings-grid-layout">
+                {/* Regular User Update Check */}
+                <div className="settings-card">
+                  <div className="settings-card-top" style={{ flex: 1 }}>
+                    <div className="settings-card-icon-container"><AlertCircle size={18} /></div>
+                    <div className="settings-card-info" style={{ flex: 1 }}>
+                      <span className="settings-card-title">
+                        Check for Updates 
+                        {currentAppVersion && <span style={{ marginLeft: "8px", fontSize: "11px", color: "rgba(255,255,255,0.5)", background: "rgba(255,255,255,0.1)", padding: "2px 6px", borderRadius: "10px" }}>v{currentAppVersion}</span>}
+                      </span>
+                      <span className="settings-card-desc">Automatically fetch and install the latest OTA updates.</span>
+                    </div>
+                  </div>
+                  <div className="settings-card-control" style={{ width: "100%" }}>
+                    <button 
+                      type="button" 
+                      className="action-btn action-btn--primary"
+                      onClick={handleCheckUpdates}
+                      disabled={isCheckingUpdate}
+                      style={{ minHeight: "34px", padding: "0 14px", fontSize: "12px", width: "100%" }}
+                    >
+                      {isCheckingUpdate ? "Checking..." : "Check Now"}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Developer Publisher Mode */}
+                <div className="settings-card" style={{ gridColumn: "1 / -1", border: "1px solid var(--accent)", background: "rgba(0, 0, 0, 0.2)" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", marginBottom: "12px" }}>
+                    <div className="settings-card-top">
+                      <div className="settings-card-icon-container" style={{ background: "var(--accent)" }}><Activity size={18} color="#000" /></div>
+                      <div className="settings-card-info">
+                        <span className="settings-card-title" style={{ color: "var(--accent)" }}>Developer OTA Publisher</span>
+                        <span className="settings-card-desc">Build the app and deploy an update to all users globally.</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div style={{ display: "flex", gap: "10px", marginBottom: "10px" }}>
+                    <input 
+                      type="text" 
+                      value={updateVersion} 
+                      onChange={(e) => setUpdateVersion(e.target.value)} 
+                      placeholder="New Version (e.g. 1.0.1)"
+                      style={{ flex: 1, padding: "8px", borderRadius: "6px", border: "1px solid rgba(255,255,255,0.1)", background: "rgba(0,0,0,0.3)", color: "#fff" }}
+                    />
+                    <input 
+                      type="password" 
+                      value={updateKeyPassword} 
+                      onChange={(e) => setUpdateKeyPassword(e.target.value)} 
+                      placeholder="Private Key Password"
+                      style={{ flex: 1, padding: "8px", borderRadius: "6px", border: "1px solid rgba(255,255,255,0.1)", background: "rgba(0,0,0,0.3)", color: "#fff" }}
+                    />
+                  </div>
+                  <textarea 
+                    value={updateNotes}
+                    onChange={(e) => setUpdateNotes(e.target.value)}
+                    placeholder="Release Notes..."
+                    style={{ width: "100%", padding: "8px", borderRadius: "6px", border: "1px solid rgba(255,255,255,0.1)", background: "rgba(0,0,0,0.3)", color: "#fff", minHeight: "60px", marginBottom: "10px" }}
+                  />
+                  
+                  {updateStatus && (
+                    <div style={{ padding: "8px", background: "rgba(255,255,255,0.05)", borderRadius: "6px", marginBottom: "10px", fontSize: "12px", color: "var(--accent)" }}>
+                      {updateStatus}
+                    </div>
+                  )}
+
+                  <button 
+                    type="button" 
+                    className="action-btn action-btn--primary"
+                    onClick={handlePublishUpdate}
+                    disabled={isPublishing}
+                    style={{ minHeight: "34px", padding: "0 14px", fontSize: "12px", width: "100%", background: "var(--accent)", color: "#000" }}
+                  >
+                    {isPublishing ? "Building & Publishing (This takes 3+ minutes)..." : "Publish App Update"}
+                  </button>
                 </div>
               </div>
             </div>

@@ -204,6 +204,8 @@ pub fn run() {
             }
 
         })
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(move |app| {
             state_store.set_app_handle(app.handle().clone());
             if cfg!(debug_assertions) {
@@ -330,6 +332,7 @@ pub fn run() {
             commands::addon_manager::list_installed_addons,
             commands::addon_manager::get_addon_script,
             commands::addon_manager::open_addons_folder,
+            commands::publisher::publish_app_update,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

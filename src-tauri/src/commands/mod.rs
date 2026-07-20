@@ -10,4 +10,5 @@ pub mod settings;
 pub mod shell_control;
 pub mod window_info;
 pub mod addon_manager;
+pub mod publisher;
 

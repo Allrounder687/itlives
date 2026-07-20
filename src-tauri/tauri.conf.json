@@ -96,5 +96,13 @@
         "displayLanguageSelector": true
       }
     }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDg1QzkzMDY4QTc1RjgyODAKUldTQWdsK25hRERKaGZlSmFadDAzL08vUEFMbUtDQ2JXSFRreTdWenVicGtIZ0l5R25nUXhxU2cK",
+      "endpoints": [
+        "https://raw.githubusercontent.com/Allrounder687/itlives/main/update.json"
+      ]
+    }
   }
 }

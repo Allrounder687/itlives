@@ -58,6 +58,8 @@ function Home() {
   }>({});
   const [isErrorDismissed, setIsErrorDismissed] = useState(false);
   const [isErrorVisible, setIsErrorVisible] = useState(false);
+  const [silentUpdateState, setSilentUpdateState] = useState({ visible: false, text: "", percent: 0 });
+  const [updateSuccessToast, setUpdateSuccessToast] = useState<{ visible: boolean, version: string }>({ visible: false, version: "" });
 
   // Reset error dismissal when a new error appears
   const prevErrorRef = useRef(wallpaper.error);
@@ -99,6 +101,47 @@ function Home() {
     }
   }, []);
 
+  // --- SILENT OTA AUTO-UPDATER ---
+  useEffect(() => {
+    if (isOverlayMode) return; // Only run on main window
+    const checkUpdates = async () => {
+      try {
+        const { check } = await import('@tauri-apps/plugin-updater');
+        const update = await check();
+        if (update) {
+          console.log(`Silent Update Found: v${update.version}. Downloading in background...`);
+          setSilentUpdateState({ visible: true, text: `Downloading Update v${update.version}...`, percent: 0 });
+          
+          let downloaded = 0;
+          let contentLength = 0;
+          
+          await update.downloadAndInstall((event) => {
+            if (event.event === 'Started') {
+              contentLength = event.data.contentLength || 0;
+            } else if (event.event === 'Progress') {
+              downloaded += event.data.chunkLength;
+              if (contentLength > 0) {
+                setSilentUpdateState(prev => ({ ...prev, percent: Math.round((downloaded / contentLength) * 100) }));
+              }
+            } else if (event.event === 'Finished') {
+              setSilentUpdateState({ visible: true, text: "Installing update & restarting...", percent: 100 });
+            }
+          });
+          
+          console.log("Silent Update Installed. Relaunching...");
+          const { relaunch } = await import('@tauri-apps/plugin-process');
+          await relaunch();
+        }
+      } catch (e) {
+        console.warn("Silent background update check failed:", e);
+        setSilentUpdateState({ visible: false, text: "", percent: 0 });
+      }
+    };
+    // Run once after 5 seconds to avoid slowing down initial boot
+    const timer = setTimeout(checkUpdates, 5000);
+    return () => clearTimeout(timer);
+  }, [isOverlayMode]);
+
   useEffect(() => {
     if (isOverlayMode) {
       const loadConfig = () => {
@@ -112,9 +155,37 @@ function Home() {
           });
         }).catch(console.error);
       };
-
       loadConfig();
+      window.addEventListener("popstate", loadConfig);
+      return () => window.removeEventListener("popstate", loadConfig);
+    }
+  }, [isOverlayMode]);
 
+  // --- POST-UPDATE WELCOME NOTIFICATION ---
+  useEffect(() => {
+    if (isOverlayMode) return;
+    const checkPostUpdate = async () => {
+      try {
+        const { getVersion } = await import('@tauri-apps/api/app');
+        const currentVersion = await getVersion();
+        const lastSeen = localStorage.getItem("last_seen_version");
+        
+        if (lastSeen && lastSeen !== currentVersion) {
+          // App was updated!
+          setUpdateSuccessToast({ visible: true, version: currentVersion });
+          setTimeout(() => setUpdateSuccessToast({ visible: false, version: "" }), 8000);
+        }
+        
+        localStorage.setItem("last_seen_version", currentVersion);
+      } catch (e) {
+        console.warn("Failed to check version:", e);
+      }
+    };
+    checkPostUpdate();
+  }, [isOverlayMode]);
+
+  useEffect(() => {
+    if (isOverlayMode) {
       let unlistenRef = { current: () => { } };
 
       import("@tauri-apps/api/event").then(({ listen }) => {
