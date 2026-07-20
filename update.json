@@ -1,11 +1,11 @@
 {
-  "version": "0.1.2",
-  "notes": "Initial release",
-  "pub_date": "2026-07-20T12:00:00Z",
-  "platforms": {
-    "windows-x86_64": {
-      "signature": "",
-      "url": ""
-    }
-  }
+    "platforms":  {
+                      "windows-x86_64":  {
+                                             "signature":  "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTQWdsK25hRERKaFRQb2hublNPSDhqY0NaQ1RmT1cwSExWQVQ3NDVKcVFsM3NYV2NNRzQ1d0xFbzdvaGJZalBVMnNqdy84TzRveEVRYVRUSVByek9GT3BtQU1uWGw1bXcwPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg0NTM3NDkzCWZpbGU6aXRMaXZlc18wLjEuNl94NjQtc2V0dXAuZXhlCmRoQTBBRjJFODRWekFQU3JPVW5BeG5xMGd2cmNGaFhvSXpGN1ZpOWtDd1FJVmJiMFJ1aEhpMWpUZ0ZSaXhkRHdnTFdUdTQ3bEhTRWhPRDJ2TE1rSkN3PT0K",
+                                             "url":  "https://github.com/Allrounder687/itlives/releases/download/v0.1.6/"
+                                         }
+                  },
+    "pub_date":  "2026-07-20T14:24:18Z",
+    "version":  "0.1.6",
+    "notes":  "Automated test release v0.1.6"
 }
